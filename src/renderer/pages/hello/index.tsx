@@ -1,6 +1,6 @@
 import { Button } from 'antd';
 import { NavLink } from 'react-router-dom';
-import icon from '../../../assets/icon.svg';
+import icon from './icon.svg';
 import './index.scss';
 
 export default function Hello() {
@@ -12,7 +12,7 @@ export default function Hello() {
       <h1>欢迎使用AI学习助手</h1>
       <div className="Hello">
         <Button>打开AI学习助手</Button>
-        <br/>
+        <br />
         <Button>
           <NavLink to="/ai-service">AI功能设置</NavLink>
         </Button>

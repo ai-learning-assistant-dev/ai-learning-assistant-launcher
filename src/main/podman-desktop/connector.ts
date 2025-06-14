@@ -39,15 +39,15 @@ async function getSocketPath(machineName: string): Promise<string> {
     machineName,
   ]);
   socketPath = socket;
-  return socketPath
+  return socketPath;
 }
 
 const libPodDockerode = new LibpodDockerode();
 libPodDockerode.enhancePrototypeWithLibPod();
 
-export async function connect(machineName: string = "podman-machine-default"): Promise<LibPod> {
+export async function connect(machineName: string = "podman-machine-default"): Promise<LibPod & Dockerode> {
   const socketPath = await getSocketPath(machineName);
   console.debug("Socket Path: ", socketPath);
-  return new Dockerode({ socketPath: socketPath }) as unknown as LibPod;
+  return new Dockerode({ socketPath: socketPath }) as unknown as LibPod & Dockerode;
 }
 
