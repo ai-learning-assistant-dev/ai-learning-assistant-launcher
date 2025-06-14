@@ -1,4 +1,5 @@
 import { MemoryRouter as Router, Routes, Route } from 'react-router-dom';
+import { Button } from "antd";
 import icon from '../../assets/icon.svg';
 import './App.css';
 
@@ -15,24 +16,24 @@ function Hello() {
           target="_blank"
           rel="noreferrer"
         >
-          <button type="button">
+          <Button>
             <span role="img" aria-label="books">
               📚
             </span>
             Read our docs
-          </button>
+          </Button>
         </a>
         <a
           href="https://github.com/sponsors/electron-react-boilerplate"
           target="_blank"
           rel="noreferrer"
         >
-          <button type="button">
+          <Button>
             <span role="img" aria-label="folded hands">
               🙏
             </span>
             Donate
-          </button>
+          </Button>
         </a>
       </div>
     </div>
