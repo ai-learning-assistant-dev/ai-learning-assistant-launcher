@@ -1,5 +1,5 @@
 import Dockerode from 'dockerode';
-import { isMac, isWindows } from './util';
+import { isMac, isWindows } from '../exec/util';
 import { extensionApi } from './real-api';
 import { LibPod, LibpodDockerode } from './libpod-dockerode';
 

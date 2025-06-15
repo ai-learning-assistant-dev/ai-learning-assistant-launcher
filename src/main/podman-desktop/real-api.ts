@@ -1,5 +1,5 @@
 import type * as containerDesktopAPI from '@podman-desktop/api';
-import { Exec } from './exec';
+import { Exec } from '../exec';
 
 const exec = new Exec();
 

@@ -1,38 +1,19 @@
 import { IpcMain } from 'electron';
 import { ActionName, ServiceName } from './type-info';
+import { Exec } from '../exec';
 
-let connectionGlobal: any;
+const commandLine = new Exec();
 
 export default async function init(ipcMain: IpcMain) {
-  if (!connectionGlobal) {
-    connectionGlobal = await connect();
-  }
+
   ipcMain.on(
     'cmd',
     async (event, action: ActionName, serviceName: ServiceName) => {
-      const containerInfos = await connectionGlobal.listPodmanContainers({
-        all: true,
-      });
-      console.debug('containerInfos', containerInfos);
-      if (action === 'query') {
-        event.reply('docker', 'data', containerInfos);
-        return;
-      }
-      console.debug(event, action, serviceName);
-      const imageName = imageNameDict[serviceName];
-      const containerName = serviceName;
 
-      const containerInfo = containerInfos.filter(
-        (item) => item.Names.indexOf(containerName) >= 0,
-      )[0];
-      const container =
-        containerInfo && connectionGlobal.getContainer(containerInfo.Id);
-      console.debug('container', container);
-      if (connectionGlobal) {
+      if (commandLine) {
         if (container) {
           if (action === 'start') {
-            await container.start();
-            event.reply('docker', 'info', '成功启动');
+            commandLine.exec()
           } else if (action === 'stop') {
             await container.stop();
             event.reply('docker', 'info', '成功停止');
@@ -42,7 +23,7 @@ export default async function init(ipcMain: IpcMain) {
           }
         } else if (action === 'install') {
           console.debug('install', imageName);
-          const newContainerInfo = await connectionGlobal.createPodmanContainer(
+          const newContainerInfo = await commandLine.createPodmanContainer(
             {
               image: imageName,
               name: containerName,
