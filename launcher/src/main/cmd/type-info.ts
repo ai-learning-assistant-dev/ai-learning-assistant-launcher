@@ -1,4 +1,4 @@
-export type ServiceName = 'TTS' | 'ASR' | 'LLM';
+export type ServiceName = 'podman';
 export type ActionName =
   | 'query'
   | 'install'

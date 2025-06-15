@@ -3,6 +3,7 @@ import { notification } from 'antd';
 import type Dockerode from 'dockerode';
 import {
   ActionName,
+  MESSAGE_TYPE,
   ServiceName,
 } from '../../../main/podman-desktop/type-info';
 
@@ -27,16 +28,23 @@ export default function useDocker() {
   useEffect(() => {
     const cancel = window.electron?.ipcRenderer.on(
       'docker',
-      (messageType: 'error' | 'info' | 'data', data: any) => {
+      (messageType: MESSAGE_TYPE, data: any) => {
         console.debug(messageType, data);
-        if (messageType === 'error') {
+        if (messageType === MESSAGE_TYPE.ERROR) {
           notification.error({ message: data, placement: 'topRight' });
-        } else if (messageType === 'data') {
+          setLoading(false);
+        } else if (messageType === MESSAGE_TYPE.DATA) {
           setContainers(data);
-        } else if (messageType === 'info') {
+        } else if (messageType === MESSAGE_TYPE.INFO) {
           notification.success({ message: data, placement: 'topRight' });
           queryContainers();
           setLoading(false);
+        } else if (messageType === MESSAGE_TYPE.PROGRESS) {
+          notification.success({ message: data, placement: 'topRight' });
+        } else if (messageType === MESSAGE_TYPE.PROGRESS_ERROR) {
+          notification.error({ message: data, placement: 'topRight' });
+        } else if (messageType === MESSAGE_TYPE.WARNING) {
+          notification.warning({ message: data, placement: 'topRight' });
         }
       },
     );

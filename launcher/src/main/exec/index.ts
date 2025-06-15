@@ -23,7 +23,13 @@ import { spawn } from 'node:child_process';
 import type { RunError, RunOptions, RunResult } from '@podman-desktop/api';
 import * as sudo from 'sudo-prompt';
 
+import { app } from 'electron';
+import path from 'path';
 import { isLinux, isMac, isWindows } from './util';
+
+export const appPath = app.isPackaged
+  ? path.dirname(app.getPath('exe'))
+  : app.getAppPath();
 
 export const macosExtraPath =
   '/opt/podman/bin:/usr/local/bin:/opt/homebrew/bin:/opt/local/bin';
@@ -62,7 +68,7 @@ export class Exec {
       env.PATH = getInstallationPath(env.PATH);
     }
 
-    console.log(command, args, options);
+    console.debug('exec', command, args, options);
 
     // do we have an admin task ?
     // if yes, will use sudo-prompt on windows and osascript on mac and pkexec on linux
