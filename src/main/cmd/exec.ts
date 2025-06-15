@@ -1,4 +1,3 @@
-/* eslint-disable max-classes-per-file */
 /** ********************************************************************
  * Copyright (C) 2023 Red Hat, Inc.
  *
@@ -17,6 +16,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************** */
 
+// eslint-disable-next-line max-classes-per-file
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { spawn } from 'node:child_process';
 

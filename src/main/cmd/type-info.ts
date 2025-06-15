@@ -6,9 +6,3 @@ export type ActionName =
   | 'stop'
   | 'remove'
   | 'update';
-
-export const imageNameDict: Record<ServiceName, string> = {
-  ASR: '',
-  TTS: 'docker.io/library/ai-tts-2:latest',
-  LLM: '',
-};

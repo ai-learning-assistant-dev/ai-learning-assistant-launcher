@@ -8,10 +8,13 @@ import {
 
 export default function useDocker() {
   const [containers, setContainers] = useState<Dockerode.ContainerInfo[]>([]);
-   const [ loading, setLoading ] = useState(false);
+  const [loading, setLoading] = useState(false);
   function action(actionName: ActionName, serviceName: ServiceName) {
-    if(loading){
-      notification.warning({message: "请等待上一个操作完成后再操作", placement: "topRight"});
+    if (loading) {
+      notification.warning({
+        message: '请等待上一个操作完成后再操作',
+        placement: 'topRight',
+      });
       return;
     }
     setLoading(true);
@@ -31,7 +34,7 @@ export default function useDocker() {
         } else if (messageType === 'data') {
           setContainers(data);
         } else if (messageType === 'info') {
-          notification.success({message: data, placement: 'topRight'});
+          notification.success({ message: data, placement: 'topRight' });
           queryContainers();
           setLoading(false);
         }
@@ -50,6 +53,6 @@ export default function useDocker() {
   return {
     containers,
     action,
-    loading
+    loading,
   };
 }

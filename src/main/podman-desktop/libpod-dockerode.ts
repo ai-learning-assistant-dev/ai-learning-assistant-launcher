@@ -1,4 +1,4 @@
-/**********************************************************************
+/** ********************************************************************
  * Copyright (C) 2022-2025 Red Hat, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,11 +14,15 @@
  * limitations under the License.
  *
  * SPDX-License-Identifier: Apache-2.0
- ***********************************************************************/
+ ********************************************************************** */
 
 import type { RequestOptions } from 'node:http';
 
-import type { ManifestCreateOptions, ManifestInspectInfo, ManifestPushOptions } from '@podman-desktop/api';
+import type {
+  ManifestCreateOptions,
+  ManifestInspectInfo,
+  ManifestPushOptions,
+} from '@podman-desktop/api';
 import type DockerModem from 'docker-modem';
 import type { DialOptions } from 'docker-modem';
 import type { VolumeCreateOptions, VolumeCreateResponse } from 'dockerode';
@@ -197,7 +201,13 @@ export interface PodmanContainerInfo {
   StartedAt: number;
   Command: string[];
   Labels: { [label: string]: string };
-  Ports: { host_ip: string; container_port: number; host_port: number; range?: string; protocol: string }[];
+  Ports: {
+    host_ip: string;
+    container_port: number;
+    host_port: number;
+    range?: string;
+    protocol: string;
+  }[];
 }
 
 export interface Info {
@@ -367,7 +377,9 @@ export interface GetImagesOptions {
 // API of libpod that we want to expose on our side
 export interface LibPod {
   createPod(podOptions: PodCreateOptions): Promise<{ Id: string }>;
-  createPodmanContainer(containerCreateOptions: ContainerCreateOptions): Promise<{ Id: string; Warnings: string[] }>;
+  createPodmanContainer(
+    containerCreateOptions: ContainerCreateOptions,
+  ): Promise<{ Id: string; Warnings: string[] }>;
   listPods(): Promise<PodInfo[]>;
   listPodmanContainers(opts?: { all: boolean }): Promise<PodmanContainerInfo[]>;
   prunePods(): Promise<void>;
@@ -379,14 +391,22 @@ export interface LibPod {
   resolveShortnameImage(shortname: string): Promise<{ Names: string[] }>;
   restartPod(podId: string): Promise<void>;
   generateKube(names: string[]): Promise<string>;
-  playKube(file: string | NodeJS.ReadableStream, options?: { build?: boolean }): Promise<PlayKubeInfo>;
+  playKube(
+    file: string | NodeJS.ReadableStream,
+    options?: { build?: boolean },
+  ): Promise<PlayKubeInfo>;
   pruneAllImages(dangling: boolean): Promise<void>;
   podmanInfo(): Promise<Info>;
   getImages(options: GetImagesOptions): Promise<NodeJS.ReadableStream>;
   podmanListImages(options?: PodmanListImagesOptions): Promise<ImageInfo[]>;
-  podmanCreateManifest(manifestOptions: ManifestCreateOptions): Promise<{ engineId: string; Id: string }>;
+  podmanCreateManifest(
+    manifestOptions: ManifestCreateOptions,
+  ): Promise<{ engineId: string; Id: string }>;
   podmanInspectManifest(manifestName: string): Promise<ManifestInspectInfo>;
-  podmanPushManifest(manifestOptions: ManifestPushOptions, authInfo?: Dockerode.AuthConfig): Promise<void>;
+  podmanPushManifest(
+    manifestOptions: ManifestPushOptions,
+    authInfo?: Dockerode.AuthConfig,
+  ): Promise<void>;
   podmanRemoveManifest(manifestName: string): Promise<void>;
 }
 
@@ -414,9 +434,12 @@ const wrapAs = <T>(data: unknown): T => {
 export class LibpodDockerode {
   // setup the libpod API
   enhancePrototypeWithLibPod(): void {
-    const prototypeOfDockerode = Dockerode.prototype as unknown as DockerodeInternals;
+    const prototypeOfDockerode =
+      Dockerode.prototype as unknown as DockerodeInternals;
     // add listPodmanContainers
-    prototypeOfDockerode.listPodmanContainers = function (opts?: { all: boolean }): Promise<PodmanContainerInfo[]> {
+    prototypeOfDockerode.listPodmanContainers = function (opts?: {
+      all: boolean;
+    }): Promise<PodmanContainerInfo[]> {
       const optsf = {
         path: '/v4.2.0/libpod/containers/json?',
         method: 'GET',
@@ -466,11 +489,13 @@ export class LibpodDockerode {
     };
 
     // add listImages
-    prototypeOfDockerode.podmanListImages = function (options?: PodmanListImagesOptions): Promise<ImageInfo[]> {
+    prototypeOfDockerode.podmanListImages = function (
+      options?: PodmanListImagesOptions,
+    ): Promise<ImageInfo[]> {
       const optsf = {
         path: '/v4.2.0/libpod/images/json',
         method: 'GET',
-        options: options,
+        options,
         statusCodes: {
           200: true,
           500: 'server error',
@@ -509,7 +534,9 @@ export class LibpodDockerode {
     };
 
     // add attach
-    prototypeOfDockerode.podmanAttach = function (containerId: string): Promise<NodeJS.ReadWriteStream> {
+    prototypeOfDockerode.podmanAttach = function (
+      containerId: string,
+    ): Promise<NodeJS.ReadWriteStream> {
       const optsf = {
         path: `/v4.2.0/libpod/containers/${containerId}/attach?stdin=true&stdout=true&stderr=true&`,
         method: 'POST',
@@ -550,7 +577,9 @@ export class LibpodDockerode {
     };
 
     // add pruneAllImages
-    prototypeOfDockerode.pruneAllImages = function (all: boolean): Promise<void> {
+    prototypeOfDockerode.pruneAllImages = function (
+      all: boolean,
+    ): Promise<void> {
       const optsf = {
         path: '/v4.2.0/libpod/images/prune',
         method: 'POST',
@@ -578,7 +607,9 @@ export class LibpodDockerode {
 
     // replace createVolume call by not wrapping the result into an object named Volume
     // we need the raw data
-    prototypeOfDockerode.createVolume = function (opts: unknown): Promise<VolumeCreateResponse> {
+    prototypeOfDockerode.createVolume = function (
+      opts: unknown,
+    ): Promise<VolumeCreateResponse> {
       const optsf: DialOptions = {
         path: '/volumes/create?',
         method: 'POST',
@@ -606,7 +637,9 @@ export class LibpodDockerode {
     };
 
     // add createPod
-    prototypeOfDockerode.createPod = function (podOptions: PodCreateOptions): Promise<{ Id: string }> {
+    prototypeOfDockerode.createPod = function (
+      podOptions: PodCreateOptions,
+    ): Promise<{ Id: string }> {
       const optsf = {
         path: '/v4.2.0/libpod/pods/create',
         method: 'POST',
@@ -631,7 +664,9 @@ export class LibpodDockerode {
     };
 
     // add getPodInspect
-    prototypeOfDockerode.getPodInspect = function (podId: string): Promise<PodInspectInfo> {
+    prototypeOfDockerode.getPodInspect = function (
+      podId: string,
+    ): Promise<PodInspectInfo> {
       const optsf = {
         path: `/v4.2.0/libpod/pods/${podId}/json`,
         method: 'GET',
@@ -746,7 +781,10 @@ export class LibpodDockerode {
     };
 
     // add removePod
-    prototypeOfDockerode.removePod = function (podId: string, options?: { force: boolean }): Promise<void> {
+    prototypeOfDockerode.removePod = function (
+      podId: string,
+      options?: { force: boolean },
+    ): Promise<void> {
       const optsf = {
         path: `/v4.2.0/libpod/pods/${podId}?`,
         method: 'DELETE',
@@ -792,10 +830,12 @@ export class LibpodDockerode {
     };
 
     // add generateKube
-    prototypeOfDockerode.generateKube = function (names: string[]): Promise<string> {
+    prototypeOfDockerode.generateKube = function (
+      names: string[],
+    ): Promise<string> {
       // transform array into a list of queries
       const queries = names
-        .map(name => {
+        .map((name) => {
           return `names=${name}`;
         })
         .join('&');
@@ -832,7 +872,7 @@ export class LibpodDockerode {
       const optsf = {
         path: '/v4.2.0/libpod/play/kube',
         method: 'POST',
-        file: file,
+        file,
         statusCodes: {
           200: true,
           204: true,
@@ -843,7 +883,9 @@ export class LibpodDockerode {
 
       // if we don't build - we should send Content-Type application/yaml
       // application/tar is not supported
-      const contentType = options?.build ? 'application/x-tar' : 'application/yaml';
+      const contentType = options?.build
+        ? 'application/x-tar'
+        : 'application/yaml';
 
       // patch the modem to not send x-tar header as content-type
       const originalBuildRequest = this.modem.buildRequest;
@@ -856,7 +898,11 @@ export class LibpodDockerode {
         // in case of kube play, docker-modem will send the header application/tar while it's basically the content of the file so it should be application/yaml
         if (context && typeof context === 'object' && 'path' in context) {
           if (String(context.path).includes('/libpod/play/kube')) {
-            if (options && typeof options === 'object' && 'headers' in options) {
+            if (
+              options &&
+              typeof options === 'object' &&
+              'headers' in options
+            ) {
               options.headers = { 'Content-Type': contentType };
             }
           }
@@ -897,7 +943,9 @@ export class LibpodDockerode {
     };
 
     // info
-    prototypeOfDockerode.getImages = function (options: GetImagesOptions): Promise<NodeJS.ReadableStream> {
+    prototypeOfDockerode.getImages = function (
+      options: GetImagesOptions,
+    ): Promise<NodeJS.ReadableStream> {
       // let's create the query using the names list.
       // N.B: last ? will be cut by the modem dial call
       const query = `names=${options.names.join('&names=')}?`;
@@ -930,14 +978,18 @@ export class LibpodDockerode {
       authInfo?: Dockerode.AuthConfig,
     ): Promise<void> {
       const encodedManifestName = encodeURIComponent(manifestOptions.name);
-      const encodedDestinationName = encodeURIComponent(manifestOptions.destination);
+      const encodedDestinationName = encodeURIComponent(
+        manifestOptions.destination,
+      );
 
       // If there is an authInfo, we need to add it as a Header named 'X-Registry-Auth' with the base64 encoded value
       // in order to provide the credentials needed to push to the registry.
       const headers = authInfo
         ? {
             'Content-Type': 'application/json', // Ensuring Content-Type is set
-            'X-Registry-Auth': Buffer.from(JSON.stringify(authInfo)).toString('base64'),
+            'X-Registry-Auth': Buffer.from(JSON.stringify(authInfo)).toString(
+              'base64',
+            ),
           }
         : {};
 
@@ -950,7 +1002,7 @@ export class LibpodDockerode {
           404: 'no such manifest',
           500: 'server error',
         },
-        headers: headers,
+        headers,
         // We require all=true to always be present in the URL in order for the manifest to be pushed correctly.
         // If you do not provide it, it will return a "uknown manifest blob" error as it's trying to push a manifest blob with no images.
         options: {
@@ -997,7 +1049,9 @@ export class LibpodDockerode {
     };
 
     // add inspectManifest
-    prototypeOfDockerode.podmanInspectManifest = function (manifestName: string): Promise<ManifestInspectInfo> {
+    prototypeOfDockerode.podmanInspectManifest = function (
+      manifestName: string,
+    ): Promise<ManifestInspectInfo> {
       // make sure encodeURI component for the name ex. domain.com/foo/bar:latest
       const encodedManifestName = encodeURIComponent(manifestName);
 
@@ -1025,7 +1079,9 @@ export class LibpodDockerode {
     };
 
     // remove manifest
-    prototypeOfDockerode.podmanRemoveManifest = function (manifestName: string): Promise<void> {
+    prototypeOfDockerode.podmanRemoveManifest = function (
+      manifestName: string,
+    ): Promise<void> {
       // make sure encodeURI component for the name ex. domain.com/foo/bar:latest
       const encodedManifestName = encodeURIComponent(manifestName);
 
@@ -1050,7 +1106,9 @@ export class LibpodDockerode {
       });
     };
 
-    prototypeOfDockerode.resolveShortnameImage = function (shortname: string): Promise<{
+    prototypeOfDockerode.resolveShortnameImage = function (
+      shortname: string,
+    ): Promise<{
       Names: string[];
     }> {
       const optsf = {

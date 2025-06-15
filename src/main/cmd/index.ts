@@ -1,17 +1,14 @@
 import { IpcMain } from 'electron';
-import Dockerode from 'dockerode';
-import { connect } from './connector';
-import { LibPod } from './libpod-dockerode';
-import { ActionName, imageNameDict, ServiceName } from './type-info';
+import { ActionName, ServiceName } from './type-info';
 
-let connectionGlobal: LibPod & Dockerode;
+let connectionGlobal: any;
 
 export default async function init(ipcMain: IpcMain) {
   if (!connectionGlobal) {
     connectionGlobal = await connect();
   }
   ipcMain.on(
-    'docker',
+    'cmd',
     async (event, action: ActionName, serviceName: ServiceName) => {
       const containerInfos = await connectionGlobal.listPodmanContainers({
         all: true,

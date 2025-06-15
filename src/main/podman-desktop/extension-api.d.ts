@@ -1,4 +1,5 @@
-/**********************************************************************
+/* eslint-disable max-classes-per-file */
+/** ********************************************************************
  * Copyright (C) 2022-2024 Red Hat, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,7 +15,7 @@
  * limitations under the License.
  *
  * SPDX-License-Identifier: Apache-2.0
- ***********************************************************************/
+ ********************************************************************** */
 
 /**
  * The Podman Desktop API is intended to be consumed by extensions interacting with Podman Desktop.
@@ -39,7 +40,7 @@
  * ```
  *
  * @module @podman-desktop/api
- **/
+ * */
 
 declare module '@podman-desktop/api' {
   /**
@@ -89,6 +90,7 @@ declare module '@podman-desktop/api' {
 
   export class Disposable {
     constructor(func: () => void);
+
     /**
      * Creates a new Disposable calling the provided function
      * on dispose.
@@ -154,7 +156,11 @@ declare module '@podman-desktop/api' {
      * @return A disposable which unsubscribes the event listener.
      */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (listener: (e: T) => any, thisArgs?: any, disposables?: Disposable[]): Disposable;
+    (
+      listener: (e: T) => any,
+      thisArgs?: any,
+      disposables?: Disposable[],
+    ): Disposable;
   }
 
   /**
@@ -169,11 +175,13 @@ declare module '@podman-desktop/api' {
      * For the public to allow to subscribe to events from this Emitter
      */
     event: Event<T>;
+
     /**
      * To fire an event to the subscribers
      * @param data The event to send to the registered listeners
      */
     fire(data: T): void;
+
     /**
      * Dispose by removing registered listeners
      */
@@ -263,7 +271,9 @@ declare module '@podman-desktop/api' {
      * @returns An extension or `undefined`.
      */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    export function getExtension<T = any>(extensionId: string): Extension<T> | undefined;
+    export function getExtension<T = any>(
+      extensionId: string,
+    ): Extension<T> | undefined;
 
     /**
      * All extensions currently known to the system.
@@ -356,7 +366,12 @@ declare module '@podman-desktop/api' {
     emptyConnectionMarkdownDescription?: string;
   }
 
-  export type ProviderConnectionStatus = 'started' | 'stopped' | 'starting' | 'stopping' | 'unknown';
+  export type ProviderConnectionStatus =
+    | 'started'
+    | 'stopped'
+    | 'starting'
+    | 'stopping'
+    | 'unknown';
 
   export interface Logger {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -532,7 +547,10 @@ declare module '@podman-desktop/api' {
     status(): ProviderConnectionStatus;
   }
 
-  export type ProviderConnection = ContainerProviderConnection | KubernetesProviderConnection | VmProviderConnection;
+  export type ProviderConnection =
+    | ContainerProviderConnection
+    | KubernetesProviderConnection
+    | VmProviderConnection;
 
   // common set of options for creating a provider
   export interface ProviderConnectionFactory {
@@ -547,20 +565,35 @@ declare module '@podman-desktop/api' {
   }
 
   // create programmatically a ContainerProviderConnection
-  export interface ContainerProviderConnectionFactory extends ProviderConnectionFactory {
+  export interface ContainerProviderConnectionFactory
+    extends ProviderConnectionFactory {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    create(params: { [key: string]: any }, logger?: Logger, token?: CancellationToken): Promise<void>;
+    create(
+      params: { [key: string]: any },
+      logger?: Logger,
+      token?: CancellationToken,
+    ): Promise<void>;
   }
 
   // create a kubernetes provider
-  export interface KubernetesProviderConnectionFactory extends ProviderConnectionFactory {
+  export interface KubernetesProviderConnectionFactory
+    extends ProviderConnectionFactory {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    create?(params: { [key: string]: any }, logger?: Logger, token?: CancellationToken): Promise<void>;
+    create?(
+      params: { [key: string]: any },
+      logger?: Logger,
+      token?: CancellationToken,
+    ): Promise<void>;
   }
 
   // create a Vm provider
-  export interface VmProviderConnectionFactory extends ProviderConnectionFactory {
-    create?(params: { [key: string]: unknown }, logger?: Logger, token?: CancellationToken): Promise<void>;
+  export interface VmProviderConnectionFactory
+    extends ProviderConnectionFactory {
+    create?(
+      params: { [key: string]: unknown },
+      logger?: Logger,
+      token?: CancellationToken,
+    ): Promise<void>;
   }
 
   export interface AuditRecord {
@@ -625,7 +658,9 @@ declare module '@podman-desktop/api' {
     /**
      * updateContainerConnection must be called by the provider when a connection status is updated
      */
-    updateContainerConnection(containerProviderConnection: ContainerProviderConnection): void;
+    updateContainerConnection(
+      containerProviderConnection: ContainerProviderConnection,
+    ): void;
   }
 
   /**
@@ -688,8 +723,12 @@ declare module '@podman-desktop/api' {
       connectionAuditor?: Auditor,
     ): Disposable;
 
-    registerContainerProviderConnection(connection: ContainerProviderConnection): Disposable;
-    registerKubernetesProviderConnection(connection: KubernetesProviderConnection): Disposable;
+    registerContainerProviderConnection(
+      connection: ContainerProviderConnection,
+    ): Disposable;
+    registerKubernetesProviderConnection(
+      connection: KubernetesProviderConnection,
+    ): Disposable;
     registerVmProviderConnection(connection: VmProviderConnection): Disposable;
     registerLifecycle(lifecycle: ProviderLifecycle): Disposable;
 
@@ -775,7 +814,11 @@ declare module '@podman-desktop/api' {
      * @throws if a command with the same name is already registered.
      */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    export function registerCommand(command: string, callback: (...args: any[]) => any, thisArg?: any): Disposable;
+    export function registerCommand(
+      command: string,
+      callback: (...args: any[]) => any,
+      thisArg?: any,
+    ): Disposable;
     /**
      * Execute a command, previously registered with {@link commands.registerCommand}.
      *
@@ -789,7 +832,10 @@ declare module '@podman-desktop/api' {
      * @throws if the command throws an exception
      */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    export function executeCommand<T = unknown>(command: string, ...rest: any[]): PromiseLike<T>;
+    export function executeCommand<T = unknown>(
+      command: string,
+      ...rest: any[]
+    ): PromiseLike<T>;
   }
 
   export interface ProviderEvent {
@@ -977,7 +1023,10 @@ declare module '@podman-desktop/api' {
      * @param token a cancellation token the function can use to be informed when the caller asks for the operation to be cancelled
      * @return the complete result of the layers, either synchronously of through a Promise
      */
-    getFilesystemLayers(image: ImageInfo, token?: CancellationToken): ProviderResult<ImageFilesystemLayers>;
+    getFilesystemLayers(
+      image: ImageInfo,
+      token?: CancellationToken,
+    ): ProviderResult<ImageFilesystemLayers>;
   }
 
   /**
@@ -988,15 +1037,24 @@ declare module '@podman-desktop/api' {
     /**
      * add a file to the layer
      */
-    addFile(layer: ImageFilesystemLayer, opts: { path: string; mode: number; size: number }): ImageFilesProvider;
+    addFile(
+      layer: ImageFilesystemLayer,
+      opts: { path: string; mode: number; size: number },
+    ): ImageFilesProvider;
     /**
      * add a directory to the layer
      */
-    addDirectory(layer: ImageFilesystemLayer, opts: { path: string; mode: number }): ImageFilesProvider;
+    addDirectory(
+      layer: ImageFilesystemLayer,
+      opts: { path: string; mode: number },
+    ): ImageFilesProvider;
     /**
      * add a symbolic link to the layer
      */
-    addSymlink(layer: ImageFilesystemLayer, opts: { path: string; mode: number; linkPath: string }): ImageFilesProvider;
+    addSymlink(
+      layer: ImageFilesystemLayer,
+      opts: { path: string; mode: number; linkPath: string },
+    ): ImageFilesProvider;
     /**
      * add a file or directory to remove from previous layers
      * @param path
@@ -1006,7 +1064,10 @@ declare module '@podman-desktop/api' {
      * add a complete directory to remove from previous layers
      * @param path
      */
-    addOpaqueWhiteout(layer: ImageFilesystemLayer, path: string): ImageFilesProvider;
+    addOpaqueWhiteout(
+      layer: ImageFilesystemLayer,
+      path: string,
+    ): ImageFilesProvider;
   }
 
   export interface ImageFilesProviderMetadata {
@@ -1161,7 +1222,9 @@ declare module '@podman-desktop/api' {
    * Handle registries from different sources
    */
   export namespace registry {
-    export function registerRegistryProvider(registryProvider: RegistryProvider): Disposable;
+    export function registerRegistryProvider(
+      registryProvider: RegistryProvider,
+    ): Disposable;
 
     // expose a registry from a source
     export function registerRegistry(registry: Registry): Disposable;
@@ -1170,7 +1233,9 @@ declare module '@podman-desktop/api' {
     export function unregisterRegistry(registry: Registry): void;
 
     // suggest a registry to be included on the registry settings page
-    export function suggestRegistry(registry: RegistrySuggestedProvider): Disposable;
+    export function suggestRegistry(
+      registry: RegistrySuggestedProvider,
+    ): Disposable;
 
     export const onDidRegisterRegistry: Event<Registry>;
     export const onDidUpdateRegistry: Event<Registry>;
@@ -1189,11 +1254,17 @@ declare module '@podman-desktop/api' {
      * @param providerId the same as the id on Provider provided by createProvider() method, need to place menu item properly
      * @param item
      */
-    export function registerProviderMenuItem(providerId: string, item: MenuItem): Disposable;
+    export function registerProviderMenuItem(
+      providerId: string,
+      item: MenuItem,
+    ): Disposable;
   }
 
   export namespace configuration {
-    export function getConfiguration(section?: string, scope?: ConfigurationScope): Configuration;
+    export function getConfiguration(
+      section?: string,
+      scope?: ConfigurationScope,
+    ): Configuration;
 
     /**
      * An event that is emitted when the {@link Configuration configuration} changed.
@@ -1765,7 +1836,9 @@ declare module '@podman-desktop/api' {
   /**
    * Represents the alignment of status bar items.
    */
-  export type StatusBarAlignment = typeof StatusBarAlignLeft | typeof StatusBarAlignRight;
+  export type StatusBarAlignment =
+    | typeof StatusBarAlignLeft
+    | typeof StatusBarAlignRight;
 
   /**
    * Default priority for the status bar items.
@@ -1868,7 +1941,13 @@ declare module '@podman-desktop/api' {
     /**
      * Use the `file` and `parse` factory functions to create new `Uri` objects.
      */
-    private constructor(scheme: string, authority: string, path: string, query: string, fragment: string);
+    private constructor(
+      scheme: string,
+      authority: string,
+      path: string,
+      query: string,
+      fragment: string,
+    );
 
     /**
      * Scheme is the `http` part of `http://www.example.com/some/path?query#fragment`.
@@ -2104,7 +2183,9 @@ declare module '@podman-desktop/api' {
      * Contains which features the dialog should use. The following values are
      * supported:
      */
-    selectors?: Array<'openFile' | 'openDirectory' | 'multiSelections' | 'showHiddenFiles'>;
+    selectors?: Array<
+      'openFile' | 'openDirectory' | 'multiSelections' | 'showHiddenFiles'
+    >;
 
     /**
      * A set of file filters that are used by the dialog.
@@ -2167,7 +2248,10 @@ declare module '@podman-desktop/api' {
      * @param items A set of items that will be rendered as actions in the message.
      * @return A promise that resolves to the selected item or `undefined` when being dismissed.
      */
-    export function showInformationMessage(message: string, ...items: string[]): Promise<string | undefined>;
+    export function showInformationMessage(
+      message: string,
+      ...items: string[]
+    ): Promise<string | undefined>;
 
     /**
      * Show a warning message. Optionally provide an array of items which will be presented as
@@ -2177,7 +2261,10 @@ declare module '@podman-desktop/api' {
      * @param items A set of items that will be rendered as actions in the message.
      * @return A promise that resolves to the selected item or `undefined` when being dismissed.
      */
-    export function showWarningMessage(message: string, ...items: string[]): Promise<string | undefined>;
+    export function showWarningMessage(
+      message: string,
+      ...items: string[]
+    ): Promise<string | undefined>;
 
     /**
      * Show a error message. Optionally provide an array of items which will be presented as
@@ -2187,7 +2274,10 @@ declare module '@podman-desktop/api' {
      * @param items A set of items that will be rendered as actions in the message.
      * @return A promise that resolves to the selected item or `undefined` when being dismissed.
      */
-    export function showErrorMessage(message: string, ...items: string[]): Promise<string | undefined>;
+    export function showErrorMessage(
+      message: string,
+      ...items: string[]
+    ): Promise<string | undefined>;
 
     /**
      * Show progress in Podman Desktop. Progress is shown while running the given callback
@@ -2250,7 +2340,10 @@ declare module '@podman-desktop/api' {
      */
     export function withProgress<R>(
       options: ProgressOptions,
-      task: (progress: Progress<{ message?: string; increment?: number }>, token: CancellationToken) => Promise<R>,
+      task: (
+        progress: Progress<{ message?: string; increment?: number }>,
+        token: CancellationToken,
+      ) => Promise<R>,
     ): Promise<R>;
 
     /**
@@ -2284,7 +2377,10 @@ declare module '@podman-desktop/api' {
      * }
      * ```
      */
-    export function createStatusBarItem(alignment?: StatusBarAlignment, priority?: number): StatusBarItem;
+    export function createStatusBarItem(
+      alignment?: StatusBarAlignment,
+      priority?: number,
+    ): StatusBarItem;
 
     /**
      * Opens an input box to ask the user for input.
@@ -2297,7 +2393,10 @@ declare module '@podman-desktop/api' {
      * @param token A token that can be used to signal cancellation.
      * @return A promise that resolves to a string the user provided or to `undefined` in case of dismissal.
      */
-    export function showInputBox(options?: InputBoxOptions, token?: CancellationToken): Promise<string | undefined>;
+    export function showInputBox(
+      options?: InputBoxOptions,
+      token?: CancellationToken,
+    ): Promise<string | undefined>;
 
     /**
      * Shows a file open dialog to the user which allows to select a file
@@ -2306,7 +2405,9 @@ declare module '@podman-desktop/api' {
      * @param options Options that control the dialog.
      * @returns A promise that resolves to the selected resources or `undefined`.
      */
-    export function showOpenDialog(options?: OpenDialogOptions): Promise<Uri[] | undefined>;
+    export function showOpenDialog(
+      options?: OpenDialogOptions,
+    ): Promise<Uri[] | undefined>;
 
     /**
      * Shows a file save dialog to the user which allows to select a file
@@ -2315,7 +2416,9 @@ declare module '@podman-desktop/api' {
      * @param options Options that control the dialog.
      * @returns A promise that resolves to the selected resource or `undefined`.
      */
-    export function showSaveDialog(options?: SaveDialogOptions): Promise<Uri | undefined>;
+    export function showSaveDialog(
+      options?: SaveDialogOptions,
+    ): Promise<Uri | undefined>;
 
     /**
      * Shows a selection list allowing multiple selections.
@@ -2388,7 +2491,11 @@ declare module '@podman-desktop/api' {
      *
      * @returns New webview panel.
      */
-    export function createWebviewPanel(viewType: string, title: string, options?: WebviewOptions): WebviewPanel;
+    export function createWebviewPanel(
+      viewType: string,
+      title: string,
+      options?: WebviewOptions,
+    ): WebviewPanel;
 
     export function listWebviews(): Promise<WebviewInfo[]>;
   }
@@ -2405,13 +2512,18 @@ declare module '@podman-desktop/api' {
      * @param context the Kubernetes context to use
      * @param manifests the manifests to create as JSON objects
      */
-    export function createResources(context: string, manifests: unknown[]): Promise<void>;
+    export function createResources(
+      context: string,
+      manifests: unknown[],
+    ): Promise<void>;
 
     /**
      * Add a KubernetesGenerator to KubernetesGeneratorRegistry
      * @param provider the custom provider to add
      */
-    export function registerKubernetesGenerator(provider: KubernetesGeneratorProvider): Disposable;
+    export function registerKubernetesGenerator(
+      provider: KubernetesGeneratorProvider,
+    ): Disposable;
   }
   /**
    * An event describing the update in kubeconfig location
@@ -2421,7 +2533,9 @@ declare module '@podman-desktop/api' {
     readonly location: Uri;
   }
 
-  export type KubernetesGeneratorSelector = KubernetesGeneratorType | ReadonlyArray<KubernetesGeneratorType>;
+  export type KubernetesGeneratorSelector =
+    | KubernetesGeneratorType
+    | ReadonlyArray<KubernetesGeneratorType>;
 
   export type KubernetesGeneratorType = 'Compose' | 'Pod' | 'Container';
 
@@ -2446,7 +2560,9 @@ declare module '@podman-desktop/api' {
   export interface KubernetesGeneratorProvider {
     name: string;
     types: KubernetesGeneratorSelector;
-    generate(kubernetesGeneratorArguments: KubernetesGeneratorArgument[]): Promise<GenerateKubeResult>;
+    generate(
+      kubernetesGeneratorArguments: KubernetesGeneratorArgument[],
+    ): Promise<GenerateKubeResult>;
   }
 
   export interface ImageInfo {
@@ -2685,7 +2801,13 @@ declare module '@podman-desktop/api' {
 
   type MountConsistency = 'default' | 'consistent' | 'cached' | 'delegated';
 
-  type MountPropagation = 'private' | 'rprivate' | 'shared' | 'rshared' | 'slave' | 'rslave';
+  type MountPropagation =
+    | 'private'
+    | 'rprivate'
+    | 'shared'
+    | 'rshared'
+    | 'slave'
+    | 'rslave';
 
   interface MountSettings {
     Target: string;
@@ -3779,7 +3901,10 @@ declare module '@podman-desktop/api' {
      * @param id the id or name of the container on this engine, obtained from the result of {@link containerEngine.listContainers} or as the result of {@link containerEngine.createContainer}
      * @return A promise resolving to a structure containing the container information
      */
-    export function inspectContainer(engineId: string, id: string): Promise<ContainerInspectInfo>;
+    export function inspectContainer(
+      engineId: string,
+      id: string,
+    ): Promise<ContainerInspectInfo>;
 
     /**
      * Create a new container on a specific container engine
@@ -3855,7 +3980,10 @@ declare module '@podman-desktop/api' {
      * @param id the id of the container on this engine, obtained from the result of {@link containerEngine.listContainers} or as the result of {@link containerEngine.createContainer}
      */
 
-    export function deleteContainer(engineId: string, id: string): Promise<void>;
+    export function deleteContainer(
+      engineId: string,
+      id: string,
+    ): Promise<void>;
     /**
      * Build a container image
      *
@@ -3865,7 +3993,10 @@ declare module '@podman-desktop/api' {
      */
     export function buildImage(
       context: string,
-      eventCollect: (eventName: 'stream' | 'error' | 'finish', data: string) => void,
+      eventCollect: (
+        eventName: 'stream' | 'error' | 'finish',
+        data: string,
+      ) => void,
       options?: BuildImageOptions,
     ): Promise<unknown>;
 
@@ -3877,7 +4008,12 @@ declare module '@podman-desktop/api' {
      * @param filename the file on which to save the container image content
      * @param token an optional cancellation token which will cancel saving the image on disk when the token is canceled
      */
-    export function saveImage(engineId: string, id: string, filename: string, token?: CancellationToken): Promise<void>;
+    export function saveImage(
+      engineId: string,
+      id: string,
+      filename: string,
+      token?: CancellationToken,
+    ): Promise<void>;
 
     /**
      * List the container images. Only images from a final layer (no children) are returned.
@@ -3896,7 +4032,9 @@ declare module '@podman-desktop/api' {
      * const images = await listImages({ provider: provider.connection });
      * console.log(images);
      */
-    export function listImages(options?: ListImagesOptions): Promise<ImageInfo[]>;
+    export function listImages(
+      options?: ListImagesOptions,
+    ): Promise<ImageInfo[]>;
 
     /**
      * Tag an image so that it becomes part of a repository
@@ -3906,7 +4044,12 @@ declare module '@podman-desktop/api' {
      * @param repo The repository to tag in. For example, `someuser/someimage`
      * @param tag The name of the new tag
      */
-    export function tagImage(engineId: string, imageId: string, repo: string, tag?: string): Promise<void>;
+    export function tagImage(
+      engineId: string,
+      imageId: string,
+      repo: string,
+      tag?: string,
+    ): Promise<void>;
 
     /**
      * Push an image to a registry.
@@ -3957,7 +4100,10 @@ declare module '@podman-desktop/api' {
      * @param id the id of the image on this engine, obtained from the result of {@link containerEngine.listImages}
      * @return A promise resolving to a structure containing the image information
      */
-    export function getImageInspect(engineId: string, id: string): Promise<ImageInspectInfo>;
+    export function getImageInspect(
+      engineId: string,
+      id: string,
+    ): Promise<ImageInspectInfo>;
 
     export function info(engineId: string): Promise<ContainerEngineInfo>;
 
@@ -3979,7 +4125,9 @@ declare module '@podman-desktop/api' {
      * const info = await listInfos({ provider: provider.connection });
      * console.log(info);
      */
-    export function listInfos(options?: ListInfosOptions): Promise<ContainerEngineInfo[]>;
+    export function listInfos(
+      options?: ListInfosOptions,
+    ): Promise<ContainerEngineInfo[]>;
     export const onEvent: Event<ContainerJSONEvent>;
 
     export function listNetworks(): Promise<NetworkInspectInfo[]>;
@@ -3989,10 +4137,17 @@ declare module '@podman-desktop/api' {
     ): Promise<NetworkCreateResult>;
 
     export function listVolumes(): Promise<VolumeListInfo[]>;
-    export function createVolume(options?: VolumeCreateOptions): Promise<VolumeCreateResponseInfo>;
-    export function deleteVolume(volumeName: string, options?: VolumeDeleteOptions): Promise<void>;
+    export function createVolume(
+      options?: VolumeCreateOptions,
+    ): Promise<VolumeCreateResponseInfo>;
+    export function deleteVolume(
+      volumeName: string,
+      options?: VolumeDeleteOptions,
+    ): Promise<void>;
 
-    export function createPod(podOptions: PodCreateOptions): Promise<{ engineId: string; Id: string }>;
+    export function createPod(
+      podOptions: PodCreateOptions,
+    ): Promise<{ engineId: string; Id: string }>;
     export function replicatePodmanContainer(
       source: { engineId: string; id: string },
       target: { engineId: string },
@@ -4004,8 +4159,13 @@ declare module '@podman-desktop/api' {
     export function removePod(engineId: string, podId: string): Promise<void>;
 
     // Manifest related methods
-    export function createManifest(options: ManifestCreateOptions): Promise<{ engineId: string; Id: string }>;
-    export function inspectManifest(engineId: string, id: string): Promise<ManifestInspectInfo>;
+    export function createManifest(
+      options: ManifestCreateOptions,
+    ): Promise<{ engineId: string; Id: string }>;
+    export function inspectManifest(
+      engineId: string,
+      id: string,
+    ): Promise<ManifestInspectInfo>;
     export function pushManifest(options: ManifestPushOptions): Promise<void>;
     export function removeManifest(engineId: string, id: string): Promise<void>;
   }
@@ -4182,7 +4342,9 @@ declare module '@podman-desktop/api' {
      * these permissions, otherwise all sessions should be returned.
      * @returns A promise that resolves to an array of authentication sessions.
      */
-    getSessions(scopes?: string[]): Promise<ReadonlyArray<AuthenticationSession>>;
+    getSessions(
+      scopes?: string[],
+    ): Promise<ReadonlyArray<AuthenticationSession>>;
 
     /**
      * Prompts a user to login.
@@ -4333,7 +4495,10 @@ declare module '@podman-desktop/api' {
      * @param options Options for the telemetry logger.
      * @returns A new telemetry logger
      */
-    export function createTelemetryLogger(sender?: TelemetrySender, options?: TelemetryLoggerOptions): TelemetryLogger;
+    export function createTelemetryLogger(
+      sender?: TelemetrySender,
+      options?: TelemetryLoggerOptions,
+    ): TelemetryLogger;
 
     /**
      * The system clipboard.
@@ -4449,7 +4614,11 @@ declare module '@podman-desktop/api' {
      * @returns A promise that resolves to a RunResult object.
      * @throws {@link RunError} if provided command can not be executed.
      */
-    export function exec(command: string, args?: string[], options?: RunOptions): Promise<RunResult>;
+    export function exec(
+      command: string,
+      args?: string[],
+      options?: RunOptions,
+    ): Promise<RunResult>;
   }
 
   /**
@@ -4501,7 +4670,10 @@ declare module '@podman-desktop/api' {
      * @param data The data to log
      */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    logUsage(eventName: string, data?: Record<string, any | TelemetryTrustedValue>): void;
+    logUsage(
+      eventName: string,
+      data?: Record<string, any | TelemetryTrustedValue>,
+    ): void;
 
     /**
      * Log an error event.
@@ -4512,7 +4684,10 @@ declare module '@podman-desktop/api' {
      * @param data The data to log
      */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    logError(eventName: string, data?: Record<string, any | TelemetryTrustedValue>): void;
+    logError(
+      eventName: string,
+      data?: Record<string, any | TelemetryTrustedValue>,
+    ): void;
 
     /**
      * Log an error event.
@@ -4520,7 +4695,10 @@ declare module '@podman-desktop/api' {
      * @param data Additional data to log alongside the stack trace
      */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    logError(error: Error, data?: Record<string, any | TelemetryTrustedValue>): void;
+    logError(
+      error: Error,
+      data?: Record<string, any | TelemetryTrustedValue>,
+    ): void;
 
     /**
      * Dispose this object and free resources.
@@ -4612,7 +4790,11 @@ declare module '@podman-desktop/api' {
      * @param scope the scope to use to save the value
      */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    export function setValue(key: string, value: any, scope?: 'onboarding' | 'DockerCompatibility'): void;
+    export function setValue(
+      key: string,
+      value: any,
+      scope?: 'onboarding' | 'DockerCompatibility',
+    ): void;
   }
 
   export type CliToolInstallationSource = 'extension' | 'external';
@@ -4777,7 +4959,10 @@ declare module '@podman-desktop/api' {
      * @param token a cancellation token the function can use to be informed when the caller asks for the operation to be cancelled
      * @return the complete result of the analyze, either synchronously of through a Promise
      */
-    check(image: ImageInfo, token?: CancellationToken): ProviderResult<ImageChecks>;
+    check(
+      image: ImageInfo,
+      token?: CancellationToken,
+    ): ProviderResult<ImageChecks>;
   }
 
   export interface ImageCheckerProviderMetadata {
@@ -4825,17 +5010,28 @@ declare module '@podman-desktop/api' {
     // Navigate to the Images page
     export function navigateToImages(): Promise<void>;
     // Navigate to a specific image referenced by id, engineId and tag
-    export function navigateToImage(id: string, engineId: string, tag: string): Promise<void>;
+    export function navigateToImage(
+      id: string,
+      engineId: string,
+      tag: string,
+    ): Promise<void>;
 
     // Navigate to the Volumes page
     export function navigateToVolumes(): Promise<void>;
     // Navigate to a specific volume
-    export function navigateToVolume(name: string, engineId: string): Promise<void>;
+    export function navigateToVolume(
+      name: string,
+      engineId: string,
+    ): Promise<void>;
 
     // Navigate to the Pods page
     export function navigateToPods(): Promise<void>;
     // Navigate to a specific pod referenced by kind, name and engineId
-    export function navigateToPod(kind: string, name: string, engineId: string): Promise<void>;
+    export function navigateToPod(
+      kind: string,
+      name: string,
+      engineId: string,
+    ): Promise<void>;
 
     // Navigate to the CliTools page
     export function navigateToCliTools(): Promise<void>;
@@ -4863,7 +5059,9 @@ declare module '@podman-desktop/api' {
     /**
      * Navigate to the Edit Provider Container Connection page
      */
-    export function navigateToEditProviderContainerConnection(connection: ProviderContainerConnection): Promise<void>;
+    export function navigateToEditProviderContainerConnection(
+      connection: ProviderContainerConnection,
+    ): Promise<void>;
 
     /**
      *  Navigate to a specific onboarding page referenced by its extensionId
@@ -4905,7 +5103,10 @@ declare module '@podman-desktop/api' {
      * @param routeId the identifier of the route to use
      * @param args the arguments to provide to the command linked to the routeId
      */
-    export function navigate(routeId: string, ...args: unknown[]): Promise<void>;
+    export function navigate(
+      routeId: string,
+      ...args: unknown[]
+    ): Promise<void>;
   }
 
   /**

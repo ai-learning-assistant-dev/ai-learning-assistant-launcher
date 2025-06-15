@@ -1,28 +1,27 @@
-import { isMac, isWindows } from "./util";
+import Dockerode from 'dockerode';
+import { isMac, isWindows } from './util';
 import { extensionApi } from './real-api';
-import { LibPod, LibpodDockerode } from "./libpod-dockerode";
-import Dockerode from "dockerode";
+import { LibPod, LibpodDockerode } from './libpod-dockerode';
 
-export const macosExtraPath = '/opt/podman/bin:/usr/local/bin:/opt/homebrew/bin:/opt/local/bin';
+export const macosExtraPath =
+  '/opt/podman/bin:/usr/local/bin:/opt/homebrew/bin:/opt/local/bin';
 
 export function getInstallationPath(envPATH?: string): string {
-  envPATH ??= process.env['PATH'];
+  envPATH ??= process.env.PATH;
 
   if (isWindows()) {
     return `c:\\Program Files\\RedHat\\Podman;${envPATH}`;
-  } else if (isMac()) {
+  }
+  if (isMac()) {
     if (!envPATH) {
       return macosExtraPath;
-    } else {
-      return macosExtraPath.concat(':').concat(envPATH);
     }
-  } else {
-    return envPATH ?? '';
+    return macosExtraPath.concat(':').concat(envPATH);
   }
+  return envPATH ?? '';
 }
 
 export function getPodmanCli(): string {
-
   if (isWindows()) {
     return 'podman.exe';
   }
@@ -30,7 +29,7 @@ export function getPodmanCli(): string {
 }
 
 async function getSocketPath(machineName: string): Promise<string> {
-  let socketPath: string = "";
+  let socketPath: string = '';
   const { stdout: socket } = await extensionApi.process.exec(getPodmanCli(), [
     'machine',
     'inspect',
@@ -45,9 +44,10 @@ async function getSocketPath(machineName: string): Promise<string> {
 const libPodDockerode = new LibpodDockerode();
 libPodDockerode.enhancePrototypeWithLibPod();
 
-export async function connect(machineName: string = "podman-machine-default"): Promise<LibPod & Dockerode> {
+export async function connect(
+  machineName: string = 'podman-machine-default',
+): Promise<LibPod & Dockerode> {
   const socketPath = await getSocketPath(machineName);
-  console.debug("Socket Path: ", socketPath);
-  return new Dockerode({ socketPath: socketPath }) as unknown as LibPod & Dockerode;
+  console.debug('Socket Path: ', socketPath);
+  return new Dockerode({ socketPath }) as unknown as LibPod & Dockerode;
 }
-
