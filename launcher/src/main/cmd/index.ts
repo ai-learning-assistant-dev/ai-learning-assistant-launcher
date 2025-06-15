@@ -1,51 +1,66 @@
 import { IpcMain } from 'electron';
 import { ActionName, ServiceName } from './type-info';
 import { Exec } from '../exec';
+import { Channels } from '../preload';
+import { isMac, isWindows } from '../exec/util';
+
+const channel: Channels = "cmd";
 
 const commandLine = new Exec();
 
 export default async function init(ipcMain: IpcMain) {
 
   ipcMain.on(
-    'cmd',
+    channel,
     async (event, action: ActionName, serviceName: ServiceName) => {
-
-      if (commandLine) {
-        if (container) {
-          if (action === 'start') {
-            commandLine.exec()
-          } else if (action === 'stop') {
-            await container.stop();
-            event.reply('docker', 'info', '成功停止');
-          } else if (action === 'remove') {
-            await container.remove();
-            event.reply('docker', 'info', '成功删除');
-          }
+      if(isWindows()){
+        if (action === 'start') {
+          const result = await commandLine.exec("echo %cd%")
+          event.reply(channel, 'info', '成功启动');
+        } else if (action === 'stop') {
+          const result = await commandLine.exec("echo %cd%")
+          event.reply(channel, 'info', '成功停止');
+        } else if (action === 'remove') {
+          const result = await commandLine.exec("echo %cd%")
+          event.reply(channel, 'info', '成功删除');
         } else if (action === 'install') {
-          console.debug('install', imageName);
-          const newContainerInfo = await commandLine.createPodmanContainer(
-            {
-              image: imageName,
-              name: containerName,
-              devices: [{ path: 'nvidia.com/gpu=all' }],
-            },
-          );
-          console.debug('newContainerInfo', newContainerInfo);
-          if (newContainerInfo) {
-            console.debug('安装成功');
-            event.reply('docker', 'info', '安装成功');
-          } else {
-            console.debug('安装失败');
-            event.reply('docker', 'error', '安装失败');
-          }
+          const result = await commandLine.exec("echo %cd%")
+          event.reply(channel, 'info', '安装成功');
+        } else if (action === 'query'){
+          const result = await commandLine.exec("echo %cd%")
+          event.reply(channel, 'info', '成功查询');
+        } else if (action === 'update'){
+          const result = await commandLine.exec("echo %cd%")
+          event.reply(channel, 'info', '成功更新');
         } else {
-          console.debug('没找到容器');
-          event.reply('docker', 'error', '没找到容器');
+          event.reply(channel, 'error', '现在还没有这个功能');
         }
-      } else {
-        console.debug('还没连接到docker');
-        event.reply('docker', 'error', '还没连接到docker');
+      }else if(isMac()){
+        if (action === 'start') {
+          const result = await commandLine.exec("pwd")
+          event.reply(channel, 'info', '成功启动');
+        } else if (action === 'stop') {
+          const result = await commandLine.exec("pwd")
+          event.reply(channel, 'info', '成功停止');
+        } else if (action === 'remove') {
+          const result = await commandLine.exec("pwd")
+          event.reply(channel, 'info', '成功删除');
+        }else if (action === 'install') {
+          const result = await commandLine.exec("pwd")
+          event.reply(channel, 'info', '安装成功');
+        } else if (action === 'query'){
+          const result = await commandLine.exec("echo %cd%")
+          event.reply(channel, 'info', '成功查询');
+        } else if (action === 'update'){
+          const result = await commandLine.exec("echo %cd%")
+          event.reply(channel, 'info', '成功更新');
+        } else {
+          event.reply(channel, 'error', '现在还没有这个功能');
+        }
+      }else{
+        event.reply(channel, 'error', '现在还不支持这个平台');
       }
+
     },
   );
 }
