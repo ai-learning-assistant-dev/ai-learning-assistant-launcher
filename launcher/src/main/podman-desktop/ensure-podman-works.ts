@@ -203,6 +203,7 @@ export async function ensurePodmanWorks(
   event: IpcMainEvent,
   channel: Channels,
 ) {
+  event.reply(channel,MESSAGE_TYPE.PROGRESS,"正在启动WSL，这需要一点时间")
   await checkAndSetup(isWSLInstall, installWSLMock, {
     event,
     channel,
