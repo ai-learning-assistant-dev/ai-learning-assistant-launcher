@@ -1,13 +1,20 @@
-import { Button, List, notification, Typography } from 'antd';
+import { Button, List, Modal, notification, Typography } from 'antd';
 import { Link } from 'react-router-dom';
 import './index.scss';
 import type { ContainerInfo } from 'dockerode';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import useDocker from '../../containers/use-docker';
 import {
   ActionName,
   ServiceName,
 } from '../../../main/podman-desktop/type-info';
+import {
+  ActionName as CmdActionName,
+  ServiceName as CmdServiceName,
+  channel as cmdChannel,
+} from '../../../main/cmd/type-info';
+import useCmd from '../../containers/use-cmd';
+import { MESSAGE_TYPE, MessageData } from '../../../main/ipc-data-type';
 
 interface ContainerItem {
   name: string;
@@ -27,11 +34,20 @@ function getState(container?: ContainerInfo): ContainerItem['state'] {
 
 export default function AiService() {
   const { containers, action, loading } = useDocker();
+  const { isInstallWSL, action: cmdAction, loading: cmdLoading } = useCmd();
+  const [showRebootModal, setShowRebootModal] = useState(false);
   const [operating, setOperating] = useState<{
     serviceName: ServiceName;
     actionName: ActionName;
   }>({
     serviceName: 'LLM',
+    actionName: 'install',
+  });
+  const [cmdOperating, setCmdOperating] = useState<{
+    serviceName: CmdServiceName;
+    actionName: CmdActionName;
+  }>({
+    serviceName: 'WSL',
     actionName: 'install',
   });
   const llmContainer = containers.filter(
@@ -73,14 +89,71 @@ export default function AiService() {
     setOperating({ actionName, serviceName });
     action(actionName, serviceName);
   }
+
+  function clickCmd(actionName: CmdActionName, serviceName: CmdServiceName) {
+    if (cmdLoading) {
+      notification.warning({
+        message: '请等待上一个操作完成后再操作',
+        placement: 'topRight',
+      });
+      return;
+    }
+    setCmdOperating({ actionName, serviceName });
+    cmdAction(actionName, serviceName);
+  }
+
+  useEffect(() => {
+    const cancel = window.electron?.ipcRenderer.on(
+      cmdChannel,
+      (messageType: MESSAGE_TYPE, data: any) => {
+        if (messageType === MESSAGE_TYPE.DATA) {
+          const {
+            action: actionName,
+            service,
+            data: success,
+          } = data as MessageData<CmdActionName, CmdServiceName, boolean>;
+          if (actionName === 'install' && service === 'WSL') {
+            if (success) {
+              setShowRebootModal(true);
+            }
+          }
+        }
+      },
+    );
+
+    return () => {
+      cancel();
+    };
+  }, [setShowRebootModal]);
+
   return (
     <div className="ai-service">
+      <Modal open={showRebootModal} footer={false} closable={false}>
+        已经成功打开windows系统自带WSL组件，需要重启电脑才能进行后续操作，请确保你保存了所有的文件后手动重启电脑
+      </Modal>
       <List
         className="ai-service-list"
         header={
-          <Link to="/hello">
-            <Button>返回</Button>
-          </Link>
+          <div className="header-container">
+            <Link to="/hello">
+              <Button>返回</Button>
+            </Link>
+            <Button
+              disabled={isInstallWSL}
+              type="primary"
+              shape="round"
+              loading={
+                cmdLoading &&
+                cmdOperating.serviceName === 'WSL' &&
+                cmdOperating.actionName === 'install'
+              }
+              onClick={() => clickCmd('install', 'WSL')}
+            >
+              {isInstallWSL
+                ? '已启用Windows自带的WSL组件'
+                : '开启本地AI服务前请点我启用Windows自带的WSL组件'}
+            </Button>
+          </div>
         }
         bordered
         dataSource={containerInfos}
@@ -91,6 +164,7 @@ export default function AiService() {
                 <Button
                   shape="round"
                   size="small"
+                  disabled={!isInstallWSL}
                   loading={
                     loading &&
                     operating.serviceName === item.serviceName &&
@@ -105,6 +179,7 @@ export default function AiService() {
                 <Button
                   shape="round"
                   size="small"
+                  disabled={!isInstallWSL}
                   loading={
                     loading &&
                     operating.serviceName === item.serviceName &&
@@ -119,6 +194,7 @@ export default function AiService() {
                 <Button
                   shape="round"
                   size="small"
+                  disabled={!isInstallWSL}
                   loading={
                     loading &&
                     operating.serviceName === item.serviceName &&
@@ -133,6 +209,7 @@ export default function AiService() {
                 <Button
                   shape="round"
                   size="small"
+                  disabled={!isInstallWSL}
                   loading={
                     loading &&
                     operating.serviceName === item.serviceName &&
@@ -147,6 +224,7 @@ export default function AiService() {
                 <Button
                   shape="round"
                   size="small"
+                  disabled={!isInstallWSL}
                   loading={
                     loading &&
                     operating.serviceName === item.serviceName &&

@@ -2,14 +2,8 @@ import path from 'node:path';
 import type { IpcMainEvent } from 'electron';
 import { appPath, Exec } from '../exec';
 import { isWindows } from '../exec/util';
-import {
-  imageNameDict,
-  imagePathDict,
-  MESSAGE_TYPE,
-  podMachineName,
-  ServiceName,
-} from './type-info';
-import type { Channels } from '../preload';
+import { imageNameDict, imagePathDict, ServiceName } from './type-info';
+import { Channels, MESSAGE_TYPE } from '../ipc-data-type';
 
 const commandLine = new Exec();
 
@@ -36,6 +30,11 @@ export async function getPodmanSocketPath(
 }
 
 async function isWSLInstall() {
+  const output = await commandLine.exec('wsl', ['--status']);
+  console.debug('isWSLInstall', output);
+  if (output.stdout.indexOf('Wsl/WSL_E_WSL_OPTIONAL_COMPONENT_REQUIRED') >= 0) {
+    return false;
+  }
   return true;
 }
 
@@ -93,7 +92,43 @@ async function loadImage(serviceName: ServiceName) {
   return true;
 }
 
+export async function installWSLMock() {
+  return false;
+}
+
 export async function installWSL() {
+  try {
+    const result1 = await commandLine.exec(
+      'dism.exe',
+      [
+        '/online',
+        '/enable-feature',
+        '/featurename:Microsoft-Windows-Subsystem-Linux',
+        '/all',
+        '/norestart',
+      ],
+      { isAdmin: true },
+    );
+    console.debug('installWSL', result1);
+  } catch (e) {
+    console.warn(e);
+  }
+
+  try {
+    const result2 = await commandLine.exec(
+      'dism.exe',
+      [
+        '/online',
+        '/enable-feature',
+        '/featurename:VirtualMachinePlatform',
+        '/all',
+        '/norestart',
+      ],
+      { isAdmin: true },
+    );
+  } catch (e) {
+    console.warn(e);
+  }
   return true;
 }
 
@@ -101,6 +136,7 @@ export async function installPodman() {
   await commandLine.exec(
     path.join(appPath, '..', 'ai-assistant-backend', 'install_podman.exe'),
     ['/s'],
+    { isAdmin: true },
   );
   return true;
 }
@@ -167,7 +203,7 @@ export async function ensurePodmanWorks(
   event: IpcMainEvent,
   channel: Channels,
 ) {
-  await checkAndSetup(isWSLInstall, installWSL, {
+  await checkAndSetup(isWSLInstall, installWSLMock, {
     event,
     channel,
     checkMessage: '检查WSL状态',
@@ -235,7 +271,6 @@ async function checkAndSetup(
   const setupStartMessage = progress ? `正在${progress.setupMessage}` : null;
   const setupSuccessMessage = progress ? `${progress.setupMessage}成功` : null;
   const setupErrorMessage = progress ? `${progress.setupMessage}失败` : null;
-  progress && progress.event.reply(progress.channel);
   try {
     checked = await check();
   } catch (e) {

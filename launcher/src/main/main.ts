@@ -14,9 +14,11 @@ import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
-import init from './podman-desktop';
+import initPodman from './podman-desktop';
+import initCmd from './cmd';
 
-init(ipcMain);
+initCmd(ipcMain);
+initPodman(ipcMain);
 
 class AppUpdater {
   constructor() {

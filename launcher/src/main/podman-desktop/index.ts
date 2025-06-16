@@ -6,17 +6,16 @@ import {
   ActionName,
   channel,
   imageNameDict,
-  MESSAGE_TYPE,
   podMachineName,
   ServiceName,
 } from './type-info';
-import { Channels } from '../preload';
 import {
   ensureImageReady,
   ensurePodmanWorks,
   startPodman,
   stopPodman,
 } from './ensure-podman-works';
+import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 
 let connectionGlobal: LibPod & Dockerode;
 
@@ -32,7 +31,7 @@ async function improveStablebility(func: () => Promise<any>) {
         await stopPodman();
         await startPodman();
         connectionGlobal = await connect();
-        return await func();
+        return func();
       } catch (e) {
         console.error(e);
         throw e;
@@ -74,15 +73,19 @@ export default async function init(ipcMain: IpcMain) {
       if (connectionGlobal) {
         console.debug('podman is ready');
         let containerInfos: PodmanContainerInfo[] = [];
-        await improveStablebility(async () => {
-          containerInfos = await connectionGlobal.listPodmanContainers({
+        containerInfos = await improveStablebility(async () => {
+          return connectionGlobal.listPodmanContainers({
             all: true,
           });
         });
         console.debug('containerInfos', containerInfos);
 
         if (action === 'query') {
-          event.reply(channel, MESSAGE_TYPE.DATA, containerInfos);
+          event.reply(
+            channel,
+            MESSAGE_TYPE.DATA,
+            new MessageData(action, serviceName, containerInfos),
+          );
           return;
         }
         console.debug(event, action, serviceName);
@@ -115,12 +118,14 @@ export default async function init(ipcMain: IpcMain) {
         } else if (action === 'install') {
           console.debug('install', imageName);
           await ensureImageReady(serviceName, event, channel);
-          let newContainerInfo: {
-            Id: string;
-            Warnings: string[];
-          } | null = null;
-          await improveStablebility(async () => {
-            newContainerInfo = await connectionGlobal.createPodmanContainer({
+          let newContainerInfo:
+            | {
+                Id: string;
+                Warnings: string[];
+              }
+            | undefined;
+          newContainerInfo = await improveStablebility(async () => {
+            return connectionGlobal.createPodmanContainer({
               image: imageName,
               name: containerName,
               devices: [{ path: 'nvidia.com/gpu=all' }],
@@ -130,6 +135,13 @@ export default async function init(ipcMain: IpcMain) {
           console.debug('newContainerInfo', newContainerInfo);
           if (newContainerInfo) {
             console.debug('安装服务成功');
+            await improveStablebility(async () => {
+              const newContainer = connectionGlobal.getContainer(
+                newContainerInfo.Id,
+              );
+              await newContainer.start();
+              event.reply(channel, MESSAGE_TYPE.INFO, '成功启动服务');
+            });
             event.reply(channel, MESSAGE_TYPE.INFO, '安装服务成功');
           } else {
             console.debug('安装服务失败');

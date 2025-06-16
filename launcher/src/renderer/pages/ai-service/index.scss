@@ -8,4 +8,9 @@
   }
   height: 100%;
   align-items: center;
+
+  .header-container{
+    display: flex;
+    justify-content: space-between;
+  }
 }

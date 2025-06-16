@@ -1,15 +1,10 @@
 import { useEffect, useState } from 'react';
 import { notification } from 'antd';
-import type Dockerode from 'dockerode';
-import {
-  ActionName,
-  channel,
-  ServiceName,
-} from '../../../main/podman-desktop/type-info';
+import { ActionName, channel, ServiceName } from '../../../main/cmd/type-info';
 import { MESSAGE_TYPE, MessageData } from '../../../main/ipc-data-type';
 
-export default function useDocker() {
-  const [containers, setContainers] = useState<Dockerode.ContainerInfo[]>([]);
+export default function useCmd() {
+  const [isInstallWSL, setIsInstallWSL] = useState<boolean>(true);
   const [loading, setLoading] = useState(false);
   function action(actionName: ActionName, serviceName: ServiceName) {
     if (loading) {
@@ -23,8 +18,8 @@ export default function useDocker() {
     window.electron.ipcRenderer.sendMessage(channel, actionName, serviceName);
   }
 
-  function queryContainers() {
-    window.electron.ipcRenderer.sendMessage(channel, 'query');
+  function query() {
+    window.electron.ipcRenderer.sendMessage(channel, 'query', 'WSL');
   }
   useEffect(() => {
     const cancel = window.electron?.ipcRenderer.on(
@@ -35,13 +30,20 @@ export default function useDocker() {
           notification.error({ message: data, placement: 'topRight' });
           setLoading(false);
         } else if (messageType === MESSAGE_TYPE.DATA) {
-          setContainers(
-            (data as MessageData<string, string, Dockerode.ContainerInfo[]>)
-              .data,
-          );
+          const {
+            action: actionName,
+            service,
+            data: isWslInstall,
+          } = data as MessageData<ActionName, ServiceName, boolean>;
+          if (actionName === 'query' && service === 'WSL') {
+            setIsInstallWSL(isWslInstall);
+          } else if (actionName === 'install' && service === 'WSL') {
+            setIsInstallWSL(isWslInstall);
+            setLoading(false);
+          }
         } else if (messageType === MESSAGE_TYPE.INFO) {
           notification.success({ message: data, placement: 'topRight' });
-          queryContainers();
+          query();
           setLoading(false);
         } else if (messageType === MESSAGE_TYPE.PROGRESS) {
           notification.success({ message: data, placement: 'topRight' });
@@ -56,14 +58,14 @@ export default function useDocker() {
     return () => {
       cancel();
     };
-  }, [setContainers]);
+  }, [setIsInstallWSL]);
 
   useEffect(() => {
-    queryContainers();
+    query();
   }, []);
 
   return {
-    containers,
+    isInstallWSL,
     action,
     loading,
   };

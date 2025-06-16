@@ -23,13 +23,4 @@ export const imagePathDict: Record<ServiceName, string> = {
 
 export const podMachineName = 'podman-machine-default';
 
-export enum MESSAGE_TYPE {
-  ERROR = 'error',
-  WARNING = 'warning',
-  INFO = 'info',
-  DATA = 'data',
-  PROGRESS = 'progress',
-  PROGRESS_ERROR = 'progress_success',
-}
-
 export const channel: Channels = 'docker';

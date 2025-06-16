@@ -1,4 +1,6 @@
-export type ServiceName = 'podman';
+import type { Channels } from '../ipc-data-type';
+
+export type ServiceName = 'WSL';
 export type ActionName =
   | 'query'
   | 'install'
@@ -6,3 +8,5 @@ export type ActionName =
   | 'stop'
   | 'remove'
   | 'update';
+
+export const channel: Channels = 'cmd';
