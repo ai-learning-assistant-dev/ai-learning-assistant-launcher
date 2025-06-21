@@ -1,3 +1,7 @@
+# 错误解决方案
+## npm run package Cannot create symbolic link
+在admin模式的命令行里运行能解决
+
 <img src=".erb/img/erb-banner.svg" width="100%" />
 
 <br>
