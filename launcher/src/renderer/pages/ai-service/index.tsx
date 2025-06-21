@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import useDocker from '../../containers/use-docker';
 import {
   ActionName,
+  containerNameDict,
   ServiceName,
 } from '../../../main/podman-desktop/type-info';
 import {
@@ -51,13 +52,13 @@ export default function AiService() {
     actionName: 'install',
   });
   const llmContainer = containers.filter(
-    (item) => item.Names.indexOf('LLM') >= 0,
+    (item) => item.Names.indexOf(containerNameDict.LLM) >= 0,
   )[0];
   const ttsContainer = containers.filter(
-    (item) => item.Names.indexOf('TTS') >= 0,
+    (item) => item.Names.indexOf(containerNameDict.TTS) >= 0,
   )[0];
   const asrContainer = containers.filter(
-    (item) => item.Names.indexOf('ASR') >= 0,
+    (item) => item.Names.indexOf(containerNameDict.ASR) >= 0,
   )[0];
 
   const containerInfos: ContainerItem[] = [

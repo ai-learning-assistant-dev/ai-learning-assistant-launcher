@@ -14,7 +14,7 @@ import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
-import initPodman from './podman-desktop';
+import initPodman from './podman-desktop/simple-container-manage';
 import initCmd from './cmd';
 
 initCmd(ipcMain);

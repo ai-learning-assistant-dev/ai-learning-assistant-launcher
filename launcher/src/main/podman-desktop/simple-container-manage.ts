@@ -5,6 +5,8 @@ import { LibPod, PodmanContainerInfo } from './libpod-dockerode';
 import {
   ActionName,
   channel,
+  containerNameDict,
+  getMergedContainerConfig,
   imageNameDict,
   podMachineName,
   ServiceName,
@@ -16,6 +18,8 @@ import {
   stopPodman,
 } from './ensure-podman-works';
 import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
+import containerConfig from "../../../../ai-assistant-backend/container-config.json"
+import { getContainerConfig } from '../configs';
 
 let connectionGlobal: LibPod & Dockerode;
 
@@ -90,7 +94,7 @@ export default async function init(ipcMain: IpcMain) {
         }
         console.debug(event, action, serviceName);
         const imageName = imageNameDict[serviceName];
-        const containerName = serviceName;
+        const containerName = containerNameDict[serviceName];
 
         const containerInfo = containerInfos.filter(
           (item) => item.Names.indexOf(containerName) >= 0,
@@ -118,6 +122,7 @@ export default async function init(ipcMain: IpcMain) {
         } else if (action === 'install') {
           console.debug('install', imageName);
           await ensureImageReady(serviceName, event, channel);
+          const config = getMergedContainerConfig(serviceName,getContainerConfig())
           let newContainerInfo:
             | {
                 Id: string;
@@ -129,6 +134,7 @@ export default async function init(ipcMain: IpcMain) {
               image: imageName,
               name: containerName,
               devices: [{ path: 'nvidia.com/gpu=all' }],
+              portmappings:config.port.map(p=>({container_port: p.container, host_port: p.host}))
             });
           });
 
