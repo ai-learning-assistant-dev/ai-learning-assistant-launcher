@@ -85,12 +85,24 @@ async function loadImage(serviceName: ServiceName) {
       'ai-assistant-backend',
       imagePathDict[serviceName],
     )
-  await commandLine.exec(getPodmanCli(), [
+  const output = await commandLine.exec(getPodmanCli(), [
     'load',
     '-i',
     imagePath
   ]);
-  return true;
+  console.debug("loadImage",output)
+  const id = output.stdout.split(":").pop();
+  if(output.stdout.indexOf("Loaded image")>=0 &&id&&id.length > 25){
+    const output2 = await commandLine.exec(getPodmanCli(), [
+      'tag',
+      id,
+      imageNameDict[serviceName],
+    ]);
+    console.debug("podman tag", output2)
+    return true;
+  }else{
+    return false;
+  }
 }
 
 export async function installWSLMock() {
