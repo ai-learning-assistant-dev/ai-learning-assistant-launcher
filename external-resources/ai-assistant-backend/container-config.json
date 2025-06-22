@@ -1,0 +1,26 @@
+{
+  "ASR": {
+    "port": [
+      {
+        "container": 8000,
+        "host": 8000
+      }
+    ]
+  },
+  "TTS": {
+    "port": [
+      {
+        "container": 9000,
+        "host": 9000
+      }
+    ]
+  },
+  "LLM": {
+    "port": [
+      {
+        "container": 7000,
+        "host": 7000
+      }
+    ]
+  }
+}
