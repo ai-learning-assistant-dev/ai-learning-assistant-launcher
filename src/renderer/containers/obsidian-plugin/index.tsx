@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { notification } from 'antd';
 import { MESSAGE_TYPE, MessageData } from '../../../main/ipc-data-type';
-import { ActionName, channel, ObsidianPlugin, ServiceName } from '../../../main/obsidian-plugin/type-info';
+import {
+  ActionName,
+  channel,
+  ObsidianPlugin,
+  ServiceName,
+} from '../../../main/obsidian-plugin/type-info';
 
 export default function useObsidianPlugin(vaultId: string) {
   const [obsidianPlugins, setObsidianPlugins] = useState<ObsidianPlugin[]>();
@@ -15,19 +20,27 @@ export default function useObsidianPlugin(vaultId: string) {
       return;
     }
     setLoading(true);
-    window.electron.ipcRenderer.sendMessage(channel, actionName, serviceName, vaultId);
+    window.electron.ipcRenderer.sendMessage(
+      channel,
+      actionName,
+      serviceName,
+      vaultId,
+    );
   }
 
   const query = useCallback(function query() {
     window.electron.ipcRenderer.sendMessage(channel, 'query', 'all', vaultId);
-  },[])
+  }, []);
   useEffect(() => {
     const cancel = window.electron?.ipcRenderer.on(
       channel,
       (messageType, data) => {
         console.debug(messageType, data);
         if (messageType === MESSAGE_TYPE.ERROR) {
-          notification.error({ message: data as string, placement: 'topRight' });
+          notification.error({
+            message: data as string,
+            placement: 'topRight',
+          });
           setLoading(false);
         } else if (messageType === MESSAGE_TYPE.DATA) {
           const {
@@ -36,20 +49,32 @@ export default function useObsidianPlugin(vaultId: string) {
             data: payload,
           } = data as MessageData;
           if (actionName === 'query' && service === 'all') {
-            console.debug('payload',payload)
-            setObsidianPlugins(payload)
+            console.debug('payload', payload);
+            setObsidianPlugins(payload);
             setLoading(false);
           }
         } else if (messageType === MESSAGE_TYPE.INFO) {
-          notification.success({ message: data as string, placement: 'topRight' });
+          notification.success({
+            message: data as string,
+            placement: 'topRight',
+          });
           query();
           setLoading(false);
         } else if (messageType === MESSAGE_TYPE.PROGRESS) {
-          notification.success({ message: data as string, placement: 'topRight' });
+          notification.success({
+            message: data as string,
+            placement: 'topRight',
+          });
         } else if (messageType === MESSAGE_TYPE.PROGRESS_ERROR) {
-          notification.error({ message: data as string, placement: 'topRight' });
+          notification.error({
+            message: data as string,
+            placement: 'topRight',
+          });
         } else if (messageType === MESSAGE_TYPE.WARNING) {
-          notification.warning({ message: data as string, placement: 'topRight' });
+          notification.warning({
+            message: data as string,
+            placement: 'topRight',
+          });
         }
       },
     );

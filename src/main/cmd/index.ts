@@ -2,7 +2,7 @@ import { IpcMain } from 'electron';
 import { ActionName, channel, ServiceName } from './type-info';
 import { Exec } from '../exec';
 import { isMac, isWindows } from '../exec/util';
-import { getObsidianConfig } from '../configs'
+import { getObsidianConfig, setVaultDefaultOpen } from '../configs';
 import { Channels, MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 
 const commandLine = new Exec();
@@ -10,26 +10,41 @@ const commandLine = new Exec();
 export default async function init(ipcMain: IpcMain) {
   ipcMain.on(
     channel,
-    async (event, action: ActionName, serviceName: ServiceName) => {
+    async (
+      event,
+      action: ActionName,
+      serviceName: ServiceName,
+      vaultId?: string,
+    ) => {
       console.debug(
         `cmd action: ${action}, serviceName: ${serviceName}, channel: ${channel}`,
       );
       if (isWindows()) {
         if (action === 'start') {
-          if(serviceName === 'obsidianApp'){
+          if (serviceName === 'obsidianApp') {
             // Obsidian app specific command
-            console.debug('obsidian app start');
-            let obsidianPath = getObsidianConfig().obsidianApp.bin;
-            
-            try{
-              obsidianPath = obsidianPath.replace('%localappdata%',process.env.LOCALAPPDATA)
-              const result = await commandLine.exec(obsidianPath,[],{env: process.env});
-              event.reply(channel, MESSAGE_TYPE.INFO, '成功启动obsidian');
-            }catch(e){
-              console.warn('启动obsidian失败',e)
-              event.reply(channel, MESSAGE_TYPE.ERROR, '启动obsidian失败，请检查obsidian路径设置');
+            console.debug('obsidian app start',vaultId);
+            if (vaultId) {
+              setVaultDefaultOpen(vaultId);
             }
-          }else{
+            let obsidianPath = getObsidianConfig().obsidianApp.bin;
+
+            try {
+              obsidianPath = obsidianPath.replace(
+                '%localappdata%',
+                process.env.LOCALAPPDATA,
+              );
+              const result = commandLine.exec(obsidianPath, [],{});
+              event.reply(channel, MESSAGE_TYPE.INFO, '成功启动obsidian');
+            } catch (e) {
+              console.warn('启动obsidian失败', e);
+              event.reply(
+                channel,
+                MESSAGE_TYPE.ERROR,
+                '启动obsidian失败，请检查obsidian路径设置',
+              );
+            }
+          } else {
             const result = await commandLine.exec('echo %cd%');
             console.debug('cmd', result);
             event.reply(channel, MESSAGE_TYPE.INFO, '成功启动');
@@ -59,7 +74,7 @@ export default async function init(ipcMain: IpcMain) {
               MESSAGE_TYPE.DATA,
               new MessageData(action, serviceName, await isWSLInstall()),
             );
-          } else{
+          } else {
             const result = await commandLine.exec('echo %cd%');
             event.reply(channel, MESSAGE_TYPE.INFO, '成功查询');
           }

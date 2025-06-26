@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Button, List, Skeleton } from 'antd';
+import { Button, List, notification, Skeleton } from 'antd';
 import { Link, NavLink, useParams } from 'react-router-dom';
 import './index.scss';
 import useObsidianPlugin from '../../containers/obsidian-plugin';
@@ -23,20 +23,19 @@ export default function ObsidianPlugin() {
     actionName: 'install',
   });
 
-  const updateObsidianPlugin = useCallback(
-    (pluginId: ServiceName) => {
-      obsidianPluginAction('update', pluginId);
-      setOperating({ actionName: 'update', serviceName: pluginId });
+  const action = useCallback(
+    (action: ActionName, pluginId: ServiceName) => {
+      if (loading) {
+        notification.warning({
+          message: '请等待上一个操作完成后再操作',
+          placement: 'topRight',
+        });
+        return;
+      }
+      obsidianPluginAction(action, pluginId);
+      setOperating({ actionName: action, serviceName: pluginId });
     },
-    [obsidianPluginAction],
-  );
-
-  const installObsidianPlugin = useCallback(
-    (pluginId: ServiceName) => {
-      obsidianPluginAction('install', pluginId);
-      setOperating({ actionName: 'install', serviceName: pluginId });
-    },
-    [obsidianPluginAction],
+    [obsidianPluginAction, setOperating],
   );
 
   return (
@@ -45,9 +44,9 @@ export default function ObsidianPlugin() {
         className="obsidian-plugin-list"
         header={
           <div className="header-container">
-            <Button>
-              <NavLink to="/obsidian-app">返回</NavLink>
-            </Button>
+            <NavLink to="/obsidian-app">
+              <Button>返回</Button>
+            </NavLink>
           </div>
         }
         bordered
@@ -64,30 +63,31 @@ export default function ObsidianPlugin() {
                     operating.serviceName === plugin.id &&
                     operating.actionName === 'install'
                   }
-                  onClick={() =>
-                    installObsidianPlugin(plugin.id as ServiceName)
-                  }
+                  onClick={() => action('install', plugin.id as ServiceName)}
                 >
                   安装插件
                 </Button>
               ),
-              plugin.isInstalled && (
+              plugin.isInstalled && !plugin.isLatest && (
                 <Button
                   loading={
                     loading &&
                     operating.serviceName === plugin.id &&
                     operating.actionName === 'update'
                   }
-                  onClick={() => updateObsidianPlugin(plugin.id as ServiceName)}
+                  onClick={() => action('update', plugin.id as ServiceName)}
                 >
                   更新插件
                 </Button>
+              ),
+              plugin.isInstalled && plugin.isLatest && (
+                '已经是最新版'
               ),
             ].filter((item) => item)}
           >
             <List.Item.Meta
               title={`${plugin.name}`}
-              description={plugin.version}
+              description={`已安装版本 ${plugin.isInstalled ? plugin.version : '---'} 最新版本 ${plugin.latestVersion}`}
             />
           </List.Item>
         ))}

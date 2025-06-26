@@ -15,9 +15,12 @@ export default function ObsidianApp() {
     loading: configsLoading,
   } = useConfigs();
 
-  const startObsidian = useCallback(() => {
-    cmdAction('start', 'obsidianApp');
-  }, [cmdAction]);
+  const startObsidian = useCallback(
+    (vaultId?: string) => {
+      cmdAction('start', 'obsidianApp', vaultId);
+    },
+    [cmdAction],
+  );
 
   const locationObsidian = useCallback(() => {
     configsAction('update', 'obsidianApp');
@@ -28,9 +31,9 @@ export default function ObsidianApp() {
         className="obsidian-app-list"
         header={
           <div className="header-container">
-            <Button>
-              <NavLink to="/hello">返回</NavLink>
-            </Button>
+            <NavLink to="/hello">
+              <Button>返回</Button>
+            </NavLink>
           </div>
         }
         bordered
@@ -39,10 +42,12 @@ export default function ObsidianApp() {
           <List.Item
             key={vault.id}
             actions={[
-              <Button key={0}>
-                <NavLink to={`/obsidian-plugin/${vault.id}`}>插件情况</NavLink>
+              <NavLink key={0} to={`/obsidian-plugin/${vault.id}`}>
+                <Button>插件情况</Button>
+              </NavLink>,
+              <Button key={1} onClick={() => startObsidian(vault.id)}>
+                用阅读器打开
               </Button>,
-              <Button key={1}>更新插件</Button>,
             ]}
           >
             <List.Item.Meta
@@ -56,7 +61,7 @@ export default function ObsidianApp() {
             <Button key={0} onClick={locationObsidian}>
               定位阅读器
             </Button>,
-            <Button key={1} type="primary" onClick={startObsidian}>
+            <Button key={1} type="primary" onClick={() => startObsidian()}>
               运行阅读器
             </Button>,
           ]}

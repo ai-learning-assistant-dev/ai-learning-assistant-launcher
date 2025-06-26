@@ -145,3 +145,30 @@ export function getObsidianVaultConfig() {
   }
   return vaults;
 }
+
+export function setVaultDefaultOpen(vaultId: string) {
+  const obsidianConfigPath = '%APPDATA%\\Obsidian\\obsidian.json'.replace(
+    '%APPDATA%',
+    process.env.APPDATA,
+  );
+  const config: typeof obsidianVaultRawConfigExample = JSON.parse(
+    readFileSync(obsidianConfigPath, { encoding: 'utf8' }),
+  );
+  for (const key in config.vaults) {
+    if (Object.prototype.hasOwnProperty.call(config.vaults, key)) {
+      if (key === vaultId) {
+        config.vaults[key].open = true;
+      } else {
+        delete config.vaults[key].open;
+      }
+    }
+  }
+  writeFileSync(obsidianConfigPath, JSON.stringify(config), {
+    encoding: 'utf8',
+  });
+  console.debug(
+    'write file success',
+    obsidianConfigPath,
+    JSON.stringify(config),
+  );
+}
