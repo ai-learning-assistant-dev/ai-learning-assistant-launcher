@@ -26,7 +26,7 @@ export default async function init(ipcMain: IpcMain) {
           }
         }else if(action === 'update'){
           if(serviceName === 'obsidianApp'){
-            const result = await dialog.showOpenDialog({ properties: ['openFile'] });
+            const result = await dialog.showOpenDialog({ properties: ['openFile','showHiddenFiles'] });
             const path = result.filePaths[0]
             if(path && path.length>0){
               const obsidianConfig = getObsidianConfig();

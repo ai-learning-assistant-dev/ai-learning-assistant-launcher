@@ -1,5 +1,10 @@
 {
   "obsidianApp": {
-    "bin": "C:\\Users\\erzha\\AppData\\Local\\Programs\\Obsidian\\Obsidian.exe"
+    "bin": "%localappdata%\\Programs\\Obsidian\\Obsidian.exe"
+  },
+  "obsidianVaults": {
+    "abc":{
+      
+    }
   }
 }

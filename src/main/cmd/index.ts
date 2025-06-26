@@ -19,13 +19,14 @@ export default async function init(ipcMain: IpcMain) {
           if(serviceName === 'obsidianApp'){
             // Obsidian app specific command
             console.debug('obsidian app start');
-            const obsidianPath = getObsidianConfig().obsidianApp.bin;
+            let obsidianPath = getObsidianConfig().obsidianApp.bin;
+            
             try{
-              const result = await commandLine.exec(obsidianPath);
+              obsidianPath = obsidianPath.replace('%localappdata%',process.env.LOCALAPPDATA)
+              const result = await commandLine.exec(obsidianPath,[],{env: process.env});
               event.reply(channel, MESSAGE_TYPE.INFO, '成功启动obsidian');
             }catch(e){
-              console.log('e',e)
-              
+              console.warn('启动obsidian失败',e)
               event.reply(channel, MESSAGE_TYPE.ERROR, '启动obsidian失败，请检查obsidian路径设置');
             }
           }else{

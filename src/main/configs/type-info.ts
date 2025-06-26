@@ -1,6 +1,6 @@
 import type { Channels } from '../ipc-data-type';
 
-export type ServiceName = 'obsidianApp';
+export type ServiceName = 'obsidianApp' | 'obsidianVault';
 export type ActionName =
   | 'query'
   | 'update';
