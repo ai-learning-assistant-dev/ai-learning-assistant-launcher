@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { notification } from 'antd';
 import { MESSAGE_TYPE, MessageData } from '../../../main/ipc-data-type';
-import { ObsidianConfig, ObsidianVaultConfig, ActionName, channel, ServiceName } from '../../../main/configs/type-info';
+import { ActionName, channel, ObsidianPlugin, ServiceName } from '../../../main/obsidian-plugin/type-info';
 
-export default function useConfigs() {
-  const [obsidianConfig, setObsidianConfig] = useState<ObsidianConfig>();
-  const [obsidianVaultConfig, setObsidianVaultConfig] = useState<ObsidianVaultConfig[]>();
+export default function useObsidianPlugin(vaultId: string) {
+  const [obsidianPlugins, setObsidianPlugins] = useState<ObsidianPlugin[]>();
   const [loading, setLoading] = useState(false);
   function action(actionName: ActionName, serviceName: ServiceName) {
     if (loading) {
@@ -16,12 +15,11 @@ export default function useConfigs() {
       return;
     }
     setLoading(true);
-    window.electron.ipcRenderer.sendMessage(channel, actionName, serviceName);
+    window.electron.ipcRenderer.sendMessage(channel, actionName, serviceName, vaultId);
   }
 
   const query = useCallback(function query() {
-    window.electron.ipcRenderer.sendMessage(channel, 'query', 'obsidianApp');
-    window.electron.ipcRenderer.sendMessage(channel, 'query', 'obsidianVault');
+    window.electron.ipcRenderer.sendMessage(channel, 'query', 'all', vaultId);
   },[])
   useEffect(() => {
     const cancel = window.electron?.ipcRenderer.on(
@@ -37,13 +35,9 @@ export default function useConfigs() {
             service,
             data: payload,
           } = data as MessageData;
-          if (actionName === 'query' && service === 'obsidianApp') {
+          if (actionName === 'query' && service === 'all') {
             console.debug('payload',payload)
-            setObsidianConfig(payload)
-            setLoading(false);
-          }else if (actionName === 'query' && service === 'obsidianVault') {
-            console.debug('payload',payload)
-            setObsidianVaultConfig(payload)
+            setObsidianPlugins(payload)
             setLoading(false);
           }
         } else if (messageType === MESSAGE_TYPE.INFO) {
@@ -63,7 +57,7 @@ export default function useConfigs() {
     return () => {
       cancel();
     };
-  }, [setObsidianConfig, setObsidianVaultConfig]);
+  }, [setObsidianPlugins]);
 
   useEffect(() => {
     query();
@@ -71,8 +65,7 @@ export default function useConfigs() {
 
   return {
     action,
-    obsidianConfig,
-    obsidianVaultConfig,
+    obsidianPlugins,
     loading,
   };
 }

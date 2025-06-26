@@ -1,11 +1,17 @@
-import { readFileSync, writeFileSync } from "node:fs";
-import path from "node:path";
-import { appPath } from "../exec";
-import { dialog, IpcMain } from "electron";
-import { ActionName, channel, ServiceName } from "./type-info";
-import { isWindows } from "../exec/util";
-import { MESSAGE_TYPE, MessageData } from "../ipc-data-type";
-
+import { readFileSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+import { appPath } from '../exec';
+import { dialog, IpcMain } from 'electron';
+import {
+  ActionName,
+  channel,
+  ContainerConfig,
+  ObsidianConfig,
+  ObsidianVaultConfig,
+  ServiceName,
+} from './type-info';
+import { isWindows } from '../exec/util';
+import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 
 export default async function init(ipcMain: IpcMain) {
   ipcMain.on(
@@ -16,39 +22,39 @@ export default async function init(ipcMain: IpcMain) {
       );
       if (isWindows()) {
         if (action === 'query') {
-          if(serviceName === 'obsidianApp') {
-            console.debug('obsidianApp')
+          if (serviceName === 'obsidianApp') {
+            console.debug('obsidianApp');
             event.reply(
               channel,
               MESSAGE_TYPE.DATA,
               new MessageData(action, serviceName, getObsidianConfig()),
             );
+          } else if (serviceName === 'obsidianVault') {
+            event.reply(
+              channel,
+              MESSAGE_TYPE.DATA,
+              new MessageData(action, serviceName, getObsidianVaultConfig()),
+            );
           }
-        }else if(action === 'update'){
-          if(serviceName === 'obsidianApp'){
-            const result = await dialog.showOpenDialog({ properties: ['openFile','showHiddenFiles'] });
-            const path = result.filePaths[0]
-            if(path && path.length>0){
+        } else if (action === 'update') {
+          if (serviceName === 'obsidianApp') {
+            const result = await dialog.showOpenDialog({
+              properties: ['openFile', 'showHiddenFiles'],
+            });
+            const path = result.filePaths[0];
+            if (path && path.length > 0) {
               const obsidianConfig = getObsidianConfig();
               obsidianConfig.obsidianApp.bin = path;
               setObsidianConfig(obsidianConfig);
-              event.reply(
-                channel,
-                MESSAGE_TYPE.INFO,
-                "成功设置Obsidian路径",
-              );
-            }else{
-              event.reply(
-                channel,
-                MESSAGE_TYPE.INFO,
-                "没有设置好Obsidian路径",
-              );
+              event.reply(channel, MESSAGE_TYPE.INFO, '成功设置Obsidian路径');
+            } else {
+              event.reply(channel, MESSAGE_TYPE.INFO, '没有设置好Obsidian路径');
             }
           }
         }
       }
-    }
-  )
+    },
+  );
 }
 
 const containerConfigPath = path.join(
@@ -56,36 +62,17 @@ const containerConfigPath = path.join(
   'external-resources',
   'ai-assistant-backend',
   'container-config.json',
-)
-
-export interface ContainerConfig {
-  "ASR": {
-    "port": {
-      "container": number,
-      "host": number
-    }[]
-  },
-  "TTS": {
-    "port": {
-      "container": number,
-      "host": number
-    }[]
-  },
-  "LLM": {
-    "port": {
-      "container": number,
-      "host": number
-    }[]
-  }
-}
+);
 
 let containerConfigBuff: ContainerConfig = {
-  ASR: {port:[]},
-  TTS: {port:[]},
-  LLM: {port:[]},
+  ASR: { port: [] },
+  TTS: { port: [] },
+  LLM: { port: [] },
 };
 export function getContainerConfig() {
-  const containerConfigString = readFileSync(containerConfigPath, { encoding: 'utf8' });
+  const containerConfigString = readFileSync(containerConfigPath, {
+    encoding: 'utf8',
+  });
   const containerConfig = JSON.parse(containerConfigString) as ContainerConfig;
   if (containerConfig) {
     containerConfigBuff = containerConfig;
@@ -93,28 +80,22 @@ export function getContainerConfig() {
   return containerConfig;
 }
 
-
 const obsidianConfigPath = path.join(
   appPath,
   'external-resources',
   'config',
   'obsidian-config.json',
-)
-
-export interface ObsidianConfig {
-  "obsidianApp": {
-    "bin": string,
-  };
-}
-
+);
 
 let obsidianConfigBuff: ObsidianConfig = {
-  "obsidianApp": {
-    "bin": "C:/a/b/c"
-  }
+  obsidianApp: {
+    bin: 'C:/a/b/c',
+  },
 };
-export function getObsidianConfig(){
-  const obsidianConfigPathString = readFileSync(obsidianConfigPath, { encoding: 'utf8' });
+export function getObsidianConfig() {
+  const obsidianConfigPathString = readFileSync(obsidianConfigPath, {
+    encoding: 'utf8',
+  });
   const obsidianConfig = JSON.parse(obsidianConfigPathString) as ObsidianConfig;
   if (obsidianConfig) {
     obsidianConfigBuff = obsidianConfig;
@@ -122,6 +103,45 @@ export function getObsidianConfig(){
   return obsidianConfig;
 }
 
-export function setObsidianConfig(config){
-  writeFileSync(obsidianConfigPath, JSON.stringify(config,null,2) ,{ encoding: 'utf8'})
+export function setObsidianConfig(config) {
+  writeFileSync(obsidianConfigPath, JSON.stringify(config, null, 2), {
+    encoding: 'utf8',
+  });
+}
+
+const obsidianVaultRawConfigExample = {
+  vaults: {
+    d9d365ba15702e08: {
+      path: 'D:\\my-electron-app-win32-x64-1.0.0\\external-resources\\user-workspace\\my-docs',
+      ts: 1750931357143,
+      open: true,
+    },
+    '84cf481186ed4dcd': {
+      path: 'D:\\my-electron-app-win32-x64-1.0.0\\external-resources\\user-workspace\\t2\\t2',
+      ts: 1750931352511,
+    },
+  },
+};
+
+export function getObsidianVaultConfig() {
+  const config: typeof obsidianVaultRawConfigExample = JSON.parse(
+    readFileSync(
+      '%APPDATA%\\Obsidian\\obsidian.json'.replace(
+        '%APPDATA%',
+        process.env.APPDATA,
+      ),
+      { encoding: 'utf8' },
+    ),
+  );
+  const vaults: ObsidianVaultConfig[] = [];
+  for (const key in config.vaults) {
+    if (Object.prototype.hasOwnProperty.call(config.vaults, key)) {
+      vaults.push({
+        id: key,
+        name: path.parse(config.vaults[key].path).name,
+        path: config.vaults[key].path,
+      });
+    }
+  }
+  return vaults;
 }

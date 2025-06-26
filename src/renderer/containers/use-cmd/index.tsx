@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { notification } from 'antd';
 import { ActionName, channel, ServiceName } from '../../../main/cmd/type-info';
 import { MESSAGE_TYPE, MessageData } from '../../../main/ipc-data-type';
-import { ObsidianConfig } from '../../../main/configs';
 
 export default function useCmd() {
   const [isInstallWSL, setIsInstallWSL] = useState<boolean>(true);
