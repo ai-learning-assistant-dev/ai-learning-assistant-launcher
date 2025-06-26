@@ -2,6 +2,7 @@ import { IpcMain } from 'electron';
 import { ActionName, channel, ServiceName } from './type-info';
 import { Exec } from '../exec';
 import { isMac, isWindows } from '../exec/util';
+import { getObsidianConfig } from '../configs'
 import { Channels, MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 
 const commandLine = new Exec();
@@ -10,11 +11,28 @@ export default async function init(ipcMain: IpcMain) {
   ipcMain.on(
     channel,
     async (event, action: ActionName, serviceName: ServiceName) => {
+      console.debug(
+        `cmd action: ${action}, serviceName: ${serviceName}, channel: ${channel}`,
+      );
       if (isWindows()) {
         if (action === 'start') {
-          const result = await commandLine.exec('echo %cd%');
-          console.debug('cmd', result);
-          event.reply(channel, MESSAGE_TYPE.INFO, '成功启动');
+          if(serviceName === 'obsidianApp'){
+            // Obsidian app specific command
+            console.debug('obsidian app start');
+            const obsidianPath = getObsidianConfig().obsidianApp.bin;
+            try{
+              const result = await commandLine.exec(obsidianPath);
+              event.reply(channel, MESSAGE_TYPE.INFO, '成功启动obsidian');
+            }catch(e){
+              console.log('e',e)
+              
+              event.reply(channel, MESSAGE_TYPE.ERROR, '启动obsidian失败，请检查obsidian路径设置');
+            }
+          }else{
+            const result = await commandLine.exec('echo %cd%');
+            console.debug('cmd', result);
+            event.reply(channel, MESSAGE_TYPE.INFO, '成功启动');
+          }
         } else if (action === 'stop') {
           const result = await commandLine.exec('echo %cd%');
           event.reply(channel, MESSAGE_TYPE.INFO, '成功停止');
@@ -40,7 +58,7 @@ export default async function init(ipcMain: IpcMain) {
               MESSAGE_TYPE.DATA,
               new MessageData(action, serviceName, await isWSLInstall()),
             );
-          } else {
+          } else{
             const result = await commandLine.exec('echo %cd%');
             event.reply(channel, MESSAGE_TYPE.INFO, '成功查询');
           }

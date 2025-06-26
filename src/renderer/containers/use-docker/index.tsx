@@ -36,7 +36,7 @@ export default function useDocker() {
           setLoading(false);
         } else if (messageType === MESSAGE_TYPE.DATA) {
           setContainers(
-            (data as MessageData<string, string, Dockerode.ContainerInfo[]>)
+            (data as MessageData<ActionName, ServiceName, Dockerode.ContainerInfo[]>)
               .data,
           );
         } else if (messageType === MESSAGE_TYPE.INFO) {

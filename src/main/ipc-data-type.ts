@@ -1,4 +1,4 @@
-export type Channels = 'ipc-example' | 'docker' | 'cmd' | 'wsl';
+export type Channels = 'ipc-example' | 'docker' | 'cmd' | 'wsl' | 'configs';
 
 export enum MESSAGE_TYPE {
   ERROR = 'error',
@@ -9,11 +9,21 @@ export enum MESSAGE_TYPE {
   PROGRESS_ERROR = 'progress_success',
 }
 
-export class MessageData<A extends string, S extends string, D extends any> {
+import { ActionName as ActionNamePodman, ServiceName as ServiceNamePodman } from './podman-desktop/type-info';
+import { ActionName as ActionNameCmd, ServiceName as ServiceNameCmd } from './cmd/type-info';
+export type AllAction = ActionNamePodman | ActionNameCmd;
+export type AllService = ServiceNamePodman | ServiceNameCmd;
+
+export class MessageData<A extends AllAction = AllAction, S extends AllService = AllService,D = any> {
   // eslint-disable-next-line no-useless-constructor
   constructor(
     public action: A,
     public service: S,
     public data: D,
   ) {}
+  
+  toString(){
+    return `${this.action},${this.service},${JSON.stringify(this.data)}`
+  }
+  
 }

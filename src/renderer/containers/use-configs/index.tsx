@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { notification } from 'antd';
-import { ActionName, channel, ServiceName } from '../../../main/cmd/type-info';
+import { ActionName, channel, ServiceName } from '../../../main/configs/type-info';
 import { MESSAGE_TYPE, MessageData } from '../../../main/ipc-data-type';
 import { ObsidianConfig } from '../../../main/configs';
 
-export default function useCmd() {
-  const [isInstallWSL, setIsInstallWSL] = useState<boolean>(true);
+export default function useConfigs() {
+  const [obsidianConfig, setObsidianConfig] = useState<ObsidianConfig>();
   const [loading, setLoading] = useState(false);
   function action(actionName: ActionName, serviceName: ServiceName) {
     if (loading) {
@@ -20,7 +20,7 @@ export default function useCmd() {
   }
 
   const query = useCallback(function query() {
-    window.electron.ipcRenderer.sendMessage(channel, 'query', 'WSL');
+    window.electron.ipcRenderer.sendMessage(channel, 'query', 'obsidianApp');
   },[])
   useEffect(() => {
     const cancel = window.electron?.ipcRenderer.on(
@@ -36,10 +36,9 @@ export default function useCmd() {
             service,
             data: payload,
           } = data as MessageData;
-          if (actionName === 'query' && service === 'WSL') {
-            setIsInstallWSL(payload);
-          } else if (actionName === 'install' && service === 'WSL') {
-            setIsInstallWSL(payload);
+          if (actionName === 'query' && service === 'obsidianApp') {
+            console.debug('payload',payload)
+            setObsidianConfig(payload)
             setLoading(false);
           }
         } else if (messageType === MESSAGE_TYPE.INFO) {
@@ -59,15 +58,15 @@ export default function useCmd() {
     return () => {
       cancel();
     };
-  }, [setIsInstallWSL]);
+  }, [setObsidianConfig]);
 
   useEffect(() => {
     query();
   }, [query]);
 
   return {
-    isInstallWSL,
     action,
+    obsidianConfig,
     loading,
   };
 }

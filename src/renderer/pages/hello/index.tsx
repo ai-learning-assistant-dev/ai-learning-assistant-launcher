@@ -11,7 +11,7 @@ export default function Hello() {
       </div>
       <h1>欢迎使用AI学习助手</h1>
       <div className="Hello">
-        <Button>打开AI学习助手</Button>
+        <Button><NavLink to="/obsidian-app">学习助手阅读器</NavLink></Button>
         <br />
         <Button>
           <NavLink to="/ai-service">AI功能设置</NavLink>
