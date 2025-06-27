@@ -109,8 +109,9 @@ function getObsidianPluginInfo(pathString: string): ObsidianPlugin {
     name: manifest.name,
     version: manifest.version,
     latestVersion: manifest.version,
-    isLatest: false,
+    isLatest: true,
     isInstalled: true,
+    manageByLauncher: false,
     path: pathString,
   };
 }
@@ -122,6 +123,7 @@ function appendPluginInfoNotInstalled(obsidianPlugins: ObsidianPlugin[]) {
     const indexInTemplate = templatePlugins.findIndex((v) => v.id === p.id);
     if (indexInTemplate >= 0) {
       p.latestVersion = templatePlugins[indexInTemplate].version;
+      p.manageByLauncher = true;
       if (p.version !== p.latestVersion) {
         p.isLatest = false;
       } else {
@@ -141,6 +143,7 @@ function appendPluginInfoNotInstalled(obsidianPlugins: ObsidianPlugin[]) {
         latestVersion: item.version,
         isInstalled: false,
         isLatest: false,
+        manageByLauncher: true,
         path: '',
       };
     });

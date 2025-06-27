@@ -18,6 +18,7 @@ export interface ObsidianPlugin {
   latestVersion: string;
   isLatest: boolean;
   isInstalled: boolean;
+  manageByLauncher: boolean;
   path: string;
 }
 

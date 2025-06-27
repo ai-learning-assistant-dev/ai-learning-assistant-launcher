@@ -55,7 +55,7 @@ export default function ObsidianPlugin() {
           <List.Item
             key={plugin.id}
             actions={[
-              !plugin.isInstalled && (
+              plugin.manageByLauncher && !plugin.isInstalled && (
                 <Button
                   type="primary"
                   loading={
@@ -68,26 +68,35 @@ export default function ObsidianPlugin() {
                   安装插件
                 </Button>
               ),
-              plugin.isInstalled && !plugin.isLatest && (
-                <Button
-                  loading={
-                    loading &&
-                    operating.serviceName === plugin.id &&
-                    operating.actionName === 'update'
-                  }
-                  onClick={() => action('update', plugin.id as ServiceName)}
-                >
-                  更新插件
-                </Button>
-              ),
-              plugin.isInstalled && plugin.isLatest && (
-                '已经是最新版'
-              ),
+              plugin.manageByLauncher &&
+                plugin.isInstalled &&
+                !plugin.isLatest && (
+                  <Button
+                    loading={
+                      loading &&
+                      operating.serviceName === plugin.id &&
+                      operating.actionName === 'update'
+                    }
+                    onClick={() => action('update', plugin.id as ServiceName)}
+                  >
+                    更新插件
+                  </Button>
+                ),
+              plugin.manageByLauncher &&
+                plugin.isInstalled &&
+                plugin.isLatest &&
+                '已经是最新版',
+              !plugin.manageByLauncher && '第三方插件',
             ].filter((item) => item)}
           >
             <List.Item.Meta
               title={`${plugin.name}`}
-              description={`已安装版本 ${plugin.isInstalled ? plugin.version : '---'} 最新版本 ${plugin.latestVersion}`}
+              description={
+                `已安装版本 ${plugin.isInstalled ? plugin.version : '---'}` +
+                (plugin.manageByLauncher
+                  ? ` 最新版本 ${plugin.latestVersion}`
+                  : '')
+              }
             />
           </List.Item>
         ))}

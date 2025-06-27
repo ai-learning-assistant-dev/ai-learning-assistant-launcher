@@ -72,7 +72,7 @@ const config: ForgeConfig = {
             'external-resources'
           ),
           {
-
+            ignore: ['ai-voice.tar'],
           }
         )
       } catch (e) {
