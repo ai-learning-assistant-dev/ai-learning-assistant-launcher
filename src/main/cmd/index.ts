@@ -174,7 +174,9 @@ export async function installWSL() {
 
 async function isWSLInstall() {
   try {
-    const output = await commandLine.exec('wsl', ['--status']);
+    const output = await commandLine.exec('wsl', ['--status'], {
+      encoding: 'utf16le',
+    });
     console.debug('isWSLInstall', output);
     if (
       output.stdout.indexOf('Wsl/WSL_E_WSL_OPTIONAL_COMPONENT_REQUIRED') >= 0
