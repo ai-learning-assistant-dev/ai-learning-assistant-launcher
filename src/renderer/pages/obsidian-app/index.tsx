@@ -39,13 +39,15 @@ export default function ObsidianApp() {
               <NavLink key={0} to={`/obsidian-plugin/${vault.id}`}>
                 <Button>插件情况</Button>
               </NavLink>,
-              <Button
-                key={1}
-                onClick={() => cmdAction('start', 'obsidianApp', vault.id)}
-              >
-                用阅读器打开
-              </Button>,
-            ]}
+              isInstallObsidian && (
+                <Button
+                  key={1}
+                  onClick={() => cmdAction('start', 'obsidianApp', vault.id)}
+                >
+                  用阅读器打开
+                </Button>
+              ),
+            ].filter((item) => item)}
           >
             <List.Item.Meta
               title={`仓库 ${vault.name}`}
