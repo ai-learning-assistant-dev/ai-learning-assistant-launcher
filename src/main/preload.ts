@@ -2,7 +2,7 @@
 /* eslint no-unused-vars: off */
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 import { AllAction, AllService, Channels, MESSAGE_TYPE, MessageData } from './ipc-data-type';
-
+import 'electron-log/preload';
 
 const electronHandler = {
   ipcRenderer: {

@@ -1,5 +1,7 @@
 import { createRoot } from 'react-dom/client';
+import initLogger from './logger';
 import App from './app';
+initLogger();
 
 const container = document.getElementById('root') as HTMLElement;
 const root = createRoot(container);

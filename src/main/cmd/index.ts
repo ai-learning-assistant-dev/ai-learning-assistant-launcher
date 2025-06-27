@@ -200,7 +200,7 @@ export async function installObsidian() {
     ),
     ['/s'],
   );
-  console.log(result);
+  console.debug(result);
   return true;
 }
 
