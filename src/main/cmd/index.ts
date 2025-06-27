@@ -1,9 +1,11 @@
 import { IpcMain } from 'electron';
 import { ActionName, channel, ServiceName } from './type-info';
-import { Exec } from '../exec';
+import { appPath, Exec } from '../exec';
 import { isMac, isWindows } from '../exec/util';
 import { getObsidianConfig, setVaultDefaultOpen } from '../configs';
 import { Channels, MESSAGE_TYPE, MessageData } from '../ipc-data-type';
+import path from 'node:path';
+import { statSync } from 'node:fs';
 
 const commandLine = new Exec();
 
@@ -23,7 +25,7 @@ export default async function init(ipcMain: IpcMain) {
         if (action === 'start') {
           if (serviceName === 'obsidianApp') {
             // Obsidian app specific command
-            console.debug('obsidian app start',vaultId);
+            console.debug('obsidian app start', vaultId);
             if (vaultId) {
               setVaultDefaultOpen(vaultId);
             }
@@ -34,7 +36,7 @@ export default async function init(ipcMain: IpcMain) {
                 '%localappdata%',
                 process.env.LOCALAPPDATA,
               );
-              const result = commandLine.exec(obsidianPath, [],{});
+              const result = commandLine.exec(obsidianPath, [], {});
               event.reply(channel, MESSAGE_TYPE.INFO, '成功启动obsidian');
             } catch (e) {
               console.warn('启动obsidian失败', e);
@@ -63,6 +65,21 @@ export default async function init(ipcMain: IpcMain) {
               MESSAGE_TYPE.DATA,
               new MessageData(action, serviceName, result),
             );
+          } else if (serviceName === 'obsidianApp') {
+            try {
+              const result = await installObsidian();
+              event.reply(
+                channel,
+                MESSAGE_TYPE.DATA,
+                new MessageData(action, serviceName, result),
+              );
+            } catch (e) {
+              event.reply(
+                channel,
+                MESSAGE_TYPE.DATA,
+                new MessageData(action, serviceName, false),
+              );
+            }
           } else {
             const result = await commandLine.exec('echo %cd%');
             event.reply(channel, MESSAGE_TYPE.INFO, '安装成功');
@@ -73,6 +90,12 @@ export default async function init(ipcMain: IpcMain) {
               channel,
               MESSAGE_TYPE.DATA,
               new MessageData(action, serviceName, await isWSLInstall()),
+            );
+          } else if (serviceName === 'obsidianApp') {
+            event.reply(
+              channel,
+              MESSAGE_TYPE.DATA,
+              new MessageData(action, serviceName, await isObsidianInstall()),
             );
           } else {
             const result = await commandLine.exec('echo %cd%');
@@ -163,4 +186,38 @@ async function isWSLInstall() {
     return false;
   }
   return true;
+}
+
+export async function installObsidian() {
+  const result = await commandLine.exec(
+    path.join(
+      appPath,
+      'external-resources',
+      'ai-assistant-backend',
+      'install_obsidian.exe',
+    ),
+    ['/s'],
+  );
+  console.log(result);
+  return true;
+}
+
+export async function isObsidianInstall() {
+  let obsidianPath = getObsidianConfig().obsidianApp.bin;
+
+  try {
+    obsidianPath = obsidianPath.replace(
+      '%localappdata%',
+      process.env.LOCALAPPDATA,
+    );
+    const stat = statSync(obsidianPath);
+    if (stat.isFile()) {
+      return true;
+    } else {
+      return false;
+    }
+  } catch (e) {
+    console.warn('检查obsidian失败', e);
+    return false;
+  }
 }

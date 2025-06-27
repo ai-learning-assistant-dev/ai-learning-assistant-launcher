@@ -7,7 +7,11 @@ import useCmd from '../../containers/use-cmd';
 import useConfigs from '../../containers/use-configs';
 
 export default function ObsidianApp() {
-  const { action: cmdAction, loading: cmdLoading } = useCmd();
+  const {
+    isInstallObsidian,
+    action: cmdAction,
+    loading: cmdLoading,
+  } = useCmd();
   const {
     obsidianConfig,
     obsidianVaultConfig,
@@ -15,16 +19,6 @@ export default function ObsidianApp() {
     loading: configsLoading,
   } = useConfigs();
 
-  const startObsidian = useCallback(
-    (vaultId?: string) => {
-      cmdAction('start', 'obsidianApp', vaultId);
-    },
-    [cmdAction],
-  );
-
-  const locationObsidian = useCallback(() => {
-    configsAction('update', 'obsidianApp');
-  }, []);
   return (
     <div className="obsidian-app">
       <List
@@ -45,7 +39,10 @@ export default function ObsidianApp() {
               <NavLink key={0} to={`/obsidian-plugin/${vault.id}`}>
                 <Button>插件情况</Button>
               </NavLink>,
-              <Button key={1} onClick={() => startObsidian(vault.id)}>
+              <Button
+                key={1}
+                onClick={() => cmdAction('start', 'obsidianApp', vault.id)}
+              >
                 用阅读器打开
               </Button>,
             ]}
@@ -58,13 +55,32 @@ export default function ObsidianApp() {
         ))}
         <List.Item
           actions={[
-            <Button key={0} onClick={locationObsidian}>
-              定位阅读器
-            </Button>,
-            <Button key={1} type="primary" onClick={() => startObsidian()}>
-              运行阅读器
-            </Button>,
-          ]}
+            !isInstallObsidian && (
+              <Button
+                key={0}
+                onClick={() => cmdAction('install', 'obsidianApp')}
+              >
+                安装阅读器
+              </Button>
+            ),
+            !isInstallObsidian && (
+              <Button
+                key={1}
+                onClick={() => configsAction('update', 'obsidianApp')}
+              >
+                定位阅读器
+              </Button>
+            ),
+            isInstallObsidian && (
+              <Button
+                key={2}
+                type="primary"
+                onClick={() => cmdAction('start', 'obsidianApp')}
+              >
+                运行阅读器
+              </Button>
+            ),
+          ].filter((item) => item)}
         >
           <List.Item.Meta
             title={`阅读器主程序`}

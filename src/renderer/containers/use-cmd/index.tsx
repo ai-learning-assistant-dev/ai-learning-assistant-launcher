@@ -5,6 +5,7 @@ import { MESSAGE_TYPE, MessageData } from '../../../main/ipc-data-type';
 
 export default function useCmd() {
   const [isInstallWSL, setIsInstallWSL] = useState<boolean>(true);
+  const [isInstallObsidian, setIsInstallObsidian] = useState<boolean>(true);
   const [loading, setLoading] = useState(false);
   function action(
     actionName: ActionName,
@@ -27,8 +28,9 @@ export default function useCmd() {
     );
   }
 
-  const query = useCallback(function query() {
+  const query = useCallback(() => {
     window.electron.ipcRenderer.sendMessage(channel, 'query', 'WSL');
+    window.electron.ipcRenderer.sendMessage(channel, 'query', 'obsidianApp');
   }, []);
   useEffect(() => {
     const cancel = window.electron?.ipcRenderer.on(
@@ -47,11 +49,20 @@ export default function useCmd() {
             service,
             data: payload,
           } = data as MessageData;
-          if (actionName === 'query' && service === 'WSL') {
-            setIsInstallWSL(payload);
-          } else if (actionName === 'install' && service === 'WSL') {
-            setIsInstallWSL(payload);
-            setLoading(false);
+          if (actionName === 'query') {
+            if (service === 'WSL') {
+              setIsInstallWSL(payload);
+            } else if (service === 'obsidianApp') {
+              setIsInstallObsidian(payload);
+            }
+          } else if (actionName === 'install') {
+            if (service === 'WSL') {
+              setIsInstallWSL(payload);
+              setLoading(false);
+            } else if (service === 'obsidianApp') {
+              setIsInstallObsidian(payload);
+              setLoading(false);
+            }
           }
         } else if (messageType === MESSAGE_TYPE.INFO) {
           notification.success({
@@ -82,7 +93,7 @@ export default function useCmd() {
     return () => {
       cancel();
     };
-  }, [setIsInstallWSL]);
+  }, [setIsInstallWSL, setIsInstallObsidian]);
 
   useEffect(() => {
     query();
@@ -90,6 +101,7 @@ export default function useCmd() {
 
   return {
     isInstallWSL,
+    isInstallObsidian,
     action,
     loading,
   };
