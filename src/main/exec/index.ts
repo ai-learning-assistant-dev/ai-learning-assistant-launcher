@@ -158,6 +158,11 @@ export class Exec {
       cwd = options.cwd;
     }
 
+    let shell = undefined;
+    if (options?.shell) {
+      shell = options.shell;
+    }
+
     return new Promise((resolve, reject) => {
       let stdout = '';
       let stderr = '';
@@ -167,7 +172,7 @@ export class Exec {
       const childProcess: ChildProcessWithoutNullStreams = spawn(
         command,
         args,
-        { env, cwd },
+        { env, cwd, shell },
       );
 
       options?.token?.onCancellationRequested(() => {

@@ -1,4 +1,4 @@
-import type { ContainerConfig } from '../configs';
+import type { ContainerConfig } from '../configs/type-info';
 import { Channels } from '../ipc-data-type';
 
 export type ServiceName = 'TTS' | 'ASR' | 'LLM';

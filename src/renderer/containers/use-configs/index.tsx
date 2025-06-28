@@ -1,17 +1,21 @@
 import { useCallback, useEffect, useState } from 'react';
 import { notification } from 'antd';
-import { ActionName, channel, ServiceName } from '../../../main/cmd/type-info';
 import { MESSAGE_TYPE, MessageData } from '../../../main/ipc-data-type';
+import {
+  ObsidianConfig,
+  ObsidianVaultConfig,
+  ActionName,
+  channel,
+  ServiceName,
+} from '../../../main/configs/type-info';
+import { channel as cmdChannel } from '../../../main/cmd/type-info';
 
-export default function useCmd() {
-  const [isInstallWSL, setIsInstallWSL] = useState<boolean>(true);
-  const [isInstallObsidian, setIsInstallObsidian] = useState<boolean>(true);
+export default function useConfigs() {
+  const [obsidianConfig, setObsidianConfig] = useState<ObsidianConfig>();
+  const [obsidianVaultConfig, setObsidianVaultConfig] =
+    useState<ObsidianVaultConfig[]>();
   const [loading, setLoading] = useState(false);
-  function action(
-    actionName: ActionName,
-    serviceName: ServiceName,
-    vaultId?: string,
-  ) {
+  function action(actionName: ActionName, serviceName: ServiceName) {
     if (loading) {
       notification.warning({
         message: '请等待上一个操作完成后再操作',
@@ -20,17 +24,13 @@ export default function useCmd() {
       return;
     }
     setLoading(true);
-    window.electron.ipcRenderer.sendMessage(
-      channel,
-      actionName,
-      serviceName,
-      vaultId,
-    );
+    window.electron.ipcRenderer.sendMessage(channel, actionName, serviceName);
   }
 
   const query = useCallback(() => {
-    window.electron.ipcRenderer.sendMessage(channel, 'query', 'WSL');
+    window.electron.ipcRenderer.sendMessage(cmdChannel, 'query', 'obsidianApp');
     window.electron.ipcRenderer.sendMessage(channel, 'query', 'obsidianApp');
+    window.electron.ipcRenderer.sendMessage(channel, 'query', 'obsidianVault');
   }, []);
   useEffect(() => {
     const cancel = window.electron?.ipcRenderer.on(
@@ -49,20 +49,14 @@ export default function useCmd() {
             service,
             data: payload,
           } = data as MessageData;
-          if (actionName === 'query') {
-            if (service === 'WSL') {
-              setIsInstallWSL(payload);
-            } else if (service === 'obsidianApp') {
-              setIsInstallObsidian(payload);
-            }
-          } else if (actionName === 'install') {
-            if (service === 'WSL') {
-              setIsInstallWSL(payload);
-              setLoading(false);
-            } else if (service === 'obsidianApp') {
-              setIsInstallObsidian(payload);
-              setLoading(false);
-            }
+          if (actionName === 'query' && service === 'obsidianApp') {
+            console.debug('payload', payload);
+            setObsidianConfig(payload);
+            setLoading(false);
+          } else if (actionName === 'query' && service === 'obsidianVault') {
+            console.debug('payload', payload);
+            setObsidianVaultConfig(payload);
+            setLoading(false);
           }
         } else if (messageType === MESSAGE_TYPE.INFO) {
           notification.success({
@@ -93,16 +87,16 @@ export default function useCmd() {
     return () => {
       cancel();
     };
-  }, [setIsInstallWSL, setIsInstallObsidian]);
+  }, [setObsidianConfig, setObsidianVaultConfig]);
 
   useEffect(() => {
     query();
   }, [query]);
 
   return {
-    isInstallWSL,
-    isInstallObsidian,
     action,
+    obsidianConfig,
+    obsidianVaultConfig,
     loading,
   };
 }
