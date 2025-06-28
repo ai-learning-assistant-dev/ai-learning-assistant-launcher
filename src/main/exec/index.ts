@@ -34,7 +34,21 @@ export const appPath = app.isPackaged
 export const macosExtraPath =
   '/opt/podman/bin:/usr/local/bin:/opt/homebrew/bin:/opt/local/bin';
 
+function bufferToString(data: Buffer | string, encoding?: BufferEncoding) {
+  console.debug(data)
+  if (data) {
+    if (Buffer.isBuffer(data)) {
+      return data.toString(encoding);
+    } else {
+      return data;
+    }
+  } else {
+    return '';
+  }
+}
+
 class RunErrorImpl extends Error implements RunError {
+
   constructor(
     override readonly name: string,
     override readonly message: string,
@@ -102,14 +116,19 @@ export class Exec {
             stderr?: string | Buffer,
           ): void => {
             if (error) {
+              console.debug('sudo-prompt-error', {
+                error,
+                out: bufferToString(stdout, options?.encoding),
+                err: bufferToString(stderr, options?.encoding),
+              });
               // need to return a RunError
               const errResult: RunError = new RunErrorImpl(
                 error.name,
                 `Failed to execute command: ${error.message}`,
                 1,
                 sudoCommand,
-                stdout?.toString() ?? '',
-                stderr?.toString() ?? '',
+                bufferToString(stdout, options?.encoding),
+                bufferToString(stderr, options?.encoding),
                 false,
                 false,
               );
@@ -118,8 +137,8 @@ export class Exec {
             }
             const result: RunResult = {
               command,
-              stdout: stdout?.toString() ?? '',
-              stderr: stderr?.toString() ?? '',
+              stdout: bufferToString(stdout, options?.encoding),
+              stderr: bufferToString(stderr, options?.encoding),
             };
             // in case of success
             resolve(result);
@@ -249,7 +268,10 @@ export class Exec {
           );
           const errResult: RunError = new RunErrorImpl(
             `Command execution failed with exit code ${exitCode}`,
-            `Command execution failed with exit code ${exitCode}`,
+            `command: ${command}\n` +
+              `exitCode: ${exitCode}\n` +
+              `stdout: ${stdout.trim()}\n` +
+              `stderr: ${stderr.trim()}\n`,
             exitCode ?? 1,
             command,
             stdout.trim(),

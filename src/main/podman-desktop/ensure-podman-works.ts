@@ -4,6 +4,7 @@ import { appPath, Exec } from '../exec';
 import { isWindows } from '../exec/util';
 import { imageNameDict, imagePathDict, ServiceName } from './type-info';
 import { Channels, MESSAGE_TYPE } from '../ipc-data-type';
+import { isWSLInstall } from '../cmd';
 
 const commandLine = new Exec();
 
@@ -27,17 +28,6 @@ export async function getPodmanSocketPath(
   ]);
   socketPath = socket;
   return socketPath;
-}
-
-async function isWSLInstall() {
-  const output = await commandLine.exec('wsl', ['--status'], {
-    encoding: 'utf16le',
-  });
-  console.debug('isWSLInstall', output);
-  if (output.stdout.indexOf('Wsl/WSL_E_WSL_OPTIONAL_COMPONENT_REQUIRED') >= 0) {
-    return false;
-  }
-  return true;
 }
 
 async function isPodmanInstall() {
@@ -109,42 +99,6 @@ async function loadImage(serviceName: ServiceName) {
 
 export async function installWSLMock() {
   return false;
-}
-
-export async function installWSL() {
-  try {
-    const result1 = await commandLine.exec(
-      'dism.exe',
-      [
-        '/online',
-        '/enable-feature',
-        '/featurename:Microsoft-Windows-Subsystem-Linux',
-        '/all',
-        '/norestart',
-      ],
-      { isAdmin: true },
-    );
-    console.debug('installWSL', result1);
-  } catch (e) {
-    console.warn(e);
-  }
-
-  try {
-    const result2 = await commandLine.exec(
-      'dism.exe',
-      [
-        '/online',
-        '/enable-feature',
-        '/featurename:VirtualMachinePlatform',
-        '/all',
-        '/norestart',
-      ],
-      { isAdmin: true },
-    );
-  } catch (e) {
-    console.warn(e);
-  }
-  return true;
 }
 
 export async function installPodman() {

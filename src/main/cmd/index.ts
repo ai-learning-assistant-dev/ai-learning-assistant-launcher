@@ -3,7 +3,7 @@ import { ActionName, channel, ServiceName } from './type-info';
 import { appPath, Exec } from '../exec';
 import { isMac, isWindows } from '../exec/util';
 import { getObsidianConfig, setVaultDefaultOpen } from '../configs';
-import { Channels, MESSAGE_TYPE, MessageData } from '../ipc-data-type';
+import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 import path from 'node:path';
 import { statSync } from 'node:fs';
 
@@ -137,6 +137,7 @@ export default async function init(ipcMain: IpcMain) {
 }
 
 export async function installWSL() {
+  let success1 = false;
   try {
     const result1 = await commandLine.exec(
       'dism.exe',
@@ -147,13 +148,22 @@ export async function installWSL() {
         '/all',
         '/norestart',
       ],
-      { isAdmin: true },
+      { encoding: 'utf8', shell: true },
     );
     console.debug('installWSL', result1);
   } catch (e) {
-    console.warn(e);
+    console.warn('installWSL', e);
+    // 3010表示安装成功需要重启
+    if(e.message && e.message.indexOf('3010')){
+      console.warn(e);
+      success1 = true;
+    }else{
+      console.error(e);
+      success1 = false;
+    }
   }
 
+  let success2 = false;
   try {
     const result2 = await commandLine.exec(
       'dism.exe',
@@ -164,15 +174,23 @@ export async function installWSL() {
         '/all',
         '/norestart',
       ],
-      { isAdmin: true },
+      { encoding: 'utf8', shell: true },
     );
   } catch (e) {
-    console.warn(e);
+    console.warn('installWSL', e);
+    // 3010表示安装成功需要重启
+    if(e.message && e.message.indexOf('3010')){
+      console.warn(e);
+      success2 = true;
+    }else{
+      console.error(e);
+      success2 = false
+    }
   }
-  return true;
+  return success1 && success2;
 }
 
-async function isWSLInstall() {
+export async function isWSLInstall() {
   try {
     const output = await commandLine.exec('wsl', ['--status'], {
       encoding: 'utf16le',
@@ -184,7 +202,7 @@ async function isWSLInstall() {
       return false;
     }
   } catch (e) {
-    console.warn(e);
+    console.warn('isWSLInstall', e);
     return false;
   }
   return true;
