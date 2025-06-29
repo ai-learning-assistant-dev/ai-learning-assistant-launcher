@@ -5,6 +5,7 @@ import { isWindows } from '../exec/util';
 import { imageNameDict, imagePathDict, ServiceName } from './type-info';
 import { Channels, MESSAGE_TYPE } from '../ipc-data-type';
 import { isWSLInstall } from '../cmd';
+import { wait } from '../util';
 
 const commandLine = new Exec();
 
@@ -57,6 +58,18 @@ async function isPodmanStart() {
   );
   if (output.stdout.indexOf('Currently running') >= 0) {
     return true;
+  } else if (output.stdout.indexOf('Currently starting') >= 0) {
+    // 启动podman大约需要10秒，但是这个命令会立即返回
+    await wait(10000);
+    const output2 = await commandLine.exec(getPodmanCli(), ['machine', 'list']);
+    console.debug(
+      'isPodmanStart2',
+      output2,
+      output2.stdout.indexOf('Currently running'),
+    );
+    if (output2.stdout.indexOf('Currently running') >= 0) {
+      return true;
+    }
   }
   return false;
 }
