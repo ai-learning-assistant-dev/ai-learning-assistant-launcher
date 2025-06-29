@@ -59,7 +59,7 @@ export default async function init(ipcMain: IpcMain) {
           event.reply(channel, MESSAGE_TYPE.INFO, '成功删除');
         } else if (action === 'install') {
           if (serviceName === 'WSL') {
-             event.reply(channel, MESSAGE_TYPE.PROGRESS, '开始安装WSL，预计需要10分钟，请耐心等待');
+             event.reply(channel, MESSAGE_TYPE.PROGRESS, '预计需要10分钟，请耐心等待');
             const result = await installWSL();
             event.reply(
               channel,
