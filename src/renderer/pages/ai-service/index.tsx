@@ -35,7 +35,12 @@ function getState(container?: ContainerInfo): ContainerItem['state'] {
 
 export default function AiService() {
   const { containers, action, loading } = useDocker();
-  const { isInstallWSL, action: cmdAction, loading: cmdLoading } = useCmd();
+  const {
+    isInstallWSL,
+    checkingWsl,
+    action: cmdAction,
+    loading: cmdLoading,
+  } = useCmd();
   const [showRebootModal, setShowRebootModal] = useState(false);
   const [operating, setOperating] = useState<{
     serviceName: ServiceName;
@@ -80,7 +85,7 @@ export default function AiService() {
   ];
 
   function click(actionName: ActionName, serviceName: ServiceName) {
-    if (loading) {
+    if (loading && checkingWsl) {
       notification.warning({
         message: '请等待上一个操作完成后再操作',
         placement: 'topRight',
@@ -144,15 +149,18 @@ export default function AiService() {
               type="primary"
               shape="round"
               loading={
-                cmdLoading &&
-                cmdOperating.serviceName === 'WSL' &&
-                cmdOperating.actionName === 'install'
+                checkingWsl ||
+                (cmdLoading &&
+                  cmdOperating.serviceName === 'WSL' &&
+                  cmdOperating.actionName === 'install')
               }
               onClick={() => clickCmd('install', 'WSL')}
             >
-              {isInstallWSL
-                ? '已启用Windows自带的WSL组件'
-                : '开启本地AI服务前请点我启用Windows自带的WSL组件'}
+              {checkingWsl
+                ? '正在检查WSL安装状态'
+                : isInstallWSL
+                  ? '已启用Windows自带的WSL组件'
+                  : '开启本地AI服务前请点我启用Windows自带的WSL组件'}
             </Button>
           </div>
         }

@@ -50,6 +50,7 @@
     "eslint-plugin-react": "^7.37.5",
     "file-loader": "^6.2.0",
     "fork-ts-checker-webpack-plugin": "^7.3.0",
+    "iconv-lite": "^0.6.3",
     "isomorphic-git": "^1.32.0",
     "node-loader": "^2.1.0",
     "prettier": "3.6.1",

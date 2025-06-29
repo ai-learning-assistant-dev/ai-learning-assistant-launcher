@@ -148,16 +148,16 @@ export async function installWSL() {
         '/all',
         '/norestart',
       ],
-      { encoding: 'utf8', shell: true },
+      { isAdmin: true },
     );
     console.debug('installWSL', result1);
   } catch (e) {
     console.warn('installWSL', e);
     // 3010表示安装成功需要重启
-    if(e.message && e.message.indexOf('3010')){
+    if (e.message && e.message.indexOf('3010')) {
       console.warn(e);
       success1 = true;
-    }else{
+    } else {
       console.error(e);
       success1 = false;
     }
@@ -174,38 +174,97 @@ export async function installWSL() {
         '/all',
         '/norestart',
       ],
-      { encoding: 'utf8', shell: true },
+      { isAdmin: true },
     );
   } catch (e) {
     console.warn('installWSL', e);
     // 3010表示安装成功需要重启
-    if(e.message && e.message.indexOf('3010')){
+    if (e.message && e.message.indexOf('3010')) {
       console.warn(e);
       success2 = true;
-    }else{
+    } else {
       console.error(e);
-      success2 = false
+      success2 = false;
     }
   }
   return success1 && success2;
 }
 
 export async function isWSLInstall() {
+  let wslWork = false;
   try {
-    const output = await commandLine.exec('wsl', ['--status'], {
+    const output = await commandLine.exec('wsl', ['-l', '-v'], {
       encoding: 'utf16le',
     });
     console.debug('isWSLInstall', output);
     if (
       output.stdout.indexOf('Wsl/WSL_E_WSL_OPTIONAL_COMPONENT_REQUIRED') >= 0
     ) {
-      return false;
+      wslWork = false;
+    }
+    wslWork = true;
+  } catch (e) {
+    console.warn('isWSLInstall', e);
+    wslWork = false;
+  }
+
+  return wslWork;
+}
+
+async function checkWSLComponent() {
+  let virtualMachinePlatformInstalled = true;
+  try {
+    const output2 = await commandLine.exec(
+      'dism.exe',
+      ['/online', '/get-featureinfo', '/featurename:VirtualMachinePlatform'],
+      {
+        isAdmin: true,
+      },
+    );
+    console.debug('isWSLInstall', output2);
+    if (output2.stdout.indexOf('已启用') >= 0) {
+      virtualMachinePlatformInstalled = true;
+    } else {
+      virtualMachinePlatformInstalled = false;
     }
   } catch (e) {
     console.warn('isWSLInstall', e);
-    return false;
+    virtualMachinePlatformInstalled = false;
   }
-  return true;
+
+  let mWSLInstalled = true;
+  try {
+    const output2 = await commandLine.exec(
+      'dism.exe',
+      [
+        '/online',
+        '/get-featureinfo',
+        '/featurename:Microsoft-Windows-Subsystem-Linux',
+      ],
+      {
+        isAdmin: true,
+      },
+    );
+    console.debug('isWSLInstall', output2);
+    if (output2.stdout.indexOf('已启用') >= 0) {
+      mWSLInstalled = true;
+    } else {
+      mWSLInstalled = false;
+    }
+  } catch (e) {
+    console.warn('isWSLInstall', e);
+    mWSLInstalled = false;
+  }
+
+  console.debug(
+    'WSL安装情况调试信息',
+    'virtualMachinePlatformInstalled',
+    virtualMachinePlatformInstalled,
+    'mWSLInstalled',
+    mWSLInstalled,
+  );
+
+  return virtualMachinePlatformInstalled && mWSLInstalled;
 }
 
 export async function installObsidian() {

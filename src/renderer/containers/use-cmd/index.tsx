@@ -5,6 +5,7 @@ import { MESSAGE_TYPE, MessageData } from '../../../main/ipc-data-type';
 
 export default function useCmd() {
   const [isInstallWSL, setIsInstallWSL] = useState<boolean>(true);
+  const [checkingWsl, setCheckingWsl] = useState<boolean>(true);
   const [isInstallObsidian, setIsInstallObsidian] = useState<boolean>(true);
   const [loading, setLoading] = useState(false);
   function action(
@@ -29,9 +30,10 @@ export default function useCmd() {
   }
 
   const query = useCallback(() => {
+    setCheckingWsl(true);
     window.electron.ipcRenderer.sendMessage(channel, 'query', 'WSL');
     window.electron.ipcRenderer.sendMessage(channel, 'query', 'obsidianApp');
-  }, []);
+  }, [setCheckingWsl]);
   useEffect(() => {
     const cancel = window.electron?.ipcRenderer.on(
       channel,
@@ -52,6 +54,7 @@ export default function useCmd() {
           if (actionName === 'query') {
             if (service === 'WSL') {
               setIsInstallWSL(payload);
+              setCheckingWsl(false);
             } else if (service === 'obsidianApp') {
               setIsInstallObsidian(payload);
             }
@@ -93,7 +96,7 @@ export default function useCmd() {
     return () => {
       cancel();
     };
-  }, [setIsInstallWSL, setIsInstallObsidian]);
+  }, [setIsInstallWSL, setIsInstallObsidian, setCheckingWsl]);
 
   useEffect(() => {
     query();
@@ -102,6 +105,7 @@ export default function useCmd() {
   return {
     isInstallWSL,
     isInstallObsidian,
+    checkingWsl,
     action,
     loading,
   };

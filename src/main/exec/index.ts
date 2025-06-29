@@ -26,6 +26,7 @@ import * as sudo from 'sudo-prompt';
 import { app } from 'electron';
 import path from 'path';
 import { isLinux, isMac, isWindows } from './util';
+import iconv from 'iconv-lite';
 
 export const appPath = app.isPackaged
   ? path.dirname(app.getPath('exe'))
@@ -34,11 +35,10 @@ export const appPath = app.isPackaged
 export const macosExtraPath =
   '/opt/podman/bin:/usr/local/bin:/opt/homebrew/bin:/opt/local/bin';
 
-function bufferToString(data: Buffer | string, encoding?: BufferEncoding) {
-  console.debug(data)
+function bufferToString(data: Buffer | string, encoding?: string) {
   if (data) {
     if (Buffer.isBuffer(data)) {
-      return data.toString(encoding);
+      return iconv.decode(data, encoding);
     } else {
       return data;
     }
@@ -48,7 +48,6 @@ function bufferToString(data: Buffer | string, encoding?: BufferEncoding) {
 }
 
 class RunErrorImpl extends Error implements RunError {
-
   constructor(
     override readonly name: string,
     override readonly message: string,
@@ -61,6 +60,21 @@ class RunErrorImpl extends Error implements RunError {
   ) {
     super(message);
     Object.setPrototypeOf(this, RunErrorImpl.prototype);
+  }
+}
+
+let globalDefaultEncoding = 'utf8';
+
+export async function autoAdaptEncodingForWindows() {
+  if (isWindows()) {
+    const output = await new Exec().exec('chcp', []);
+    console.debug('autoAdaptEncodingForWindows', output);
+    if (output.stdout.indexOf('936') >= 0) {
+      globalDefaultEncoding = 'gbk';
+    } else if (output.stdout.indexOf('65001') >= 0) {
+      globalDefaultEncoding = 'utf8';
+    }
+    console.debug(`set exec default encoding to ${globalDefaultEncoding}`);
   }
 }
 
@@ -80,6 +94,16 @@ export class Exec {
 
     if (isMac() || isWindows()) {
       env.PATH = getInstallationPath(env.PATH);
+    }
+
+    let encoding = 'utf8';
+
+    if (options && options.encoding) {
+      encoding = options.encoding;
+    } else {
+      if (isWindows()) {
+        encoding = globalDefaultEncoding;
+      }
     }
 
     console.debug('exec', command, args, options);
@@ -118,8 +142,8 @@ export class Exec {
             if (error) {
               console.debug('sudo-prompt-error', {
                 error,
-                out: bufferToString(stdout, options?.encoding),
-                err: bufferToString(stderr, options?.encoding),
+                out: bufferToString(stdout, encoding),
+                err: bufferToString(stderr, encoding),
               });
               // need to return a RunError
               const errResult: RunError = new RunErrorImpl(
@@ -127,8 +151,8 @@ export class Exec {
                 `Failed to execute command: ${error.message}`,
                 1,
                 sudoCommand,
-                bufferToString(stdout, options?.encoding),
-                bufferToString(stderr, options?.encoding),
+                bufferToString(stdout, encoding),
+                bufferToString(stderr, encoding),
                 false,
                 false,
               );
@@ -137,8 +161,8 @@ export class Exec {
             }
             const result: RunResult = {
               command,
-              stdout: bufferToString(stdout, options?.encoding),
-              stderr: bufferToString(stderr, options?.encoding),
+              stdout: bufferToString(stdout, encoding),
+              stderr: bufferToString(stderr, encoding),
             };
             // in case of success
             resolve(result);
@@ -226,16 +250,16 @@ export class Exec {
         reject(errResult);
       });
 
-      childProcess.stdout.setEncoding(options?.encoding ?? 'utf8');
-      childProcess.stderr.setEncoding(options?.encoding ?? 'utf8');
+      // childProcess.stdout.setEncoding(options?.encoding ?? 'utf8');
+      // childProcess.stderr.setEncoding(options?.encoding ?? 'utf8');
 
       childProcess.stdout.on('data', (data) => {
-        stdout += data.toString();
+        stdout += bufferToString(data, encoding);
         options?.logger?.log(data);
       });
 
       childProcess.stderr.on('data', (data) => {
-        stderr += data.toString();
+        stderr += bufferToString(data, encoding);
         options?.logger?.warn(data);
       });
 

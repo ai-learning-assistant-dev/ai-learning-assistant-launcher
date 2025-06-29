@@ -133,17 +133,24 @@ export default async function init(ipcMain: IpcMain) {
               }
             | undefined;
           newContainerInfo = await improveStablebility(async () => {
-            return connectionGlobal.createPodmanContainer({
-              image: imageName,
-              name: containerName,
-              devices: [{ path: 'nvidia.com/gpu=all' }],
-              portmappings:config.port.map(p=>({container_port: p.container, host_port: p.host}))
-            });
+            try{
+              return connectionGlobal.createPodmanContainer({
+                image: imageName,
+                name: containerName,
+                devices: [{ path: 'nvidia.com/gpu=all' }],
+                portmappings:config.port.map(p=>({container_port: p.container, host_port: p.host}))
+              });
+            }catch(e){
+              console.debug('安装服务失败',e);
+              event.reply(channel, MESSAGE_TYPE.INFO, '安装服务失败');
+              return;
+            }
           });
 
           console.debug('newContainerInfo', newContainerInfo);
           if (newContainerInfo) {
             console.debug('安装服务成功');
+            event.reply(channel, MESSAGE_TYPE.INFO, '安装服务成功');
             await improveStablebility(async () => {
               const newContainer = connectionGlobal.getContainer(
                 newContainerInfo.Id,
@@ -151,7 +158,6 @@ export default async function init(ipcMain: IpcMain) {
               await newContainer.start();
               event.reply(channel, MESSAGE_TYPE.INFO, '成功启动服务');
             });
-            event.reply(channel, MESSAGE_TYPE.INFO, '安装服务成功');
           } else {
             console.debug('安装服务失败');
             event.reply(channel, MESSAGE_TYPE.ERROR, '安装服务失败');

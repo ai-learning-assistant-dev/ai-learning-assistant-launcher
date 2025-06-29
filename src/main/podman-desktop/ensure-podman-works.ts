@@ -59,12 +59,11 @@ async function isPodmanStart() {
 
 async function isImageReady(serviceName: ServiceName) {
   console.debug('serviceName', serviceName);
+  const [imageName, imageTag] = imageNameDict[serviceName].split(':');
+  const matchNameRegex = RegExp(imageName + '\\s*' + imageTag);
   const output = await commandLine.exec(getPodmanCli(), ['image', 'list']);
   console.debug('isImageReady', output);
-  if (
-    output.stdout.indexOf(imageNameDict[serviceName].replace(':latest', '')) >=
-    0
-  ) {
+  if (matchNameRegex.test(output.stdout)) {
     return true;
   }
   return false;

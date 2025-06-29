@@ -4538,7 +4538,7 @@ declare module '@podman-desktop/api' {
     /**
      * The encoding to use. Default utf8
      */
-    encoding?: BufferEncoding;
+    encoding?: BufferEncoding | string;
 
     shell?: boolean;
   }
