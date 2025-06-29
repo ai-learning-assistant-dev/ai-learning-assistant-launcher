@@ -171,7 +171,7 @@ export async function updateTemplate() {
   } catch (e) {
     console.warn(e);
   }
-  mkdirSync(tmpDir);
+  mkdirSync(tmpDir, { recursive: true });
 
   const pluginGitDir = path.join(tmpDir, 'ai-learning-assistant-plugin-dist');
   await gitClone(
@@ -220,7 +220,7 @@ async function copyPluginToVault(pluginId: string, vaultId: string) {
   )[0];
   if (plugin && templatePlugin) {
     if (plugin.isInstalled) {
-      rmSync(plugin.path, { recursive: true });
+      // rmSync(plugin.path, { recursive: true });
     }
     const dirName = path.parse(templatePlugin.path).base;
     await cpy(
