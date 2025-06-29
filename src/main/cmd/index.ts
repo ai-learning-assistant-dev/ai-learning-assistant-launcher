@@ -137,6 +137,40 @@ export default async function init(ipcMain: IpcMain) {
 }
 
 export async function installWSL() {
+
+  let successM1 = false;
+  // 方法一，适用于windows11
+  try {
+    const resultM1 = await commandLine.exec(
+      'wsl.exe',
+      [
+        '--install',
+        '--no-distribution'
+      ],
+      { shell: true, encoding: 'utf16le' },
+    );
+    console.debug('installWSLM1', resultM1);
+    if(resultM1.stdout.indexOf('The operation completed successfully')>=0 ||
+        resultM1.stdout.indexOf('请求的操作成功')>=0){
+      successM1 = true
+    }
+  } catch (e) {
+    console.warn('installWSLM1', e);
+    // 3010表示安装成功需要重启
+    if (e.message && e.message.indexOf('3010') >= 0) {
+      console.warn(e);
+      successM1 = true;
+    } else {
+      console.error(e);
+      successM1 = false;
+    }
+  }
+
+  if(successM1){
+    return true;
+  }
+
+  //方法二，适用于windows10
   let success1 = false;
   try {
     const result1 = await commandLine.exec(
@@ -148,13 +182,13 @@ export async function installWSL() {
         '/all',
         '/norestart',
       ],
-      { isAdmin: true },
+      { shell: true },
     );
     console.debug('installWSL', result1);
   } catch (e) {
     console.warn('installWSL', e);
     // 3010表示安装成功需要重启
-    if (e.message && e.message.indexOf('3010')) {
+    if (e.message && e.message.indexOf('3010') >= 0) {
       console.warn(e);
       success1 = true;
     } else {
@@ -174,12 +208,12 @@ export async function installWSL() {
         '/all',
         '/norestart',
       ],
-      { isAdmin: true },
+      { shell: true },
     );
   } catch (e) {
     console.warn('installWSL', e);
     // 3010表示安装成功需要重启
-    if (e.message && e.message.indexOf('3010')) {
+    if (e.message && e.message.indexOf('3010') >= 0) {
       console.warn(e);
       success2 = true;
     } else {
@@ -193,7 +227,7 @@ export async function installWSL() {
 export async function isWSLInstall() {
   let wslWork = false;
   try {
-    const output = await commandLine.exec('wsl', ['-l', '-v'], {
+    const output = await commandLine.exec('wsl.exe', ['-l', '-v'], {
       encoding: 'utf16le',
     });
     console.debug('isWSLInstall', output);
@@ -208,7 +242,7 @@ export async function isWSLInstall() {
     wslWork = false;
   }
 
-  return wslWork;
+  return wslWork && (await checkWSLComponent());
 }
 
 async function checkWSLComponent() {
@@ -218,7 +252,7 @@ async function checkWSLComponent() {
       'dism.exe',
       ['/online', '/get-featureinfo', '/featurename:VirtualMachinePlatform'],
       {
-        isAdmin: true,
+        shell: true,
       },
     );
     console.debug('isWSLInstall', output2);
@@ -242,7 +276,7 @@ async function checkWSLComponent() {
         '/featurename:Microsoft-Windows-Subsystem-Linux',
       ],
       {
-        isAdmin: true,
+        shell: true
       },
     );
     console.debug('isWSLInstall', output2);

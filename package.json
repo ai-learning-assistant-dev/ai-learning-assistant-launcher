@@ -5,7 +5,7 @@
   "description": "My Electron application description",
   "main": ".webpack/main",
   "scripts": {
-    "start": "electron-forge start",
+    "start": "chcp 65001 && electron-forge start",
     "package": "electron-forge package",
     "make": "electron-forge make --target @electron-forge/maker-zip",
     "publish": "electron-forge publish",

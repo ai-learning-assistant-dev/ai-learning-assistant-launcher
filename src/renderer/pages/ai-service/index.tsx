@@ -173,7 +173,7 @@ export default function AiService() {
                 <Button
                   shape="round"
                   size="small"
-                  disabled={!isInstallWSL}
+                  disabled={!isInstallWSL || checkingWsl}
                   loading={
                     loading &&
                     operating.serviceName === item.serviceName &&
@@ -188,7 +188,7 @@ export default function AiService() {
                 <Button
                   shape="round"
                   size="small"
-                  disabled={!isInstallWSL}
+                  disabled={!isInstallWSL || checkingWsl}
                   loading={
                     loading &&
                     operating.serviceName === item.serviceName &&
@@ -203,7 +203,7 @@ export default function AiService() {
                 <Button
                   shape="round"
                   size="small"
-                  disabled={!isInstallWSL}
+                  disabled={!isInstallWSL || checkingWsl}
                   loading={
                     loading &&
                     operating.serviceName === item.serviceName &&
@@ -218,7 +218,7 @@ export default function AiService() {
                 <Button
                   shape="round"
                   size="small"
-                  disabled={!isInstallWSL}
+                  disabled={!isInstallWSL || checkingWsl}
                   loading={
                     loading &&
                     operating.serviceName === item.serviceName &&
@@ -233,7 +233,7 @@ export default function AiService() {
                 <Button
                   shape="round"
                   size="small"
-                  disabled={!isInstallWSL}
+                  disabled={!isInstallWSL || checkingWsl}
                   loading={
                     loading &&
                     operating.serviceName === item.serviceName &&
