@@ -51,7 +51,7 @@ export default function AiService() {
     serviceName: ServiceName;
     actionName: ActionName;
   }>({
-    serviceName: 'LLM',
+    serviceName: 'ASR', // 改为ASR，因为LLM暂时不可用
     actionName: 'install',
   });
   const [cmdOperating, setCmdOperating] = useState<{
@@ -62,9 +62,10 @@ export default function AiService() {
     actionName: 'install',
   });
   
-  const llmContainer = containers.filter(
-    (item) => item.Names.indexOf(containerNameDict.LLM) >= 0,
-  )[0];
+  // 暂时注释掉LLM相关容器，因为没有后端支持
+  // const llmContainer = containers.filter(
+  //   (item) => item.Names.indexOf(containerNameDict.LLM) >= 0,
+  // )[0];
   const ttsContainer = containers.filter(
     (item) => item.Names.indexOf(containerNameDict.TTS) >= 0,
   )[0];
@@ -73,11 +74,12 @@ export default function AiService() {
   )[0];
 
   const containerInfos: ContainerItem[] = [
-    {
-      name: '对话机器人',
-      serviceName: 'LLM',
-      state: getState(llmContainer),
-    },
+    // 暂时注释掉LLM服务，因为没有后端支持
+    // {
+    //   name: '对话机器人',
+    //   serviceName: 'LLM',
+    //   state: getState(llmContainer),
+    // },
     {
       name: '语音转文字',
       serviceName: 'ASR',

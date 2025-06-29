@@ -22,7 +22,8 @@ interface ServiceControlResponse {
 
 export default function useServiceControl() {
   const [serviceStates, setServiceStates] = useState<ServiceControlState>({
-    LLM: { isEnabled: false, isOperating: false },
+    // 暂时注释掉LLM，因为没有后端支持
+    // LLM: { isEnabled: false, isOperating: false },
     ASR: { isEnabled: false, isOperating: false },
     TTS: { isEnabled: false, isOperating: false },
   });
@@ -33,7 +34,8 @@ export default function useServiceControl() {
       // TODO: 调用后端IPC接口获取所有服务状态
       // 目前使用mock数据
       const mockResponse: ServiceControlResponse[] = [
-        { serviceName: 'LLM', isEnabled: false, isOperating: false },
+        // 暂时注释掉LLM，因为没有后端支持
+        // { serviceName: 'LLM', isEnabled: false, isOperating: false },
         { serviceName: 'ASR', isEnabled: false, isOperating: false },
         { serviceName: 'TTS', isEnabled: false, isOperating: false },
       ];

@@ -20,8 +20,8 @@ class ServiceController {
   private serviceStates: Map<ServiceName, boolean> = new Map();
 
   constructor() {
-    // 初始化服务状态
-    this.serviceStates.set('LLM', false);
+    // 初始化服务状态 - 暂时注释掉LLM，因为没有后端支持
+    // this.serviceStates.set('LLM', false);
     this.serviceStates.set('ASR', false);
     this.serviceStates.set('TTS', false);
   }
@@ -67,7 +67,8 @@ class ServiceController {
   }
 
   async getAllServicesStatus(): Promise<ServiceControlResponse[]> {
-    const services: ServiceName[] = ['LLM', 'ASR', 'TTS'];
+    // 暂时注释掉LLM，因为没有后端支持
+    const services: ServiceName[] = [/* 'LLM', */ 'ASR', 'TTS'];
     const results: ServiceControlResponse[] = [];
     
     for (const service of services) {
