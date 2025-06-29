@@ -95,3 +95,6 @@ out/
 *.exe
 *.zip
 NUL
+
+# local debug
+local/

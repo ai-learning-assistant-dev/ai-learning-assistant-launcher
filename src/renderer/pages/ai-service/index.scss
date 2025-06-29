@@ -1,16 +1,114 @@
 .ai-service{
   display: flex;
+  flex-direction: column;
   width: 100%;
-  justify-content: center;
-  .ai-service-list{
-    width: calc(100% - 20px);
-    flex: 0 0 auto;
-  }
+  padding: 16px;
+  gap: 16px;
   height: 100%;
-  align-items: center;
+  overflow-y: auto;
 
-  .header-container{
-    display: flex;
-    justify-content: space-between;
+  .service-control-card {
+    .service-switches {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 16px;
+
+      .service-switch-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 12px;
+        border: 1px solid #d9d9d9;
+        border-radius: 6px;
+        background-color: #fafafa;
+
+        .service-name {
+          font-weight: 500;
+          flex: 1;
+        }
+
+        .ant-switch {
+          margin: 0 12px;
+        }
+      }
+    }
+
+    .control-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+  }
+
+  .logs-card {
+    .logs-container {
+      max-height: 300px;
+      overflow-y: auto;
+      border: 1px solid #f0f0f0;
+      border-radius: 6px;
+      background-color: #fafafa;
+
+      .no-logs {
+        padding: 20px;
+        text-align: center;
+        color: #999;
+        font-style: italic;
+      }
+
+      .log-entry {
+        display: flex;
+        align-items: center;
+        padding: 8px 12px;
+        border-bottom: 1px solid #f0f0f0;
+        font-family: 'Courier New', monospace;
+        font-size: 12px;
+
+        &:last-child {
+          border-bottom: none;
+        }
+
+        .log-timestamp {
+          color: #666;
+          margin-right: 8px;
+          min-width: 80px;
+        }
+
+        .log-message {
+          flex: 1;
+          margin-left: 8px;
+        }
+
+        &.log-error {
+          background-color: #fff2f0;
+          border-left: 3px solid #ff4d4f;
+        }
+
+        &.log-warning {
+          background-color: #fffbe6;
+          border-left: 3px solid #faad14;
+        }
+
+        &.log-success {
+          background-color: #f6ffed;
+          border-left: 3px solid #52c41a;
+        }
+
+        &.log-info {
+          background-color: #f0f9ff;
+          border-left: 3px solid #1890ff;
+        }
+      }
+    }
+  }
+
+  .ai-service-list{
+    flex: 1;
+    min-height: 0;
+
+    .header-container{
+      display: flex;
+      justify-content: space-between;
+    }
   }
 }

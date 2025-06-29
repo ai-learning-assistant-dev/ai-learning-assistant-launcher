@@ -1,4 +1,4 @@
-import { Button, List, Modal, notification, Typography } from 'antd';
+import { Button, List, Modal, notification, Typography, Switch, Card, Collapse, Tag } from 'antd';
 import { Link } from 'react-router-dom';
 import './index.scss';
 import type { ContainerInfo } from 'dockerode';
@@ -16,6 +16,13 @@ import {
 } from '../../../main/cmd/type-info';
 import useCmd from '../../containers/use-cmd';
 import { MESSAGE_TYPE, MessageData } from '../../../main/ipc-data-type';
+import useServiceControl from '../../containers/use-service-control';
+import useServiceLogs from '../../containers/use-service-logs';
+
+const { Panel } = Collapse;
+
+// 判断是否为开发环境
+const isDevelopment = process.env.NODE_ENV === 'development';
 
 interface ContainerItem {
   name: string;
@@ -36,6 +43,9 @@ function getState(container?: ContainerInfo): ContainerItem['state'] {
 export default function AiService() {
   const { containers, action, loading } = useDocker();
   const { isInstallWSL, action: cmdAction, loading: cmdLoading } = useCmd();
+  const { toggleService, getServiceState } = useServiceControl();
+  const { logs, isLogsVisible, addLog, clearLogs, toggleLogsVisibility } = useServiceLogs();
+  
   const [showRebootModal, setShowRebootModal] = useState(false);
   const [operating, setOperating] = useState<{
     serviceName: ServiceName;
@@ -51,6 +61,7 @@ export default function AiService() {
     serviceName: 'WSL',
     actionName: 'install',
   });
+  
   const llmContainer = containers.filter(
     (item) => item.Names.indexOf(containerNameDict.LLM) >= 0,
   )[0];
@@ -78,6 +89,33 @@ export default function AiService() {
       state: getState(ttsContainer),
     },
   ];
+
+  // 处理服务开关切换
+  const handleServiceToggle = async (serviceName: ServiceName, checked: boolean) => {
+    try {
+      // 只在开发环境下记录日志
+      if (isDevelopment) {
+        addLog('info', serviceName, `开始${checked ? '启动' : '停止'}服务...`);
+      }
+      const newState = await toggleService(serviceName);
+      if (isDevelopment) {
+        addLog('success', serviceName, `服务${newState ? '启动' : '停止'}成功`);
+      }
+      notification.success({
+        message: `${containerInfos.find(item => item.serviceName === serviceName)?.name} ${newState ? '启动' : '停止'}成功`,
+        placement: 'topRight',
+      });
+    } catch (error) {
+      if (isDevelopment) {
+        addLog('error', serviceName, `服务操作失败: ${error}`);
+      }
+      notification.error({
+        message: `服务操作失败`,
+        description: `${error}`,
+        placement: 'topRight',
+      });
+    }
+  };
 
   function click(actionName: ActionName, serviceName: ServiceName) {
     if (loading) {
@@ -132,6 +170,7 @@ export default function AiService() {
       <Modal open={showRebootModal} footer={false} closable={false}>
         已经成功打开windows系统自带WSL组件，需要重启电脑才能进行后续操作，请确保你保存了所有的文件后手动重启电脑
       </Modal>
+      
       <List
         className="ai-service-list"
         header={
@@ -243,6 +282,73 @@ export default function AiService() {
           </List.Item>
         )}
       />
+
+      {/* 服务控制区域 */}
+      <Card className="service-control-card" title="容器服务控制" size="small">
+        <div className="service-switches">
+          {containerInfos.map((item) => {
+            const serviceState = getServiceState(item.serviceName);
+            return (
+              <div key={item.serviceName} className="service-switch-item">
+                <span className="service-name">{item.name}</span>
+                <Switch
+                  checked={serviceState.isEnabled}
+                  loading={serviceState.isOperating}
+                  disabled={!isInstallWSL}
+                  onChange={(checked) => handleServiceToggle(item.serviceName, checked)}
+                />
+                <Tag color={serviceState.isEnabled ? 'green' : 'default'}>
+                  {serviceState.isEnabled ? '运行中' : '已停止'}
+                </Tag>
+              </div>
+            );
+          })}
+        </div>
+        <div className="control-actions">
+          {/* 只在开发环境下显示日志控制按钮 */}
+          {isDevelopment && (
+            <>
+              <Button 
+                size="small" 
+                onClick={toggleLogsVisibility}
+                type={isLogsVisible ? 'primary' : 'default'}
+              >
+                {isLogsVisible ? '隐藏日志' : '查看日志'}
+              </Button>
+              <Button size="small" onClick={clearLogs}>
+                清空日志
+              </Button>
+            </>
+          )}
+        </div>
+      </Card>
+
+      {/* 日志输出区域 - 只在开发环境下显示 */}
+      {isDevelopment && isLogsVisible && (
+        <Card className="logs-card" title={`服务日志 (${logs.length}条)`} size="small">
+          <div className="logs-container">
+            {logs.length === 0 ? (
+              <div className="no-logs">暂无日志</div>
+            ) : (
+              logs.map((log) => (
+                <div key={log.id} className={`log-entry log-${log.level}`}>
+                  <span className="log-timestamp">
+                    {log.timestamp.toLocaleTimeString()}
+                  </span>
+                  <Tag color={
+                    log.level === 'error' ? 'red' :
+                    log.level === 'warning' ? 'orange' :
+                    log.level === 'success' ? 'green' : 'blue'
+                  }>
+                    {log.service}
+                  </Tag>
+                  <span className="log-message">{log.message}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
