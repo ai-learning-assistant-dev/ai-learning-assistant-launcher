@@ -59,6 +59,7 @@ export default async function init(ipcMain: IpcMain) {
           event.reply(channel, MESSAGE_TYPE.INFO, '成功删除');
         } else if (action === 'install') {
           if (serviceName === 'WSL') {
+             event.reply(channel, MESSAGE_TYPE.PROGRESS, '开始安装WSL，预计需要10分钟，请耐心等待');
             const result = await installWSL();
             event.reply(
               channel,
@@ -227,22 +228,26 @@ export async function installWSL() {
 export async function isWSLInstall() {
   let wslWork = false;
   try {
-    const output = await commandLine.exec('wsl.exe', ['-l', '-v'], {
+    const output = await commandLine.exec('wsl.exe', ['--status'], {
       encoding: 'utf16le',
+      shell: true,
     });
     console.debug('isWSLInstall', output);
     if (
-      output.stdout.indexOf('Wsl/WSL_E_WSL_OPTIONAL_COMPONENT_REQUIRED') >= 0
+      output.stdout.indexOf('Wsl/WSL_E_WSL_OPTIONAL_COMPONENT_REQUIRED') >= 0 ||
+      output.stdout.indexOf('wsl.exe --install') >= 0
     ) {
       wslWork = false;
+    }else{
+      wslWork = true;
     }
-    wslWork = true;
+    
   } catch (e) {
     console.warn('isWSLInstall', e);
     wslWork = false;
   }
 
-  return wslWork && (await checkWSLComponent());
+  return wslWork;
 }
 
 async function checkWSLComponent() {
