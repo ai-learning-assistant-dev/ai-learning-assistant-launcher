@@ -151,8 +151,9 @@ export async function installWSL() {
     );
     console.debug('installWSLM1', resultM1);
     if(resultM1.stdout.indexOf('The operation completed successfully')>=0 ||
-        resultM1.stdout.indexOf('请求的操作成功')>=0){
-      successM1 = true
+        resultM1.stdout.indexOf('请求的操作成功')>=0 ||
+        resultM1.stdout.indexOf('操作成功完成')>=0){
+      successM1 = true;
     }
   } catch (e) {
     console.warn('installWSLM1', e);
