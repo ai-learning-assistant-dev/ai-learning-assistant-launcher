@@ -21,6 +21,16 @@ import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 import { getContainerConfig } from '../configs';
 import { wait } from '../util';
 
+// 日志发送函数
+function sendInstallLog(event: any, level: 'info' | 'warning' | 'error' | 'success', service: string, message: string) {
+  event.reply('service-logs', {
+    level,
+    service,
+    message,
+    timestamp: new Date().toISOString(),
+  });
+}
+
 let connectionGlobal: LibPod & Dockerode;
 
 /** 解决 ipcMain 的监听函数不显示错误日志问题 */
@@ -63,13 +73,19 @@ export default async function init(ipcMain: IpcMain) {
     async (event, action: ActionName, serviceName: ServiceName) => {
       if (action === 'install') {
         try {
+          sendInstallLog(event, 'info', serviceName, '开始安装容器服务');
           await ensurePodmanWorks(event, channel);
+          sendInstallLog(event, 'success', serviceName, 'Podman环境准备完成');
+          
           if (!connectionGlobal) {
+            sendInstallLog(event, 'info', serviceName, '正在连接到Podman...');
             connectionGlobal = await connect();
+            sendInstallLog(event, 'success', serviceName, 'Podman连接成功');
           }
         } catch (e) {
           console.error(e);
           console.debug('安装podman失败');
+          sendInstallLog(event, 'error', serviceName, `Podman环境准备失败: ${e}`);
           event.reply(channel, MESSAGE_TYPE.ERROR, '安装podman失败');
           return;
         }
@@ -107,53 +123,103 @@ export default async function init(ipcMain: IpcMain) {
         console.debug('container', container);
         if (container) {
           if (action === 'start') {
-            await improveStablebility(async () => {
-              await container.start();
-              event.reply(channel, MESSAGE_TYPE.INFO, '成功启动服务');
-            });
+            try {
+              sendInstallLog(event, 'info', serviceName, '正在启动容器...');
+              await improveStablebility(async () => {
+                await container.start();
+                event.reply(channel, MESSAGE_TYPE.INFO, '成功启动服务');
+              });
+              sendInstallLog(event, 'success', serviceName, '容器启动成功');
+            } catch (e) {
+              sendInstallLog(event, 'error', serviceName, `容器启动失败: ${e}`);
+            }
           } else if (action === 'stop') {
-            await improveStablebility(async () => {
-              await container.stop();
-              event.reply(channel, MESSAGE_TYPE.INFO, '成功停止服务');
-            });
+            try {
+              sendInstallLog(event, 'info', serviceName, '正在停止容器...');
+              await improveStablebility(async () => {
+                await container.stop();
+                event.reply(channel, MESSAGE_TYPE.INFO, '成功停止服务');
+              });
+              sendInstallLog(event, 'success', serviceName, '容器停止成功');
+            } catch (e) {
+              sendInstallLog(event, 'error', serviceName, `容器停止失败: ${e}`);
+            }
           } else if (action === 'remove') {
-            await improveStablebility(async () => {
-              await container.remove();
-              event.reply(channel, MESSAGE_TYPE.INFO, '成功删除服务');
-            });
+            try {
+              sendInstallLog(event, 'info', serviceName, '正在删除容器...');
+              await improveStablebility(async () => {
+                await container.remove();
+                event.reply(channel, MESSAGE_TYPE.INFO, '成功删除服务');
+              });
+              sendInstallLog(event, 'success', serviceName, '容器删除成功');
+            } catch (e) {
+              sendInstallLog(event, 'error', serviceName, `容器删除失败: ${e}`);
+            }
           }
         } else if (action === 'install') {
           console.debug('install', imageName);
-          await ensureImageReady(serviceName, event, channel);
+          sendInstallLog(event, 'info', serviceName, '开始准备容器镜像');
+          
+          try {
+            await ensureImageReady(serviceName, event, channel);
+            sendInstallLog(event, 'success', serviceName, '容器镜像准备完成');
+          } catch (e) {
+            sendInstallLog(event, 'error', serviceName, `镜像准备失败: ${e}`);
+            event.reply(channel, MESSAGE_TYPE.ERROR, '镜像准备失败');
+            return;
+          }
+          
+          sendInstallLog(event, 'info', serviceName, '正在获取容器配置');
           const config = getMergedContainerConfig(serviceName,getContainerConfig())
+          sendInstallLog(event, 'info', serviceName, `端口映射配置: ${config.port.map(p => `${p.host}:${p.container}`).join(', ')}`);
+          
           let newContainerInfo:
             | {
                 Id: string;
                 Warnings: string[];
               }
             | undefined;
-          newContainerInfo = await improveStablebility(async () => {
-            return connectionGlobal.createPodmanContainer({
-              image: imageName,
-              name: containerName,
-              devices: [{ path: 'nvidia.com/gpu=all' }],
-              portmappings:config.port.map(p=>({container_port: p.container, host_port: p.host}))
+          
+          try {
+            sendInstallLog(event, 'info', serviceName, '正在创建容器...');
+            newContainerInfo = await improveStablebility(async () => {
+              return connectionGlobal.createPodmanContainer({
+                image: imageName,
+                name: containerName,
+                devices: [{ path: 'nvidia.com/gpu=all' }],
+                portmappings:config.port.map(p=>({container_port: p.container, host_port: p.host}))
+              });
             });
-          });
+          } catch (e) {
+            sendInstallLog(event, 'error', serviceName, `容器创建失败: ${e}`);
+            event.reply(channel, MESSAGE_TYPE.ERROR, '容器创建失败');
+            return;
+          }
 
           console.debug('newContainerInfo', newContainerInfo);
           if (newContainerInfo) {
             console.debug('安装服务成功');
-            await improveStablebility(async () => {
-              const newContainer = connectionGlobal.getContainer(
-                newContainerInfo.Id,
-              );
-              await newContainer.start();
-              event.reply(channel, MESSAGE_TYPE.INFO, '成功启动服务');
-            });
+            sendInstallLog(event, 'success', serviceName, `容器创建成功 (ID: ${newContainerInfo.Id.substring(0, 12)})`);
+            
+            try {
+              sendInstallLog(event, 'info', serviceName, '正在启动容器...');
+              await improveStablebility(async () => {
+                const newContainer = connectionGlobal.getContainer(
+                  newContainerInfo.Id,
+                );
+                await newContainer.start();
+                event.reply(channel, MESSAGE_TYPE.INFO, '成功启动服务');
+              });
+              sendInstallLog(event, 'success', serviceName, '容器启动成功');
+            } catch (e) {
+              sendInstallLog(event, 'error', serviceName, `容器启动失败: ${e}`);
+            }
+            
+            sendInstallLog(event, 'success', serviceName, '容器安装完成');
             event.reply(channel, MESSAGE_TYPE.INFO, '安装服务成功');
           } else {
             console.debug('安装服务失败');
+            sendInstallLog(event, 'error', serviceName, '容器创建失败，返回信息为空');
             event.reply(channel, MESSAGE_TYPE.ERROR, '安装服务失败');
           }
         } else {

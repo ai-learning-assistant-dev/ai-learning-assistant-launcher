@@ -6,6 +6,16 @@ import { imageNameDict, imagePathDict, ServiceName } from './type-info';
 import { Channels, MESSAGE_TYPE } from '../ipc-data-type';
 import { isWSLInstall } from '../cmd';
 
+// 日志发送函数
+function sendInstallLog(event: IpcMainEvent, level: 'info' | 'warning' | 'error' | 'success', service: string, message: string) {
+  event.reply('service-logs', {
+    level,
+    service,
+    message,
+    timestamp: new Date().toISOString(),
+  });
+}
+
 const commandLine = new Exec();
 
 export function getPodmanCli(): string {
@@ -77,6 +87,8 @@ async function loadImage(serviceName: ServiceName) {
       'ai-assistant-backend',
       imagePathDict[serviceName],
     )
+  
+  console.debug(`开始加载镜像: ${imagePath}`);
   const output = await commandLine.exec(getPodmanCli(), [
     'load',
     '-i',
@@ -85,14 +97,17 @@ async function loadImage(serviceName: ServiceName) {
   console.debug("loadImage",output)
   const id = output.stdout.split(":").pop();
   if(output.stdout.indexOf("Loaded image")>=0 &&id&&id.length > 25){
+    console.debug(`镜像加载成功，ID: ${id}`);
     const output2 = await commandLine.exec(getPodmanCli(), [
       'tag',
       id,
       imageNameDict[serviceName],
     ]);
     console.debug("podman tag", output2)
+    console.debug(`镜像标签设置成功: ${imageNameDict[serviceName]}`);
     return true;
   }else{
+    console.debug('镜像加载失败');
     return false;
   }
 }
@@ -173,36 +188,47 @@ export async function ensurePodmanWorks(
   channel: Channels,
 ) {
   event.reply(channel,MESSAGE_TYPE.PROGRESS,"正在启动WSL，这需要一点时间")
+  sendInstallLog(event, 'info', 'System', '开始检查容器环境');
+  
   await checkAndSetup(isWSLInstall, installWSLMock, {
     event,
     channel,
     checkMessage: '检查WSL状态',
     setupMessage: '安装WSL',
   });
+  sendInstallLog(event, 'success', 'System', 'WSL环境检查完成');
+  
   await checkAndSetup(isPodmanInstall, installPodman, {
     event,
     channel,
     checkMessage: '检查Podman安装状态',
     setupMessage: '安装Podman',
   });
+  sendInstallLog(event, 'success', 'System', 'Podman安装检查完成');
+  
   await checkAndSetup(isPodmanInit, initPodman, {
     event,
     channel,
     checkMessage: '检查Podman虚拟机',
     setupMessage: '初始化Podman虚拟机',
   });
+  sendInstallLog(event, 'success', 'System', 'Podman虚拟机初始化完成');
+  
   await checkAndSetup(isPodmanStart, startPodman, {
     event,
     channel,
     checkMessage: '检查Podman虚拟机启动情况',
     setupMessage: '启动Podman虚拟机',
   });
+  sendInstallLog(event, 'success', 'System', 'Podman虚拟机启动完成');
+  
   await checkAndSetup(isCDIReady, setupCDI, {
     event,
     channel,
     checkMessage: '检查容器显卡情况',
     setupMessage: '设置容器显卡',
   });
+  sendInstallLog(event, 'success', 'System', 'GPU支持配置完成');
 }
 
 export async function ensureImageReady(
@@ -210,6 +236,8 @@ export async function ensureImageReady(
   event: IpcMainEvent,
   channel: Channels,
 ) {
+  sendInstallLog(event, 'info', service, '开始检查容器镜像');
+  
   await checkAndSetup(
     async () => await isImageReady(service),
     async () => await loadImage(service),
@@ -220,6 +248,8 @@ export async function ensureImageReady(
       setupMessage: `加载镜像${service}`,
     },
   );
+  
+  sendInstallLog(event, 'success', service, '容器镜像检查完成');
 }
 
 type AsyncStringFunction = () => Promise<boolean>;

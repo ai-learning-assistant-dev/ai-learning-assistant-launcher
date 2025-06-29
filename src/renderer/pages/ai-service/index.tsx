@@ -167,6 +167,23 @@ export default function AiService() {
     };
   }, [setShowRebootModal]);
 
+  // 监听容器安装日志
+  useEffect(() => {
+    const cancel = window.electron?.ipcRenderer.on(
+      'service-logs',
+      (logData: { level: 'info' | 'warning' | 'error' | 'success', service: string, message: string, timestamp: string }) => {
+        // 只在开发环境下显示日志
+        if (isDevelopment) {
+          addLog(logData.level, logData.service, logData.message);
+        }
+      },
+    );
+
+    return () => {
+      cancel();
+    };
+  }, [addLog]);
+
   return (
     <div className="ai-service">
       <Modal open={showRebootModal} footer={false} closable={false}>

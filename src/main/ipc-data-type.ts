@@ -4,7 +4,8 @@ export type Channels =
   | 'cmd'
   | 'wsl'
   | 'configs'
-  | 'obsidian-plugin';
+  | 'obsidian-plugin'
+  | 'service-logs';
 
 export enum MESSAGE_TYPE {
   ERROR = 'error',
