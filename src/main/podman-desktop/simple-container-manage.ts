@@ -16,10 +16,14 @@ import {
   ensurePodmanWorks,
   startPodman,
   stopPodman,
+  getPodmanCli,
 } from './ensure-podman-works';
+import { Exec } from '../exec';
 import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 import { getContainerConfig } from '../configs';
 import { wait } from '../util';
+
+const commandLine = new Exec();
 
 // 日志发送函数
 function sendInstallLog(event: any, level: 'info' | 'warning' | 'error' | 'success', service: string, message: string) {
@@ -211,6 +215,19 @@ export default async function init(ipcMain: IpcMain) {
                 event.reply(channel, MESSAGE_TYPE.INFO, '成功启动服务');
               });
               sendInstallLog(event, 'success', serviceName, '容器启动成功');
+              
+              // 容器启动后，自动启动所有服务
+              try {
+                sendInstallLog(event, 'info', serviceName, '正在启动容器内的AI服务...');
+                await commandLine.exec(getPodmanCli(), [
+                  'exec',
+                  containerName,
+                  './start.sh'
+                ]);
+                sendInstallLog(event, 'success', serviceName, 'AI服务启动成功');
+              } catch (e) {
+                sendInstallLog(event, 'warning', serviceName, `AI服务启动失败，可以稍后手动启动: ${e}`);
+              }
             } catch (e) {
               sendInstallLog(event, 'error', serviceName, `容器启动失败: ${e}`);
             }

@@ -71,12 +71,21 @@ async function isImageReady(serviceName: ServiceName) {
   console.debug('serviceName', serviceName);
   const output = await commandLine.exec(getPodmanCli(), ['image', 'list']);
   console.debug('isImageReady', output);
-  if (
-    output.stdout.indexOf(imageNameDict[serviceName].replace(':latest', '')) >=
-    0
-  ) {
-    return true;
+  
+  // 分别检查镜像名称和标签
+  const [imageName, imageTag] = imageNameDict[serviceName].split(':');
+  console.debug(`检查镜像: ${imageName}, 标签: ${imageTag}`);
+  
+  // 检查是否包含镜像名称和对应的标签
+  const lines = output.stdout.split('\n');
+  for (const line of lines) {
+    if (line.includes(imageName) && line.includes(imageTag)) {
+      console.debug(`找到匹配的镜像行: ${line}`);
+      return true;
+    }
   }
+  
+  console.debug(`未找到镜像 ${imageName}:${imageTag}`);
   return false;
 }
 

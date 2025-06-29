@@ -31,17 +31,19 @@ export default function useServiceControl() {
   // 从后端获取服务状态
   const refreshServiceStates = useCallback(async () => {
     try {
-      // TODO: 调用后端IPC接口获取所有服务状态
-      // 目前使用mock数据
-      const mockResponse: ServiceControlResponse[] = [
-        // 暂时注释掉LLM，因为没有后端支持
-        // { serviceName: 'LLM', isEnabled: false, isOperating: false },
-        { serviceName: 'ASR', isEnabled: false, isOperating: false },
-        { serviceName: 'TTS', isEnabled: false, isOperating: false },
-      ];
-
+      // 调用后端IPC接口获取所有服务状态
+      const result = await window.electron.ipcRenderer.invoke('service-control', {
+        action: 'status',
+        serviceName: undefined, // 获取所有服务状态
+      } as ServiceControlRequest);
+      
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      
+      const services = result.data as ServiceControlResponse[];
       const newStates: ServiceControlState = {};
-      mockResponse.forEach(service => {
+      services.forEach(service => {
         newStates[service.serviceName] = {
           isEnabled: service.isEnabled,
           isOperating: service.isOperating,
@@ -65,31 +67,17 @@ export default function useServiceControl() {
     }));
 
     try {
-      // TODO: 调用后端IPC接口切换服务状态
-      // const result = await window.electron.ipcRenderer.invoke('service-control', {
-      //   action: 'toggle',
-      //   serviceName,
-      // } as ServiceControlRequest);
-      
-      // if (!result.success) {
-      //   throw new Error(result.error);
-      // }
-      
-      // const response = result.data as ServiceControlResponse;
-      
-      // Mock实现：模拟后端响应
-      const currentState = serviceStates[serviceName]?.isEnabled || false;
-      const newState = !currentState;
-      
-      // 模拟异步操作
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const response: ServiceControlResponse = {
+      // 调用后端IPC接口切换服务状态
+      const result = await window.electron.ipcRenderer.invoke('service-control', {
+        action: 'toggle',
         serviceName,
-        isEnabled: newState,
-        isOperating: false,
-        message: `服务${newState ? '启动' : '停止'}成功`,
-      };
+      } as ServiceControlRequest);
+      
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      
+      const response = result.data as ServiceControlResponse;
       
       // 更新服务状态
       setServiceStates(prev => ({
@@ -121,26 +109,23 @@ export default function useServiceControl() {
   // 检查单个服务状态
   const checkServiceStatus = useCallback(async (serviceName: ServiceName): Promise<boolean> => {
     try {
-      // TODO: 调用后端IPC接口检查服务状态
-      // const result = await window.electron.ipcRenderer.invoke('service-control', {
-      //   action: 'status',
-      //   serviceName,
-      // } as ServiceControlRequest);
+      // 调用后端IPC接口检查服务状态
+      const result = await window.electron.ipcRenderer.invoke('service-control', {
+        action: 'status',
+        serviceName,
+      } as ServiceControlRequest);
       
-      // if (!result.success) {
-      //   throw new Error(result.error);
-      // }
+      if (!result.success) {
+        throw new Error(result.error);
+      }
       
-      // const response = result.data as ServiceControlResponse;
-      // return response.isEnabled;
-      
-      // Mock实现
-      return serviceStates[serviceName]?.isEnabled || false;
+      const response = result.data as ServiceControlResponse;
+      return response.isEnabled;
     } catch (error) {
       console.error(`Failed to check service status for ${serviceName}:`, error);
       return false;
     }
-  }, [serviceStates]);
+  }, []);
 
   // 初始化时获取服务状态
   useEffect(() => {

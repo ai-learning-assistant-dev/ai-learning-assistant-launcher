@@ -171,9 +171,9 @@ export default function AiService() {
   useEffect(() => {
     const cancel = window.electron?.ipcRenderer.on(
       'service-logs',
-      (logData: { level: 'info' | 'warning' | 'error' | 'success', service: string, message: string, timestamp: string }) => {
+      (logData: any) => {
         // 只在开发环境下显示日志
-        if (isDevelopment) {
+        if (isDevelopment && logData.level && logData.service && logData.message) {
           addLog(logData.level, logData.service, logData.message);
         }
       },

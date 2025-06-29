@@ -17,14 +17,14 @@ export const containerNameDict: Record<ServiceName, string> = {
 };
 
 export const imageNameDict: Record<ServiceName, string> = {
-  ASR: 'ai-voice-backend:latest',
-  TTS: 'ai-voice-backend:latest',
+  ASR: 'ai-voice-backend:v1.0',
+  TTS: 'ai-voice-backend:v1.0',
   LLM: '',
 };
 
 export const imagePathDict: Record<ServiceName, string> = {
   ASR: 'ai-voice.tar',
-  TTS: 'ai-voice.tar',
+  TTS: 'ai-voice.tar', 
   LLM: '',
 };
 
