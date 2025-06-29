@@ -162,38 +162,66 @@ export async function updateTemplate() {
   const obsidianPluginsTemplate = path.join(
     appPath,
     'external-resources',
-    'obsidian-plugins-template',
+    'obsidian-plugins-template'
   );
   const tmpDir = path.join(obsidianPluginsTemplate, 'tmp');
 
+  // 更安全的目录清理方式
   try {
-    rmSync(tmpDir, { recursive: true });
+    if (statSync(tmpDir).isDirectory()) {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
   } catch (e) {
-    console.warn(e);
+    console.warn(`Failed to clean tmp directory: ${e.message}`);
   }
-  mkdirSync(tmpDir);
+
+  // 确保目录存在
+  mkdirSync(tmpDir, { recursive: true });
 
   const pluginGitDir = path.join(tmpDir, 'ai-learning-assistant-plugin-dist');
-  await gitClone(
-    'https://gitee.com/ai-learning-assistant-dev/ai-learning-assistant-plugin-dist.git',
-    pluginGitDir,
-  );
-
-  console.debug(
-    'clone success',
-    'https://gitee.com/ai-learning-assistant-dev/ai-learning-assistant-plugin-dist.git',
-  );
+  try {
+    await gitClone(
+      'https://gitee.com/ai-learning-assistant-dev/ai-learning-assistant-plugin-dist.git',
+      pluginGitDir
+    );
+    console.debug('clone success', pluginGitDir);
+  } catch (e) {
+    console.error(`Failed to clone repository: ${e.message}`);
+    throw e; // 重新抛出错误，让调用方处理
+  }
 
   const pluginPath = path.join(obsidianPluginsTemplate, '.obsidian', 'plugins');
 
-  rmSync(pluginPath, { recursive: true });
+  // 更安全的目录清理方式
+  try {
+    if (statSync(pluginPath).isDirectory()) {
+      rmSync(pluginPath, { recursive: true, force: true });
+    }
+  } catch (e) {
+    console.warn(`Failed to clean plugin directory: ${e.message}`);
+  }
 
-  await cpy(
-    path.join(pluginGitDir, 'ai-learning-assistant-dev', '**'),
-    pluginPath,
-  );
+  // 确保目录存在
+  mkdirSync(pluginPath, { recursive: true });
 
-  rmSync(tmpDir, { recursive: true });
+  try {
+    await cpy(
+      path.join(pluginGitDir, 'ai-learning-assistant-dev', '**'),
+      pluginPath
+    );
+  } catch (e) {
+    console.error(`Failed to copy plugins: ${e.message}`);
+    throw e; // 重新抛出错误，让调用方处理
+  }
+
+  // 清理临时目录
+  try {
+    if (statSync(tmpDir).isDirectory()) {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  } catch (e) {
+    console.warn(`Failed to clean tmp directory at end: ${e.message}`);
+  }
 }
 
 function getTemplatePlugins() {
@@ -219,9 +247,9 @@ async function copyPluginToVault(pluginId: string, vaultId: string) {
     (item) => item.id === pluginId,
   )[0];
   if (plugin && templatePlugin) {
-    if (plugin.isInstalled) {
-      rmSync(plugin.path, { recursive: true });
-    }
+    // if (plugin.isInstalled) {
+    //   rmSync(plugin.path, { recursive: true });
+    // }
     const dirName = path.parse(templatePlugin.path).base;
     await cpy(
       path.join(templatePlugin.path, '**'),
