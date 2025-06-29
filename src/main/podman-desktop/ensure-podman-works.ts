@@ -50,7 +50,11 @@ async function isPodmanInit() {
 
 async function isPodmanStart() {
   const output = await commandLine.exec(getPodmanCli(), ['machine', 'list']);
-  console.debug('isPodmanStart', output, output.stdout.indexOf('Currently running'));
+  console.debug(
+    'isPodmanStart',
+    output,
+    output.stdout.indexOf('Currently running'),
+  );
   if (output.stdout.indexOf('Currently running') >= 0) {
     return true;
   }
@@ -71,27 +75,28 @@ async function isImageReady(serviceName: ServiceName) {
 
 async function loadImage(serviceName: ServiceName) {
   const imagePath = path.join(
-      appPath,
-      'external-resources',
-      'ai-assistant-backend',
-      imagePathDict[serviceName],
-    )
+    appPath,
+    'external-resources',
+    'ai-assistant-backend',
+    imagePathDict[serviceName],
+  );
   const output = await commandLine.exec(getPodmanCli(), [
     'load',
     '-i',
-    imagePath
+    imagePath,
   ]);
-  console.debug("loadImage",output)
-  const id = output.stdout.split(":").pop();
-  if(output.stdout.indexOf("Loaded image")>=0 &&id&&id.length > 25){
+  console.debug('loadImage', output);
+  const id = output.stdout.replace('Loaded image:', '').trim();
+  if (output.stdout.indexOf('Loaded image:') >= 0 && id && id.length > 3) {
+    console.debug('tag image');
     const output2 = await commandLine.exec(getPodmanCli(), [
       'tag',
       id,
       imageNameDict[serviceName],
     ]);
-    console.debug("podman tag", output2)
+    console.debug('podman tag', output2);
     return true;
-  }else{
+  } else {
     return false;
   }
 }
@@ -102,7 +107,12 @@ export async function installWSLMock() {
 
 export async function installPodman() {
   await commandLine.exec(
-    path.join(appPath, 'external-resources', 'ai-assistant-backend', 'install_podman.exe'),
+    path.join(
+      appPath,
+      'external-resources',
+      'ai-assistant-backend',
+      'install_podman.exe',
+    ),
     ['/s'],
     { isAdmin: true },
   );
@@ -171,7 +181,7 @@ export async function ensurePodmanWorks(
   event: IpcMainEvent,
   channel: Channels,
 ) {
-  event.reply(channel,MESSAGE_TYPE.PROGRESS,"正在启动WSL，这需要一点时间")
+  event.reply(channel, MESSAGE_TYPE.PROGRESS, '正在启动WSL，这需要一点时间');
   await checkAndSetup(isWSLInstall, installWSLMock, {
     event,
     channel,
@@ -268,7 +278,7 @@ async function checkAndSetup(
       progress &&
         progress.event.reply(
           progress.channel,
-          MESSAGE_TYPE.PROGRESS_ERROR,
+          MESSAGE_TYPE.ERROR,
           setupErrorMessage,
         );
       throw e;
@@ -278,7 +288,7 @@ async function checkAndSetup(
     progress &&
       progress.event.reply(
         progress.channel,
-        MESSAGE_TYPE.PROGRESS_ERROR,
+        MESSAGE_TYPE.ERROR,
         checkErrorMessage,
       );
     console.error(checkErrorMessage);
