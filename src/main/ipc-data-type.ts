@@ -5,7 +5,8 @@ export type Channels =
   | 'wsl'
   | 'configs'
   | 'obsidian-plugin'
-  | 'service-logs';
+  | 'service-logs'
+  | 'container-stopped';
 
 export enum MESSAGE_TYPE {
   ERROR = 'error',

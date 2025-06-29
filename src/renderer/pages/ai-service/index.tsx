@@ -1,4 +1,4 @@
-import { Button, List, Modal, notification, Typography, Switch, Card, Collapse, Tag } from 'antd';
+import { Button, List, Modal, notification, Typography, Switch, Card, Collapse, Tag, Checkbox } from 'antd';
 import { Link } from 'react-router-dom';
 import './index.scss';
 import type { ContainerInfo } from 'dockerode';
@@ -23,6 +23,22 @@ const { Panel } = Collapse;
 
 // 判断是否为开发环境
 const isDevelopment = process.env.NODE_ENV === 'development';
+
+// 获取服务的中文显示名称
+const getServiceDisplayName = (serviceName: ServiceName): string => {
+  switch (serviceName) {
+    case 'ASR':
+      return '语音转文字服务';
+    case 'TTS':
+      return '文字转语音服务';
+    case 'LLM':
+      return '对话机器人';
+    case 'VOICE':
+      return '语音服务';
+    default:
+      return '未知服务';
+  }
+};
 
 interface ContainerItem {
   name: string;
@@ -61,15 +77,15 @@ export default function AiService() {
     serviceName: 'WSL',
     actionName: 'install',
   });
+
+  // TTS模型选择状态
+  const [ttsModelOptions, setTtsModelOptions] = useState({
+    forceGPU: false,    // 强制N卡加速
+    forceCPU: false,    // 强制CPU加速
+  });
   
-  // 暂时注释掉LLM相关容器，因为没有后端支持
-  // const llmContainer = containers.filter(
-  //   (item) => item.Names.indexOf(containerNameDict.LLM) >= 0,
-  // )[0];
-  const ttsContainer = containers.filter(
-    (item) => item.Names.indexOf(containerNameDict.TTS) >= 0,
-  )[0];
-  const asrContainer = containers.filter(
+  // 语音服务容器（ASR和TTS共享同一个容器）
+  const voiceContainer = containers.filter(
     (item) => item.Names.indexOf(containerNameDict.ASR) >= 0,
   )[0];
 
@@ -81,16 +97,28 @@ export default function AiService() {
     //   state: getState(llmContainer),
     // },
     {
-      name: '语音转文字',
-      serviceName: 'ASR',
-      state: getState(asrContainer),
-    },
-    {
-      name: '文字转语音',
-      serviceName: 'TTS',
-      state: getState(ttsContainer),
+      name: '语音功能容器（总开关）',
+      serviceName: 'ASR', // 使用ASR作为代表进行容器操作
+      state: getState(voiceContainer),
     },
   ];
+
+  // 处理TTS模型选择checkbox变化
+  const handleTTSModelOptionChange = (option: 'forceGPU' | 'forceCPU', checked: boolean) => {
+    if (checked) {
+      // 如果勾选了一个选项，自动取消另一个选项
+      setTtsModelOptions({
+        forceGPU: option === 'forceGPU',
+        forceCPU: option === 'forceCPU',
+      });
+    } else {
+      // 如果取消勾选，只更新当前选项
+      setTtsModelOptions(prev => ({
+        ...prev,
+        [option]: false,
+      }));
+    }
+  };
 
   // 处理服务开关切换
   const handleServiceToggle = async (serviceName: ServiceName, checked: boolean) => {
@@ -99,20 +127,32 @@ export default function AiService() {
       if (isDevelopment) {
         addLog('info', serviceName, `开始${checked ? '启动' : '停止'}服务...`);
       }
-      const newState = await toggleService(serviceName);
+      
+      // 如果是TTS服务，传递模型选择参数
+      let modelOptions = {};
+      if (serviceName === 'TTS') {
+        modelOptions = {
+          forceGPU: ttsModelOptions.forceGPU,
+          forceCPU: ttsModelOptions.forceCPU,
+        };
+      }
+      
+      const newState = await toggleService(serviceName, modelOptions);
       if (isDevelopment) {
         addLog('success', serviceName, `服务${newState ? '启动' : '停止'}成功`);
       }
+      
       notification.success({
-        message: `${containerInfos.find(item => item.serviceName === serviceName)?.name} ${newState ? '启动' : '停止'}成功`,
+        message: `${getServiceDisplayName(serviceName)} ${newState ? '启动' : '停止'}成功`,
         placement: 'topRight',
       });
     } catch (error) {
       if (isDevelopment) {
         addLog('error', serviceName, `服务操作失败: ${error}`);
       }
+      
       notification.error({
-        message: `服务操作失败`,
+        message: `${getServiceDisplayName(serviceName)}操作失败`,
         description: `${error}`,
         placement: 'topRight',
       });
@@ -303,25 +343,66 @@ export default function AiService() {
       />
 
       {/* 服务控制区域 */}
-      <Card className="service-control-card" title="容器服务控制" size="small">
+      <Card className="service-control-card" title="功能控制" size="small">
         <div className="service-switches">
-          {containerInfos.map((item) => {
-            const serviceState = getServiceState(item.serviceName);
-            return (
-              <div key={item.serviceName} className="service-switch-item">
-                <span className="service-name">{item.name}</span>
-                <Switch
-                  checked={serviceState.isEnabled}
-                  loading={serviceState.isOperating}
-                  disabled={!isInstallWSL}
-                  onChange={(checked) => handleServiceToggle(item.serviceName, checked)}
-                />
-                <Tag color={serviceState.isEnabled ? 'green' : 'default'}>
-                  {serviceState.isEnabled ? '运行中' : '已停止'}
-                </Tag>
+          {/* 语音服务的独立控制 */}
+          {voiceContainer ? (
+            <>
+              <div className="container-status">
+                <Typography.Text type="secondary">
+                  容器状态: <Tag color={getState(voiceContainer) === '正在运行' ? 'green' : 'default'}>
+                    {getState(voiceContainer)}
+                  </Tag>
+                </Typography.Text>
               </div>
-            );
-          })}
+              {['ASR', 'TTS'].map((serviceName) => {
+                const serviceState = getServiceState(serviceName as ServiceName);
+                const serviceName_CN = serviceName === 'ASR' ? '语音转文字' : '文字转语音';
+                return (
+                  <div key={serviceName} className="service-switch-item">
+                    <div className="service-main-controls">
+                      <span className="service-name">{serviceName_CN}</span>
+                      <Switch
+                        checked={serviceState.isEnabled}
+                        loading={serviceState.isOperating}
+                        disabled={!isInstallWSL || getState(voiceContainer) !== '正在运行'}
+                        onChange={(checked) => handleServiceToggle(serviceName as ServiceName, checked)}
+                      />
+                      <Tag color={serviceState.isEnabled ? 'green' : 'default'}>
+                        {serviceState.isEnabled ? '运行中' : '已停止'}
+                      </Tag>
+                    </div>
+                    
+                    {/* TTS服务的模型选择选项 */}
+                    {serviceName === 'TTS' && (
+                      <div className="tts-model-options">
+                        <Checkbox
+                          checked={ttsModelOptions.forceGPU}
+                          disabled={serviceState.isEnabled || !isInstallWSL || getState(voiceContainer) !== '正在运行'}
+                          onChange={(e) => handleTTSModelOptionChange('forceGPU', e.target.checked)}
+                        >
+                          强制N卡加速
+                        </Checkbox>
+                        <Checkbox
+                          checked={ttsModelOptions.forceCPU}
+                          disabled={serviceState.isEnabled || !isInstallWSL || getState(voiceContainer) !== '正在运行'}
+                          onChange={(e) => handleTTSModelOptionChange('forceCPU', e.target.checked)}
+                        >
+                          强制CPU加速
+                        </Checkbox>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </>
+          ) : (
+            <div className="no-container">
+              <Typography.Text type="secondary">
+                语音服务容器未安装，请先安装语音服务
+              </Typography.Text>
+            </div>
+          )}
         </div>
         <div className="control-actions">
           {/* 只在开发环境下显示日志控制按钮 */}

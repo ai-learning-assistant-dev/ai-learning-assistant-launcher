@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import initLogger from './logger';
 import initPodman from './podman-desktop/simple-container-manage';
+import initServiceControl from './podman-desktop/service-control';
 import initCmd from './cmd';
 import initConfigs from './configs';
 import initObsidianPlugin, { updateTemplate } from './obsidian-plugin';
@@ -24,6 +25,7 @@ app.commandLine.appendSwitch('--enable-logging', 'file');
 app.commandLine.appendSwitch('--log-file', path.join(appPath, 'chrome.log'));
 
 initPodman(ipcMain);
+initServiceControl(ipcMain);
 initCmd(ipcMain);
 initConfigs(ipcMain);
 initObsidianPlugin(ipcMain);

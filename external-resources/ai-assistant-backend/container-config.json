@@ -15,6 +15,18 @@
       }
     ]
   },
+  "VOICE": {
+    "port": [
+      {
+        "container": 8000,
+        "host": 8000
+      },
+      {
+        "container": 9000,
+        "host": 9000
+      }
+    ]
+  },
   "LLM": {
     "port": [
       {

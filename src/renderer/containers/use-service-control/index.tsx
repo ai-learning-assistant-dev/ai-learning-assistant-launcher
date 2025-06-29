@@ -10,7 +10,11 @@ export interface ServiceControlState {
 
 interface ServiceControlRequest {
   action: 'toggle' | 'status';
-  serviceName: ServiceName;
+  serviceName?: ServiceName;
+  modelOptions?: {
+    forceGPU?: boolean;
+    forceCPU?: boolean;
+  };
 }
 
 interface ServiceControlResponse {
@@ -56,7 +60,7 @@ export default function useServiceControl() {
     }
   }, []);
 
-  const toggleService = useCallback(async (serviceName: ServiceName): Promise<boolean> => {
+  const toggleService = useCallback(async (serviceName: ServiceName, modelOptions?: { forceGPU?: boolean; forceCPU?: boolean }): Promise<boolean> => {
     // 设置操作状态
     setServiceStates(prev => ({
       ...prev,
@@ -71,6 +75,7 @@ export default function useServiceControl() {
       const result = await window.electron.ipcRenderer.invoke('service-control', {
         action: 'toggle',
         serviceName,
+        modelOptions,
       } as ServiceControlRequest);
       
       if (!result.success) {
@@ -130,6 +135,35 @@ export default function useServiceControl() {
   // 初始化时获取服务状态
   useEffect(() => {
     refreshServiceStates();
+    
+    // 监听容器停止事件
+    const handleContainerStopped = (data: any) => {
+      console.log('收到容器停止通知:', data);
+      const { serviceName, containerName } = data;
+      
+      // 如果是语音服务容器（ASR_TTS），需要重置ASR和TTS的状态
+      if (containerName === 'ASR_TTS') {
+        setServiceStates(prev => ({
+          ...prev,
+          ASR: { isEnabled: false, isOperating: false },
+          TTS: { isEnabled: false, isOperating: false },
+        }));
+        console.log('已重置ASR和TTS服务状态');
+      } else {
+        // 重置对应服务的状态
+        setServiceStates(prev => ({
+          ...prev,
+          [serviceName]: { isEnabled: false, isOperating: false },
+        }));
+        console.log(`已重置${serviceName}服务状态`);
+      }
+    };
+
+    const cancel = window.electron?.ipcRenderer.on('container-stopped', handleContainerStopped);
+    
+    return () => {
+      cancel && cancel();
+    };
   }, [refreshServiceStates]);
 
   return {

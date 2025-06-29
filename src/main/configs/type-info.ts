@@ -18,6 +18,12 @@ export interface ContainerConfig {
       host: number;
     }[];
   };
+  VOICE: {
+    port: {
+      container: number;
+      host: number;
+    }[];
+  };
   LLM: {
     port: {
       container: number;

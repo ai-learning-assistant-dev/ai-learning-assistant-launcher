@@ -67,6 +67,7 @@ const containerConfigPath = path.join(
 let containerConfigBuff: ContainerConfig = {
   ASR: { port: [] },
   TTS: { port: [] },
+  VOICE: { port: [] },
   LLM: { port: [] },
 };
 export function getContainerConfig() {

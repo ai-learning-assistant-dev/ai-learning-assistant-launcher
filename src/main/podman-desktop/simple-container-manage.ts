@@ -145,6 +145,18 @@ export default async function init(ipcMain: IpcMain) {
                 event.reply(channel, MESSAGE_TYPE.INFO, '成功停止服务');
               });
               sendInstallLog(event, 'success', serviceName, '容器停止成功');
+              
+              // 容器停止后，通知前端重置服务状态
+              try {
+                event.sender.send('container-stopped', {
+                  serviceName,
+                  containerName,
+                  timestamp: new Date().toISOString()
+                });
+                sendInstallLog(event, 'info', serviceName, '已通知前端重置服务状态');
+              } catch (e) {
+                console.warn('发送容器停止通知失败:', e);
+              }
             } catch (e) {
               sendInstallLog(event, 'error', serviceName, `容器停止失败: ${e}`);
             }
@@ -156,11 +168,41 @@ export default async function init(ipcMain: IpcMain) {
                 event.reply(channel, MESSAGE_TYPE.INFO, '成功删除服务');
               });
               sendInstallLog(event, 'success', serviceName, '容器删除成功');
+              
+              // 容器删除后，通知前端重置服务状态
+              try {
+                event.sender.send('container-stopped', {
+                  serviceName,
+                  containerName,
+                  timestamp: new Date().toISOString()
+                });
+                sendInstallLog(event, 'info', serviceName, '已通知前端重置服务状态');
+              } catch (e) {
+                console.warn('发送容器停止通知失败:', e);
+              }
             } catch (e) {
               sendInstallLog(event, 'error', serviceName, `容器删除失败: ${e}`);
             }
           }
         } else if (action === 'install') {
+          // 检查是否为语音服务相关的安装请求
+          const isVoiceService = serviceName === 'ASR' || serviceName === 'TTS';
+          const voiceContainerName = 'ASR_TTS';
+          
+          // 如果是语音服务，检查容器是否已经存在
+          if (isVoiceService) {
+            const existingVoiceContainer = containerInfos.filter(
+              (item) => item.Names.indexOf(voiceContainerName) >= 0,
+            )[0];
+            
+            if (existingVoiceContainer) {
+              sendInstallLog(event, 'info', serviceName, '检测到语音服务容器已存在，跳过安装');
+              sendInstallLog(event, 'success', serviceName, '语音服务容器已就绪');
+              event.reply(channel, MESSAGE_TYPE.INFO, '语音服务容器已存在');
+              return;
+            }
+          }
+          
           console.debug('install', imageName);
           sendInstallLog(event, 'info', serviceName, '开始准备容器镜像');
           

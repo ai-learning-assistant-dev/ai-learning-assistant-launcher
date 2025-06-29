@@ -17,6 +17,13 @@ const electronHandler = {
         return () => {
           ipcRenderer.removeListener(channel, subscription);
         };
+      } else if (channel === 'container-stopped') {
+        // 特殊处理 container-stopped 频道
+        const subscription = (_event: IpcRendererEvent, data: any) => func(data, '', ...arguments);
+        ipcRenderer.on(channel, subscription);
+        return () => {
+          ipcRenderer.removeListener(channel, subscription);
+        };
       } else {
         const subscription = (_event: IpcRendererEvent,messageType: MESSAGE_TYPE, data: MessageData<A, S, any>, ...args: unknown[]) =>
           func(messageType, data, ...args);

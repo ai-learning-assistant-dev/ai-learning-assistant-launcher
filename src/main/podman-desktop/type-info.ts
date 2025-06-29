@@ -1,7 +1,7 @@
 import type { ContainerConfig } from '../configs/type-info';
 import { Channels } from '../ipc-data-type';
 
-export type ServiceName = 'TTS' | 'ASR' | 'LLM';
+export type ServiceName = 'TTS' | 'ASR' | 'LLM' | 'VOICE';
 export type ActionName =
   | 'query'
   | 'install'
@@ -13,18 +13,21 @@ export type ActionName =
 export const containerNameDict: Record<ServiceName, string> = {
   ASR: 'ASR_TTS',
   TTS: 'ASR_TTS',
+  VOICE: 'ASR_TTS',
   LLM: '',
 };
 
 export const imageNameDict: Record<ServiceName, string> = {
   ASR: 'ai-voice-backend:v1.0',
   TTS: 'ai-voice-backend:v1.0',
+  VOICE: 'ai-voice-backend:v1.0',
   LLM: '',
 };
 
 export const imagePathDict: Record<ServiceName, string> = {
   ASR: 'ai-voice.tar',
-  TTS: 'ai-voice.tar', 
+  TTS: 'ai-voice.tar',
+  VOICE: 'ai-voice.tar',
   LLM: '',
 };
 
