@@ -16,7 +16,7 @@ import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 export default async function init(ipcMain: IpcMain) {
   ipcMain.on(
     channel,
-    async (event, action: ActionName, serviceName: ServiceName) => {
+    async (event, action: ActionName, serviceName: ServiceName, extraData?: any) => {
       console.debug(
         `configs action: ${action}, serviceName: ${serviceName}, channel: ${channel}`,
       );
@@ -35,6 +35,12 @@ export default async function init(ipcMain: IpcMain) {
               MESSAGE_TYPE.DATA,
               new MessageData(action, serviceName, getObsidianVaultConfig()),
             );
+          } else if (serviceName === 'container') {
+            event.reply(
+              channel,
+              MESSAGE_TYPE.DATA,
+              new MessageData(action, serviceName, getContainerConfig()),
+            );
           }
         } else if (action === 'update') {
           if (serviceName === 'obsidianApp') {
@@ -50,6 +56,9 @@ export default async function init(ipcMain: IpcMain) {
             } else {
               event.reply(channel, MESSAGE_TYPE.INFO, '没有设置好Obsidian路径');
             }
+          } else if (serviceName === 'container') {
+            const env = extraData?.env;
+            // 修改配置
           }
         }
       }

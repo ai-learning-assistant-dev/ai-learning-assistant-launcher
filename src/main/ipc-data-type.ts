@@ -7,11 +7,17 @@ export type Channels =
   | 'obsidian-plugin';
 
 export enum MESSAGE_TYPE {
+  /** 断性错误，会把转圈中的按钮变成不转圈 */
   ERROR = 'error',
-  WARNING = 'warning',
+  /** 结果信息，会把转圈中的按钮变成不转圈 */
   INFO = 'info',
+  /** 提示信息，不会把转圈中的按钮变成不转圈 */
+  WARNING = 'warning',
+  /** 传输数据，不会把转圈中的按钮变成不转圈 */
   DATA = 'data',
+  /** 进度信息，不会把转圈中的按钮变成不转圈 */
   PROGRESS = 'progress',
+  /** 非阻断性错误，不会把转圈中的按钮变成不转圈 */
   PROGRESS_ERROR = 'progress_error',
 }
 

@@ -7,6 +7,7 @@ import {
   ActionName,
   channel,
   ServiceName,
+  ContainerConfig,
 } from '../../../main/configs/type-info';
 import { channel as cmdChannel } from '../../../main/cmd/type-info';
 
@@ -14,8 +15,13 @@ export default function useConfigs() {
   const [obsidianConfig, setObsidianConfig] = useState<ObsidianConfig>();
   const [obsidianVaultConfig, setObsidianVaultConfig] =
     useState<ObsidianVaultConfig[]>();
+  const [containerConfig, setContainerConfig] = useState<ContainerConfig[]>();
   const [loading, setLoading] = useState(false);
-  function action(actionName: ActionName, serviceName: ServiceName) {
+  function action(
+    actionName: ActionName,
+    serviceName: ServiceName,
+    extraData?: any,
+  ) {
     if (loading) {
       notification.warning({
         message: '请等待上一个操作完成后再操作',
@@ -24,13 +30,19 @@ export default function useConfigs() {
       return;
     }
     setLoading(true);
-    window.electron.ipcRenderer.sendMessage(channel, actionName, serviceName);
+    window.electron.ipcRenderer.sendMessage(
+      channel,
+      actionName,
+      serviceName,
+      extraData,
+    );
   }
 
   const query = useCallback(() => {
     window.electron.ipcRenderer.sendMessage(cmdChannel, 'query', 'obsidianApp');
     window.electron.ipcRenderer.sendMessage(channel, 'query', 'obsidianApp');
     window.electron.ipcRenderer.sendMessage(channel, 'query', 'obsidianVault');
+    window.electron.ipcRenderer.sendMessage(channel, 'query', 'container');
   }, []);
   useEffect(() => {
     const cancel = window.electron?.ipcRenderer.on(
@@ -56,6 +68,10 @@ export default function useConfigs() {
           } else if (actionName === 'query' && service === 'obsidianVault') {
             console.debug('payload', payload);
             setObsidianVaultConfig(payload);
+            setLoading(false);
+          } else if (actionName === 'query' && service === 'container') {
+            console.debug('payload', payload);
+            setContainerConfig(payload);
             setLoading(false);
           }
         } else if (messageType === MESSAGE_TYPE.INFO) {
@@ -97,6 +113,7 @@ export default function useConfigs() {
     action,
     obsidianConfig,
     obsidianVaultConfig,
+    containerConfig,
     loading,
   };
 }

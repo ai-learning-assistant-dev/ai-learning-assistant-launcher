@@ -1,5 +1,5 @@
 import { Button, List, Modal, notification, Typography } from 'antd';
-import { Link } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
 import './index.scss';
 import type { ContainerInfo } from 'dockerode';
 import { useEffect, useState } from 'react';
@@ -16,6 +16,7 @@ import {
 } from '../../../main/cmd/type-info';
 import useCmd from '../../containers/use-cmd';
 import { MESSAGE_TYPE, MessageData } from '../../../main/ipc-data-type';
+import useConfigs from '../../containers/use-configs';
 
 interface ContainerItem {
   name: string;
@@ -42,6 +43,11 @@ export default function AiService() {
     action: cmdAction,
     loading: cmdLoading,
   } = useCmd();
+  const {
+    containerConfig,
+    loading: configsLoading,
+    action: configsAction,
+  } = useConfigs();
   const [showRebootModal, setShowRebootModal] = useState(false);
   const [operating, setOperating] = useState<{
     serviceName: ServiceName;
@@ -174,6 +180,23 @@ export default function AiService() {
           <List.Item
             actions={[
               `访问地址：http://127.0.0.1:${item.port}`,
+              <NavLink key="config" to={`/${item.serviceName}-config`}>
+                <Button
+                  shape="round"
+                  size="small"
+                  disabled={
+                    !isInstallWSL || checkingWsl || item.serviceName != 'ASR'
+                  }
+                  loading={
+                    loading &&
+                    operating.serviceName === item.serviceName &&
+                    operating.actionName === 'install'
+                  }
+                  onClick={() => click('install', item.serviceName)}
+                >
+                  设置
+                </Button>
+              </NavLink>,
               item.state !== '还未安装' && (
                 <Button
                   shape="round"
