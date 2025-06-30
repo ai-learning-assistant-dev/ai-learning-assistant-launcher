@@ -1,4 +1,5 @@
 import type { Channels } from '../ipc-data-type';
+import { ContainerCreateMountOption } from '../podman-desktop/libpod-dockerode';
 
 export type ServiceName = 'obsidianApp' | 'obsidianVault' | 'container';
 export type ActionName = 'query' | 'update';
@@ -16,6 +17,7 @@ export interface ContainerConfig {
       stop: string[];
     };
     env?: Record<string, string>;
+    mounts?: Array<ContainerCreateMountOption>;
   };
   TTS: {
     port: {
@@ -27,6 +29,7 @@ export interface ContainerConfig {
       stop: string[];
     };
     env?: Record<string, string>;
+    mounts?: Array<ContainerCreateMountOption>;
   };
   LLM: {
     port: {
@@ -38,6 +41,7 @@ export interface ContainerConfig {
       stop: string[];
     };
     env?: Record<string, string>;
+    mounts?: Array<ContainerCreateMountOption>;
   };
 }
 

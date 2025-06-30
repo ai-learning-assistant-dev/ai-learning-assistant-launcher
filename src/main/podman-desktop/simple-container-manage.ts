@@ -144,6 +144,7 @@ export default async function init(ipcMain: IpcMain) {
                 })),
                 command: config.command.start,
                 env: config.env,
+                mounts: config.mounts
               });
             } catch (e) {
               console.debug('安装服务失败', e);

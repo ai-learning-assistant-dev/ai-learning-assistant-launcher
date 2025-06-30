@@ -6,7 +6,7 @@ import AiService from './pages/ai-service';
 import ObsidianApp from './pages/obsidian-app';
 import { App as AntdApp } from 'antd';
 import ObsidianPlugin from './pages/obsidian-plugin';
-import ASRConfig from './pages/asr-config';
+import TTSConfig from './pages/tts-config';
 
 export default function App() {
   return (
@@ -16,7 +16,7 @@ export default function App() {
           <Route path="/ai-service" element={<AiService />} />
           <Route path="/hello" element={<Hello />} />
           <Route path="/obsidian-app" element={<ObsidianApp />} />
-          <Route path="/ASR-config" element={<ASRConfig />} />
+          <Route path="/TTS-config" element={<TTSConfig />} />
           <Route
             path="/obsidian-plugin/:vaultId"
             element={<ObsidianPlugin />}

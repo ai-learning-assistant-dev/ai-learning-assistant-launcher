@@ -12,11 +12,17 @@ import {
 } from './type-info';
 import { isWindows } from '../exec/util';
 import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
+import { ttsConfig } from './tts-config';
 
 export default async function init(ipcMain: IpcMain) {
   ipcMain.on(
     channel,
-    async (event, action: ActionName, serviceName: ServiceName, extraData?: any) => {
+    async (
+      event,
+      action: ActionName,
+      serviceName: ServiceName,
+      extraData?: any,
+    ) => {
       console.debug(
         `configs action: ${action}, serviceName: ${serviceName}, channel: ${channel}`,
       );
@@ -57,7 +63,7 @@ export default async function init(ipcMain: IpcMain) {
               event.reply(channel, MESSAGE_TYPE.INFO, '没有设置好Obsidian路径');
             }
           } else if (serviceName === 'container') {
-            const env = extraData?.env;
+            await ttsConfig(event, action, serviceName, extraData);
             // 修改配置
           }
         }

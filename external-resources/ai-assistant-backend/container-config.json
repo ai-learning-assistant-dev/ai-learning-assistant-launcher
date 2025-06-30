@@ -27,7 +27,8 @@
     },
     "env":{
       "SERVICE_TYPE": "tts"
-    }
+    },
+    "mounts":{}
   },
   "LLM": {
     "port": [

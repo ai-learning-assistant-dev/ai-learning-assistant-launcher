@@ -179,7 +179,7 @@ export default function AiService() {
                   shape="round"
                   size="small"
                   disabled={
-                    !isInstallWSL || checkingWsl || item.serviceName != 'ASR'
+                    !isInstallWSL || checkingWsl || item.serviceName != 'TTS'
                   }
                   loading={
                     loading &&
