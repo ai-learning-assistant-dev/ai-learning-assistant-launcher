@@ -21,6 +21,7 @@ interface ContainerItem {
   name: string;
   serviceName: ServiceName;
   state: '还未安装' | '已经停止' | '正在运行';
+  port: number;
 }
 
 function getState(container?: ContainerInfo): ContainerItem['state'] {
@@ -67,20 +68,23 @@ export default function AiService() {
   )[0];
 
   const containerInfos: ContainerItem[] = [
-    {
-      name: '对话机器人',
-      serviceName: 'LLM',
-      state: getState(llmContainer),
-    },
+    // {
+    //   name: '对话机器人',
+    //   serviceName: 'LLM',
+    //   state: getState(llmContainer),
+    //   port: 3000,
+    // },
     {
       name: '语音转文字',
       serviceName: 'ASR',
       state: getState(asrContainer),
+      port: 9000,
     },
     {
       name: '文字转语音',
       serviceName: 'TTS',
       state: getState(ttsContainer),
+      port: 8000,
     },
   ];
 
@@ -169,6 +173,7 @@ export default function AiService() {
         renderItem={(item) => (
           <List.Item
             actions={[
+              `访问地址：http://127.0.0.1:${item.port}`,
               item.state !== '还未安装' && (
                 <Button
                   shape="round"

@@ -11,18 +11,33 @@ export interface ContainerConfig {
       container: number;
       host: number;
     }[];
+    command: {
+      start: string[];
+      stop: string[];
+    };
+    env?: Record<string, string>;
   };
   TTS: {
     port: {
       container: number;
       host: number;
     }[];
+    command: {
+      start: string[];
+      stop: string[];
+    };
+    env?: Record<string, string>;
   };
   LLM: {
     port: {
       container: number;
       host: number;
     }[];
+    command: {
+      start: string[];
+      stop: string[];
+    };
+    env?: Record<string, string>;
   };
 }
 

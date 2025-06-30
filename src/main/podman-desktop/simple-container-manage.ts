@@ -125,7 +125,7 @@ export default async function init(ipcMain: IpcMain) {
         } else if (action === 'install') {
           console.debug('install', imageName);
           await ensureImageReady(serviceName, event, channel);
-          const config = getMergedContainerConfig(serviceName,getContainerConfig())
+          const config = getContainerConfig()[serviceName];
           let newContainerInfo:
             | {
                 Id: string;
@@ -133,15 +133,20 @@ export default async function init(ipcMain: IpcMain) {
               }
             | undefined;
           newContainerInfo = await improveStablebility(async () => {
-            try{
+            try {
               return connectionGlobal.createPodmanContainer({
                 image: imageName,
                 name: containerName,
                 devices: [{ path: 'nvidia.com/gpu=all' }],
-                portmappings:config.port.map(p=>({container_port: p.container, host_port: p.host}))
+                portmappings: config.port.map((p) => ({
+                  container_port: p.container,
+                  host_port: p.host,
+                })),
+                command: config.command.start,
+                env: config.env,
               });
-            }catch(e){
-              console.debug('安装服务失败',e);
+            } catch (e) {
+              console.debug('安装服务失败', e);
               event.reply(channel, MESSAGE_TYPE.INFO, '安装服务失败');
               return;
             }

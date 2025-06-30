@@ -65,9 +65,9 @@ const containerConfigPath = path.join(
 );
 
 let containerConfigBuff: ContainerConfig = {
-  ASR: { port: [] },
-  TTS: { port: [] },
-  LLM: { port: [] },
+  ASR: { port: [], command: { start: [], stop: [] } },
+  TTS: { port: [], command: { start: [], stop: [] } },
+  LLM: { port: [], command: { start: [], stop: [] } },
 };
 export function getContainerConfig() {
   const containerConfigString = readFileSync(containerConfigPath, {
