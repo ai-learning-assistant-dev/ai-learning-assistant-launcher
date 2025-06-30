@@ -16,7 +16,6 @@ import {
 } from '../../../main/cmd/type-info';
 import useCmd from '../../containers/use-cmd';
 import { MESSAGE_TYPE, MessageData } from '../../../main/ipc-data-type';
-import useConfigs from '../../containers/use-configs';
 
 interface ContainerItem {
   name: string;
@@ -43,11 +42,6 @@ export default function AiService() {
     action: cmdAction,
     loading: cmdLoading,
   } = useCmd();
-  const {
-    containerConfig,
-    loading: configsLoading,
-    action: configsAction,
-  } = useConfigs();
   const [showRebootModal, setShowRebootModal] = useState(false);
   const [operating, setOperating] = useState<{
     serviceName: ServiceName;

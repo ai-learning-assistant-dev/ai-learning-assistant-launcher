@@ -1,7 +1,13 @@
 import { Button, List } from 'antd';
 import { NavLink } from 'react-router-dom';
+import useConfigs from '../../containers/use-configs';
 
 export default function asrConfig() {
+  const {
+    containerConfig,
+    loading: configsLoading,
+    action: configsAction,
+  } = useConfigs();
   return (
     <div className="asr-config">
       <List
