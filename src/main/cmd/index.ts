@@ -59,7 +59,11 @@ export default async function init(ipcMain: IpcMain) {
           event.reply(channel, MESSAGE_TYPE.INFO, '成功删除');
         } else if (action === 'install') {
           if (serviceName === 'WSL') {
-             event.reply(channel, MESSAGE_TYPE.PROGRESS, '预计需要10分钟，请耐心等待');
+            event.reply(
+              channel,
+              MESSAGE_TYPE.PROGRESS,
+              '预计需要10分钟，请耐心等待',
+            );
             const result = await installWSL();
             event.reply(
               channel,
@@ -138,22 +142,42 @@ export default async function init(ipcMain: IpcMain) {
 }
 
 export async function installWSL() {
+  try {
+    const outputWSLmsi = await commandLine.exec(
+      path.join(
+        appPath,
+        'external-resources',
+        'ai-assistant-backend',
+        'install_wsl.msi',
+      ),
+      [],
+      { shell: true },
+    );
+
+    console.debug('installWSLmsi', outputWSLmsi);
+  } catch (e) {
+    console.error(e);
+    if (e.message.indexOf('exitCode: 1603') >= 0) {
+      // 这个错误可能代表安装过了
+    } else {
+      return false;
+    }
+  }
 
   let successM1 = false;
   // 方法一，适用于windows11
   try {
     const resultM1 = await commandLine.exec(
       'wsl.exe',
-      [
-        '--install',
-        '--no-distribution'
-      ],
+      ['--install', '--no-distribution'],
       { shell: true, encoding: 'utf16le' },
     );
     console.debug('installWSLM1', resultM1);
-    if(resultM1.stdout.indexOf('The operation completed successfully')>=0 ||
-        resultM1.stdout.indexOf('请求的操作成功')>=0 ||
-        resultM1.stdout.indexOf('操作成功完成')>=0){
+    if (
+      resultM1.stdout.indexOf('The operation completed successfully') >= 0 ||
+      resultM1.stdout.indexOf('请求的操作成功') >= 0 ||
+      resultM1.stdout.indexOf('操作成功完成') >= 0
+    ) {
       successM1 = true;
     }
   } catch (e) {
@@ -168,7 +192,7 @@ export async function installWSL() {
     }
   }
 
-  if(successM1){
+  if (successM1) {
     return true;
   }
 
@@ -239,10 +263,9 @@ export async function isWSLInstall() {
       output.stdout.indexOf('wsl.exe --install') >= 0
     ) {
       wslWork = false;
-    }else{
+    } else {
       wslWork = true;
     }
-    
   } catch (e) {
     console.warn('isWSLInstall', e);
     wslWork = false;
@@ -282,7 +305,7 @@ async function checkWSLComponent() {
         '/featurename:Microsoft-Windows-Subsystem-Linux',
       ],
       {
-        shell: true
+        shell: true,
       },
     );
     console.debug('isWSLInstall', output2);
