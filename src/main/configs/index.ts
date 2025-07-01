@@ -81,7 +81,11 @@ const containerConfigPath = path.join(
 
 let containerConfigBuff: ContainerConfig = {
   ASR: { port: [], command: { start: [], stop: [] } },
-  TTS: { port: [], command: { start: [], stop: [] } },
+  TTS: { 
+    port: [], 
+    command: { start: [], stop: [] },
+    gpuConfig: { forceNvidia: false, forceCPU: false }
+  },
   LLM: { port: [], command: { start: [], stop: [] } },
 };
 export function getContainerConfig() {
@@ -92,6 +96,12 @@ export function getContainerConfig() {
   if (containerConfig) {
     containerConfigBuff = containerConfig;
   }
+  
+  // 确保TTS配置包含gpuConfig
+  if (containerConfig && containerConfig.TTS && !containerConfig.TTS.gpuConfig) {
+    containerConfig.TTS.gpuConfig = { forceNvidia: false, forceCPU: false };
+  }
+  
   return containerConfig;
 }
 

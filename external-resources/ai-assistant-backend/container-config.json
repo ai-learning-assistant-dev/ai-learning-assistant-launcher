@@ -7,10 +7,16 @@
       }
     ],
     "command": {
-      "start": ["sh", "./start.sh"],
-      "stop": ["sh", "./stop.sh"]
+      "start": [
+        "sh",
+        "./start.sh"
+      ],
+      "stop": [
+        "sh",
+        "./stop.sh"
+      ]
     },
-    "env":{
+    "env": {
       "SERVICE_TYPE": "asr"
     }
   },
@@ -22,11 +28,21 @@
       }
     ],
     "command": {
-      "start": ["sh", "./start.sh"],
-      "stop": ["sh", "./stop.sh"]
+      "start": [
+        "sh",
+        "./start.sh"
+      ],
+      "stop": [
+        "sh",
+        "./stop.sh"
+      ]
     },
-    "env":{
+    "env": {
       "SERVICE_TYPE": "tts"
+    },
+    "gpuConfig": {
+      "forceNvidia": false,
+      "forceCPU": true
     }
   },
   "LLM": {

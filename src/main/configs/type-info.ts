@@ -30,6 +30,10 @@ export interface ContainerConfig {
     };
     env?: Record<string, string>;
     mounts?: Array<ContainerCreateMountOption>;
+    gpuConfig?: {
+      forceNvidia: boolean;
+      forceCPU: boolean;
+    };
   };
   LLM: {
     port: {

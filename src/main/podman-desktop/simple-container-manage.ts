@@ -16,6 +16,8 @@ import {
   ensurePodmanWorks,
   startPodman,
   stopPodman,
+  startService,
+  stopService,
 } from './ensure-podman-works';
 import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 import { getContainerConfig } from '../configs';
@@ -120,6 +122,22 @@ export default async function init(ipcMain: IpcMain) {
             await improveStablebility(async () => {
               await container.remove();
               event.reply(channel, MESSAGE_TYPE.INFO, '成功删除服务');
+            });
+          } else if (action === 'update') {
+            // 更新操作：如果是tts，则重启tts服务
+            await improveStablebility(async () => {
+              if (serviceName === 'TTS') {
+                
+                await container.restart();
+                
+                event.reply(channel, MESSAGE_TYPE.INFO, '成功重启TTS容器');
+
+                const config = getContainerConfig()[serviceName];
+                const gpuConfig = 'gpuConfig' in config ? config.gpuConfig : undefined;
+                
+                await startService(serviceName, event, channel, containerName, gpuConfig);
+                event.reply(channel, MESSAGE_TYPE.INFO, '成功重启TTS服务');
+              }
             });
           }
         } else if (action === 'install') {
