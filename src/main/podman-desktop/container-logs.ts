@@ -10,6 +10,7 @@ import {
   ServiceName,
 } from './type-info';
 import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
+import { cleanMultiplexedLog } from './stream-utils';
 
 let connectionGlobal: LibPod & Dockerode;
 
@@ -49,13 +50,14 @@ export default async function init(ipcMain: IpcMain) {
               await container.logs({
                 stdout: true,
                 stderr: true,
+                timestamps: true,
               })
-            ).toString('utf8');
+            ).toString('utf-8');
             // console.debug('logStream', logs);
             event.reply(
               containerLogsChannel,
               MESSAGE_TYPE.DATA,
-              new MessageData(action, serviceName, logs),
+              new MessageData(action, serviceName, cleanMultiplexedLog(logs)),
             );
           }
         }
@@ -70,3 +72,4 @@ export default async function init(ipcMain: IpcMain) {
     },
   );
 }
+

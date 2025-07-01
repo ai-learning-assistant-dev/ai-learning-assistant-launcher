@@ -14,6 +14,7 @@ import './index.scss';
 export interface LogEntry {
   id: string;
   level: 'info' | 'warning' | 'error' | 'success';
+  timestamp: string;
   message: string;
 }
 
@@ -35,14 +36,17 @@ export default function ContainerLogs(props: { serviceName: ServiceName }) {
           data.service === props.serviceName
         ) {
           // console.debug('reciveLogs', data.data);
-          const newLogs = data.data.split('\n').map<LogEntry>((log, index) => {
-            return {
-              id: index.toString(),
-              timestamp: '',
-              level: 'info',
-              message: log,
-            };
-          });
+          const newLogs = data.data
+            .split('\n')
+            .filter((log) => log != '')
+            .map<LogEntry>((log, index) => {
+              return {
+                id: index.toString(),
+                timestamp: new Date(log.substring(0, 25)).toLocaleString(),
+                level: 'info',
+                message: log.substring(25),
+              };
+            });
           setLogs(newLogs);
           if (!loaded) {
             setLoaded(true);
@@ -88,6 +92,7 @@ export default function ContainerLogs(props: { serviceName: ServiceName }) {
         ) : (
           logs.map((log, index) => (
             <div key={index} className={`log-entry log-${log.level}`}>
+              <span className="log-timestamp">{log.timestamp}</span>
               <Tag
                 color={
                   log.level === 'error'
