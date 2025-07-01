@@ -1,6 +1,7 @@
 export type Channels =
   | 'ipc-example'
   | 'docker'
+  | 'container-logs'
   | 'cmd'
   | 'wsl'
   | 'configs'

@@ -4,17 +4,18 @@ import useConfigs from '../../containers/use-configs';
 import useDocker from '../../containers/use-docker';
 import ContainerLogs from '../../containers/container-logs';
 
-export default function TTSConfig() {
+export default function ASRConfig() {
   const {
     containerConfig,
     loading: configsLoading,
     action: configsAction,
   } = useConfigs();
   const { loading: dockerLoading, action: dockerAction } = useDocker();
+
   return (
-    <div className="tts-config">
+    <div className="asr-config">
       <List
-        className="tts-config-list"
+        className="asr-config-list"
         header={
           <div className="header-container">
             <NavLink to="/ai-service">
@@ -23,7 +24,7 @@ export default function TTSConfig() {
           </div>
         }
       />
-      <ContainerLogs serviceName="TTS" />
+      <ContainerLogs serviceName="ASR" />
     </div>
   );
 }

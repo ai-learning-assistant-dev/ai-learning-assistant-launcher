@@ -179,12 +179,9 @@ export default function AiService() {
                   shape="round"
                   size="small"
                   disabled={
-                    !isInstallWSL || checkingWsl || item.serviceName != 'TTS'
-                  }
-                  loading={
-                    loading &&
-                    operating.serviceName === item.serviceName &&
-                    operating.actionName === 'install'
+                    !isInstallWSL ||
+                    checkingWsl ||
+                    (loading && operating.serviceName === item.serviceName)
                   }
                   onClick={() => click('install', item.serviceName)}
                 >

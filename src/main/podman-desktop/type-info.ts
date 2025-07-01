@@ -8,7 +8,8 @@ export type ActionName =
   | 'start'
   | 'stop'
   | 'remove'
-  | 'update';
+  | 'update'
+  | 'logs';
 
 export const containerNameDict: Record<ServiceName, string> = {
   ASR: 'ASR',
@@ -31,6 +32,7 @@ export const imagePathDict: Record<ServiceName, string> = {
 export const podMachineName = 'podman-machine-default';
 
 export const channel: Channels = 'docker';
+export const containerLogsChannel: Channels = 'container-logs';
 
 /** For N Service in One Container
  * merge all config for list service into one container

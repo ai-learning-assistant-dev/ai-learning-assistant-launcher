@@ -35,10 +35,14 @@ export default function useDocker() {
           notification.error({ message: data, placement: 'topRight' });
           setLoading(false);
         } else if (messageType === MESSAGE_TYPE.DATA) {
-          setContainers(
-            (data as MessageData<ActionName, ServiceName, Dockerode.ContainerInfo[]>)
-              .data,
-          );
+          const d = data as MessageData<
+            ActionName,
+            ServiceName,
+            Dockerode.ContainerInfo[] | string
+          >;
+          if (d.action === 'query') {
+            setContainers(d.data as Dockerode.ContainerInfo[]);
+          }
         } else if (messageType === MESSAGE_TYPE.INFO) {
           notification.success({ message: data, placement: 'topRight' });
           queryContainers();
