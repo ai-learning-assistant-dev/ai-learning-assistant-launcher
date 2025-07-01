@@ -68,8 +68,8 @@ export default async function init(ipcMain: IpcMain) {
           MESSAGE_TYPE.WARNING,
           '还没连接到docker',
         );
+        connectionGlobal = await connect();
       }
     },
   );
 }
-

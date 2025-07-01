@@ -183,7 +183,6 @@ export default function AiService() {
                     checkingWsl ||
                     (loading && operating.serviceName === item.serviceName)
                   }
-                  onClick={() => click('install', item.serviceName)}
                 >
                   设置
                 </Button>
