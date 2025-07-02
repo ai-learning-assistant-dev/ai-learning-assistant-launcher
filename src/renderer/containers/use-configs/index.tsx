@@ -15,7 +15,7 @@ export default function useConfigs() {
   const [obsidianConfig, setObsidianConfig] = useState<ObsidianConfig>();
   const [obsidianVaultConfig, setObsidianVaultConfig] =
     useState<ObsidianVaultConfig[]>();
-  const [containerConfig, setContainerConfig] = useState<ContainerConfig[]>();
+  const [containerConfig, setContainerConfig] = useState<ContainerConfig>();
   const [loading, setLoading] = useState(false);
   function action(
     actionName: ActionName,

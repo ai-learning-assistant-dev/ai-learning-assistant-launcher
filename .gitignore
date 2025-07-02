@@ -95,3 +95,5 @@ out/
 *.exe
 *.zip
 NUL
+
+local/

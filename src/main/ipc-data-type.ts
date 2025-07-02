@@ -8,7 +8,7 @@ export type Channels =
   | 'obsidian-plugin';
 
 export enum MESSAGE_TYPE {
-  /** 断性错误，会把转圈中的按钮变成不转圈 */
+  /** 阻断性错误，会把转圈中的按钮变成不转圈 */
   ERROR = 'error',
   /** 结果信息，会把转圈中的按钮变成不转圈 */
   INFO = 'info',

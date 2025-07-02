@@ -63,7 +63,9 @@ export default async function init(ipcMain: IpcMain) {
               event.reply(channel, MESSAGE_TYPE.INFO, '没有设置好Obsidian路径');
             }
           } else if (serviceName === 'container') {
-            await ttsConfig(event, action, serviceName, extraData);
+            if (extraData.containerName === 'TTS') {
+              await ttsConfig(event, action, serviceName, extraData);
+            }
             // 修改配置
           }
         }
@@ -81,7 +83,11 @@ const containerConfigPath = path.join(
 
 let containerConfigBuff: ContainerConfig = {
   ASR: { port: [], command: { start: [], stop: [] } },
-  TTS: { port: [], command: { start: [], stop: [] } },
+  TTS: { 
+    port: [], 
+    command: { start: [], stop: [] },
+    gpuConfig: { forceNvidia: false, forceCPU: false }
+  },
   LLM: { port: [], command: { start: [], stop: [] } },
 };
 export function getContainerConfig() {
@@ -92,6 +98,12 @@ export function getContainerConfig() {
   if (containerConfig) {
     containerConfigBuff = containerConfig;
   }
+  
+  // 确保TTS配置包含gpuConfig
+  if (containerConfig && containerConfig.TTS && !containerConfig.TTS.gpuConfig) {
+    containerConfig.TTS.gpuConfig = { forceNvidia: false, forceCPU: false };
+  }
+  
   return containerConfig;
 }
 
