@@ -16,6 +16,7 @@ import cpy from 'cpy';
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
+    icon: path.join(__dirname, 'icons', 'icon'),
   },
   rebuildConfig: {},
   makers: [

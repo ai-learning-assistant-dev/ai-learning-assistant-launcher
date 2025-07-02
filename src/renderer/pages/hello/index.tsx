@@ -1,6 +1,6 @@
 import { Button } from 'antd';
 import { NavLink } from 'react-router-dom';
-import icon from './icon.svg';
+import icon from './icon.png';
 import './index.scss';
 
 export default function Hello() {
