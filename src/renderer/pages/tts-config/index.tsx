@@ -13,7 +13,6 @@ export default function TTSConfig() {
     action: configsAction,
   } = useConfigs();
   const { loading: dockerLoading, action: dockerAction } = useDocker();
-  
   const [forceNvidia, setForceNvidia] = useState(false);
   const [forceCPU, setForceCPU] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
@@ -42,11 +41,11 @@ export default function TTSConfig() {
   // 保存配置
   const handleSaveConfig = () => {
     configsAction('update', 'container', {
+      containerName: 'TTS',
       forceNvidia: forceNvidia,
       forceCPU: forceCPU,
     });
     setHasChanges(false);
-    message.success('配置已保存，如需生效请重启TTS服务');
   };
 
   // 返回按钮处理
@@ -63,8 +62,8 @@ export default function TTSConfig() {
           <Button>返回</Button>
         </NavLink>
         {hasChanges && (
-          <Button 
-            type="primary" 
+          <Button
+            type="primary"
             onClick={handleSaveConfig}
             loading={configsLoading}
             style={{ marginLeft: '10px' }}
@@ -73,7 +72,7 @@ export default function TTSConfig() {
           </Button>
         )}
       </div>
-      
+
       <div className="gpu-config-section">
         <h3>TTS 模型选择</h3>
         <p style={{ color: '#666', fontSize: '14px', marginBottom: '16px' }}>
@@ -101,7 +100,7 @@ export default function TTSConfig() {
           </div>
         )}
       </div>
-      
+
       <ContainerLogs serviceName="TTS" />
     </div>
   );

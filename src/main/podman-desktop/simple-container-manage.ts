@@ -16,8 +16,6 @@ import {
   ensurePodmanWorks,
   startPodman,
   stopPodman,
-  startService,
-  stopService,
 } from './ensure-podman-works';
 import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 import { getContainerConfig } from '../configs';
@@ -34,9 +32,9 @@ async function improveStablebility(func: () => Promise<any>) {
     if (e) {
       try {
         console.warn(e);
-        await stopPodman();
-        await wait(1000);
-        await startPodman();
+        // await stopPodman();
+        // await wait(1000);
+        // await startPodman();
         await wait(1000);
         connectionGlobal = await connect();
         await wait(1000);
@@ -124,46 +122,19 @@ export default async function init(ipcMain: IpcMain) {
               event.reply(channel, MESSAGE_TYPE.INFO, '成功删除服务');
             });
           } else if (action === 'update') {
-            // 更新操作：如果是tts，则重启tts服务
-            await improveStablebility(async () => {
-              if (serviceName === 'TTS') {
-                
-                await container.restart();
-                
-                event.reply(channel, MESSAGE_TYPE.INFO, '成功重启TTS容器');
-
-                const config = getContainerConfig()[serviceName];
-                const gpuConfig = 'gpuConfig' in config ? config.gpuConfig : undefined;
-                
-                await startService(serviceName, event, channel, containerName, gpuConfig);
-                event.reply(channel, MESSAGE_TYPE.INFO, '成功重启TTS服务');
-              }
-            });
+            // TODO 更新容器镜像版本
           }
         } else if (action === 'install') {
           console.debug('install', imageName);
           await ensureImageReady(serviceName, event, channel);
-          const config = getContainerConfig()[serviceName];
-          let newContainerInfo:
+          const newContainerInfo:
             | {
                 Id: string;
                 Warnings: string[];
               }
-            | undefined;
-          newContainerInfo = await improveStablebility(async () => {
+            | undefined = await improveStablebility(async () => {
             try {
-              return connectionGlobal.createPodmanContainer({
-                image: imageName,
-                name: containerName,
-                devices: [{ path: 'nvidia.com/gpu=all' }],
-                portmappings: config.port.map((p) => ({
-                  container_port: p.container,
-                  host_port: p.host,
-                })),
-                command: config.command.start,
-                env: config.env,
-                mounts: config.mounts
-              });
+              return createContainer(serviceName);
             } catch (e) {
               console.debug('安装服务失败', e);
               event.reply(channel, MESSAGE_TYPE.INFO, '安装服务失败');
@@ -176,10 +147,7 @@ export default async function init(ipcMain: IpcMain) {
             console.debug('安装服务成功');
             event.reply(channel, MESSAGE_TYPE.INFO, '安装服务成功');
             await improveStablebility(async () => {
-              const newContainer = connectionGlobal.getContainer(
-                newContainerInfo.Id,
-              );
-              await newContainer.start();
+              await startContainer(newContainerInfo.Id);
               event.reply(channel, MESSAGE_TYPE.INFO, '成功启动服务');
             });
           } else {
@@ -196,4 +164,57 @@ export default async function init(ipcMain: IpcMain) {
       }
     },
   );
+}
+
+export async function createContainer(serviceName: ServiceName) {
+  console.debug('创建容器', serviceName);
+  const imageName = imageNameDict[serviceName];
+  const containerName = containerNameDict[serviceName];
+  const config = getContainerConfig()[serviceName];
+  return connectionGlobal.createPodmanContainer({
+    image: imageName,
+    name: containerName,
+    devices: [{ path: 'nvidia.com/gpu=all' }],
+    portmappings: config.port.map((p) => ({
+      container_port: p.container,
+      host_port: p.host,
+    })),
+    command: config.command.start,
+    env: config.env,
+    mounts: config.mounts,
+  });
+}
+
+export async function startContainer(containerId: string) {
+  const newContainer = connectionGlobal.getContainer(containerId);
+  return newContainer.start();
+}
+
+export async function removeContainer(serviceName: ServiceName) {
+  const containerInfos: PodmanContainerInfo[] =
+    await connectionGlobal.listPodmanContainers({
+      all: true,
+    });
+  const containerName = containerNameDict[serviceName];
+
+  const containerInfo = containerInfos.filter(
+    (item) => item.Names.indexOf(containerName) >= 0,
+  )[0];
+  const container =
+    containerInfo && connectionGlobal.getContainer(containerInfo.Id);
+
+  console.debug('准备删除的容器', containerInfo, container);
+  if (container) {
+    try {
+      await container.stop();
+    } catch (e) {
+      if (
+        !(e && e.message && e.message.indexOf('container already stopped') >= 0)
+      ) {
+        console.warn(e);
+        throw e;
+      }
+    }
+    await container.remove();
+  }
 }

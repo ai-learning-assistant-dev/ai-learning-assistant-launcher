@@ -42,7 +42,7 @@
     },
     "gpuConfig": {
       "forceNvidia": false,
-      "forceCPU": true
+      "forceCPU": false
     }
   },
   "LLM": {

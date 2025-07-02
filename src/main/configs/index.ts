@@ -63,7 +63,9 @@ export default async function init(ipcMain: IpcMain) {
               event.reply(channel, MESSAGE_TYPE.INFO, '没有设置好Obsidian路径');
             }
           } else if (serviceName === 'container') {
-            await ttsConfig(event, action, serviceName, extraData);
+            if (extraData.containerName === 'TTS') {
+              await ttsConfig(event, action, serviceName, extraData);
+            }
             // 修改配置
           }
         }
