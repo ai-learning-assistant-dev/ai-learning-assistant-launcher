@@ -20,6 +20,10 @@ import {
 import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 import { getContainerConfig } from '../configs';
 import { wait } from '../util';
+import path from 'node:path';
+import { appPath } from '../exec';
+import { isWindows } from '../exec/util';
+import convertPath from '@stdlib/utils-convert-path';
 
 let connectionGlobal: LibPod & Dockerode;
 
@@ -182,7 +186,13 @@ export async function createContainer(serviceName: ServiceName) {
     })),
     command: config.command.start,
     env: config.env,
-    mounts: config.mounts,
+    mounts: config.mounts.map((mount) => {
+      mount.Source = path.join(appPath, mount.Source);
+      if (isWindows()) {
+        mount.Source = `/mnt${convertPath(mount.Source, 'posix')}`;
+      }
+      return mount;
+    }),
   });
 }
 

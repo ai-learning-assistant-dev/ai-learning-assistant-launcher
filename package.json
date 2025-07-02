@@ -29,6 +29,7 @@
     "@electron-forge/plugin-fuses": "^7.8.1",
     "@electron-forge/plugin-webpack": "^7.8.1",
     "@electron/fuses": "^1.8.0",
+    "@stdlib/utils-convert-path": "^0.2.2",
     "@svgr/webpack": "^8.1.0",
     "@types/dockerode": "^3.3.40",
     "@types/react": "^19.1.8",

@@ -43,7 +43,25 @@
     "gpuConfig": {
       "forceNvidia": false,
       "forceCPU": false
-    }
+    },
+    "mounts": [
+      {
+        "Destination": "/app/tts/models/kokoro/voices",
+        "Source": "external-resources/ai-assistant-backend/kokoro/voices",
+        "Propagation": "rprivate",
+        "Type": "bind",
+        "RW": true,
+        "Options": ["rbind"]
+      },
+      {
+        "Destination": "/app/tts/models/index-tts/voices",
+        "Source": "external-resources/ai-assistant-backend/index-tts/voices",
+        "Propagation": "rprivate",
+        "Type": "bind",
+        "RW": true,
+        "Options": ["rbind"]
+      }
+    ]
   },
   "LLM": {
     "port": [
