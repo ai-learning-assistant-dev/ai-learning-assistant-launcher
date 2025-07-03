@@ -1,7 +1,7 @@
 import { Button, Checkbox, Space, message, Input, Card } from 'antd';
 import { NavLink } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
-import { LeftOutlined, RightOutlined, SaveOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { LeftOutlined, RightOutlined, SaveOutlined, DeleteOutlined, PlusOutlined, FolderOpenOutlined } from '@ant-design/icons';
 import useConfigs from '../../containers/use-configs';
 import useDocker from '../../containers/use-docker';
 import ContainerLogs from '../../containers/container-logs';
@@ -105,7 +105,7 @@ export default function TTSConfig() {
       name: '新语音',
       description: '语音描述',
       filename: 'new_voice.wav',
-      text: '示例文本',
+      text: '语音对应文本',
       language: 'Chinese'
     };
     setVoiceConfigs([...voiceConfigs, newVoice]);
@@ -142,6 +142,17 @@ export default function TTSConfig() {
   const scrollRight = () => {
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollBy({ left: 320, behavior: 'smooth' });
+    }
+  };
+
+  // 打开voices文件夹
+  const handleOpenVoicesFolder = () => {
+    try {
+      // 使用configs通道的update动作来打开voices文件夹
+      configsAction('update', 'voice', { action: 'openFolder' });
+    } catch (error) {
+      message.error('打开voices文件夹失败');
+      console.error('Error opening voices folder:', error);
     }
   };
 
@@ -199,16 +210,16 @@ export default function TTSConfig() {
         
         <div className="voice-config-container">
           <div className="voice-config-scroll" ref={scrollContainerRef}>
-            {voiceConfigs.map((voice, index) => (
-              <div key={index} className="voice-card">
+            {voiceConfigs.slice().reverse().map((voice, index) => (
+              <div key={voiceConfigs.length - 1 - index} className="voice-card">
                 <div className="voice-card-header">
-                  <div className="voice-card-title">语音 {index + 1}</div>
+                  <div className="voice-card-title">语音 {voiceConfigs.length - index}</div>
                   <div className="voice-card-actions">
                     <Button
                       type="text"
                       size="small"
                       icon={<DeleteOutlined />}
-                      onClick={() => handleDeleteVoice(index)}
+                      onClick={() => handleDeleteVoice(voiceConfigs.length - 1 - index)}
                       danger
                     />
                   </div>
@@ -219,7 +230,7 @@ export default function TTSConfig() {
                   <Input
                     className="config-input"
                     value={voice.name}
-                    onChange={(e) => handleVoiceConfigChange(index, 'name', e.target.value)}
+                    onChange={(e) => handleVoiceConfigChange(voiceConfigs.length - 1 - index, 'name', e.target.value)}
                     placeholder="输入语音名称"
                   />
                 </div>
@@ -229,7 +240,7 @@ export default function TTSConfig() {
                   <Input
                     className="config-input"
                     value={voice.description}
-                    onChange={(e) => handleVoiceConfigChange(index, 'description', e.target.value)}
+                    onChange={(e) => handleVoiceConfigChange(voiceConfigs.length - 1 - index, 'description', e.target.value)}
                     placeholder="输入语音描述"
                   />
                 </div>
@@ -239,7 +250,7 @@ export default function TTSConfig() {
                   <Input
                     className="config-input"
                     value={voice.filename}
-                    onChange={(e) => handleVoiceConfigChange(index, 'filename', e.target.value)}
+                    onChange={(e) => handleVoiceConfigChange(voiceConfigs.length - 1 - index, 'filename', e.target.value)}
                     placeholder="输入文件名"
                   />
                 </div>
@@ -249,7 +260,7 @@ export default function TTSConfig() {
                   <TextArea
                     className="config-input"
                     value={voice.text || ''}
-                    onChange={(e) => handleVoiceConfigChange(index, 'text', e.target.value)}
+                    onChange={(e) => handleVoiceConfigChange(voiceConfigs.length - 1 - index, 'text', e.target.value)}
                     placeholder="输入示例文本"
                     rows={2}
                   />
@@ -260,7 +271,7 @@ export default function TTSConfig() {
                   <Input
                     className="config-input"
                     value={voice.language}
-                    onChange={(e) => handleVoiceConfigChange(index, 'language', e.target.value)}
+                    onChange={(e) => handleVoiceConfigChange(voiceConfigs.length - 1 - index, 'language', e.target.value)}
                     placeholder="输入语言"
                   />
                 </div>
@@ -288,6 +299,14 @@ export default function TTSConfig() {
           </div>
           
           <div>
+            <Button
+              icon={<FolderOpenOutlined />}
+              onClick={handleOpenVoicesFolder}
+              disabled={voiceConfigsLoading}
+              style={{ marginRight: '8px' }}
+            >
+              导入语音
+            </Button>
             <Button
               icon={<PlusOutlined />}
               onClick={handleAddVoice}

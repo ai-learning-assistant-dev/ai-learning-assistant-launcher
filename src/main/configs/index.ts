@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { appPath } from '../exec';
-import { dialog, IpcMain } from 'electron';
+import { dialog, IpcMain, shell } from 'electron';
 import {
   ActionName,
   channel,
@@ -75,8 +75,26 @@ export default async function init(ipcMain: IpcMain) {
             }
             // 修改配置
           } else if (serviceName === 'voice') {
-            setVoiceConfig(extraData);
-            event.reply(channel, MESSAGE_TYPE.INFO, '语音配置已保存');
+            if (extraData.action === 'openFolder') {
+              // 打开voices文件夹
+              const voicesFolderPath = path.join(
+                appPath,
+                'external-resources',
+                'ai-assistant-backend',
+                'index-tts',
+                'voices'
+              );
+              try {
+                await shell.openPath(voicesFolderPath);
+                event.reply(channel, MESSAGE_TYPE.INFO, '已打开voices文件夹');
+              } catch (error) {
+                console.error('Error opening voices folder:', error);
+                event.reply(channel, MESSAGE_TYPE.ERROR, '打开voices文件夹失败');
+              }
+            } else {
+              setVoiceConfig(extraData);
+              event.reply(channel, MESSAGE_TYPE.INFO, '语音配置已保存');
+            }
           }
         }
       }
@@ -220,8 +238,8 @@ export function setVaultDefaultOpen(vaultId: string) {
   );
 }
 
-// 语音配置文件路径
-const ttsVoiceConfigPath = path.join(
+// GPU语音配置文件路径
+const ttsGPUVoiceConfigPath = path.join(
   appPath,
   'external-resources',
   'ai-assistant-backend',
@@ -230,9 +248,19 @@ const ttsVoiceConfigPath = path.join(
   'voice_config.json',
 );
 
+// CPU语音配置文件路径
+const ttsKokoroVoiceConfigPath = path.join(
+  appPath,
+  'external-resources',
+  'ai-assistant-backend',
+  'kokoro',
+  'voices',
+  'voice_config.json',
+);
+
 export function getVoiceConfig(): VoiceConfigFile {
   try {
-    const voiceConfigString = readFileSync(ttsVoiceConfigPath, {
+    const voiceConfigString = readFileSync(ttsGPUVoiceConfigPath, {
       encoding: 'utf8',
     });
     return JSON.parse(voiceConfigString) as VoiceConfigFile;
@@ -243,7 +271,7 @@ export function getVoiceConfig(): VoiceConfigFile {
 }
 
 export function setVoiceConfig(config: VoiceConfigFile) {
-  writeFileSync(ttsVoiceConfigPath, JSON.stringify(config, null, 2), {
+  writeFileSync(ttsGPUVoiceConfigPath, JSON.stringify(config, null, 2), {
     encoding: 'utf8',
   });
 }
