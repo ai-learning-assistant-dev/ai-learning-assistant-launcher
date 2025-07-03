@@ -326,3 +326,12 @@ async function checkAndSetup(
   }
   return checked;
 }
+
+export async function removeImage(serviceName: ServiceName) {
+  const result = commandLine.exec(getPodmanCli(), [
+    'image',
+    'rm',
+    imageNameDict[serviceName],
+  ]);
+  return result;
+}

@@ -16,6 +16,7 @@ import {
   ensurePodmanWorks,
   isImageReady,
   loadImageFromPath,
+  removeImage,
   startPodman,
   stopPodman,
 } from './ensure-podman-works';
@@ -125,6 +126,29 @@ export default async function init(ipcMain: IpcMain) {
           } else if (action === 'remove') {
             await improveStablebility(async () => {
               await container.remove();
+              const imageName = imageNameDict[serviceName];
+              const containerName = containerNameDict[serviceName];
+              let containersHaveSameImage = [];
+              containerInfos.forEach((item) => {
+                containersHaveSameImage = containersHaveSameImage.concat(
+                  item.Names,
+                );
+              });
+
+              containersHaveSameImage = containersHaveSameImage.filter(
+                (item) => {
+                  return (
+                    item !== containerName || imageNameDict[item] !== imageName
+                  );
+                },
+              );
+
+              console.debug('containersHaveSameImage', containersHaveSameImage);
+
+              if (containersHaveSameImage.length === 0) {
+                await removeImage(serviceName);
+              }
+
               event.reply(channel, MESSAGE_TYPE.INFO, '成功删除服务');
             });
           } else if (action === 'update') {

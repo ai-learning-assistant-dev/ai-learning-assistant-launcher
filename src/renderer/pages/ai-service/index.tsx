@@ -1,4 +1,4 @@
-import { Button, List, Modal, notification, Typography } from 'antd';
+import { Button, List, Modal, notification, Popconfirm, Typography } from 'antd';
 import { Link, NavLink } from 'react-router-dom';
 import './index.scss';
 import type { ContainerInfo } from 'dockerode';
@@ -223,25 +223,35 @@ export default function AiService() {
                     operating.serviceName === item.serviceName &&
                     operating.actionName === 'start'
                   }
+                  type="primary"
                   onClick={() => click('start', item.serviceName)}
                 >
                   启动
                 </Button>
               ),
               item.state === '已经停止' && (
-                <Button
-                  shape="round"
-                  size="small"
-                  disabled={!isInstallWSL || checkingWsl}
-                  loading={
-                    loading &&
-                    operating.serviceName === item.serviceName &&
-                    operating.actionName === 'remove'
-                  }
-                  onClick={() => click('remove', item.serviceName)}
+                <Popconfirm
+                  title="删除容器"
+                  description="你确定要删除容器？删除后再次安装会需要较长时间！"
+                  onConfirm={() => click('remove', item.serviceName)}
+                  okText="确认删除"
+                  cancelText="不删除"
                 >
-                  删除
-                </Button>
+                  <Button
+                    shape="round"
+                    size="small"
+                    disabled={!isInstallWSL || checkingWsl}
+                    loading={
+                      loading &&
+                      operating.serviceName === item.serviceName &&
+                      operating.actionName === 'remove'
+                    }
+                    color="danger"
+                    danger
+                  >
+                    删除
+                  </Button>
+                </Popconfirm>
               ),
               item.state === '还未安装' && (
                 <Button
@@ -254,6 +264,7 @@ export default function AiService() {
                     operating.actionName === 'install'
                   }
                   onClick={() => click('install', item.serviceName)}
+                  type="primary"
                 >
                   安装
                 </Button>
