@@ -27,6 +27,7 @@ export default function TTSConfig() {
   const [voiceConfigs, setVoiceConfigs] = useState<VoiceConfig[]>([]);
   const [voiceConfigsLoading, setVoiceConfigsLoading] = useState(false);
   const [voiceConfigsChanged, setVoiceConfigsChanged] = useState(false);
+  const [currentModel, setCurrentModel] = useState<'gpu' | 'cpu'>('gpu'); // 当前选择的模型
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // 从配置中读取初始状态
@@ -54,12 +55,29 @@ export default function TTSConfig() {
   const loadVoiceConfigs = async () => {
     setVoiceConfigsLoading(true);
     try {
-      queryVoice();
+      queryVoice(currentModel);
     } catch (error) {
       message.error('加载语音配置失败');
       console.error('Error loading voice configs:', error);
     } finally {
       setVoiceConfigsLoading(false);
+    }
+  };
+
+  // 切换模型类型
+  const handleModelSwitch = (modelType: 'gpu' | 'cpu') => {
+    if (modelType !== currentModel) {
+      setCurrentModel(modelType);
+      // 切换模型时重新加载配置
+      setVoiceConfigsLoading(true);
+      try {
+        queryVoice(modelType);
+      } catch (error) {
+        message.error('加载语音配置失败');
+        console.error('Error loading voice configs:', error);
+      } finally {
+        setVoiceConfigsLoading(false);
+      }
     }
   };
 
@@ -104,8 +122,8 @@ export default function TTSConfig() {
     const newVoice: VoiceConfig = {
       name: '新语音',
       description: '语音描述',
-      filename: 'new_voice.wav',
-      text: '语音对应文本',
+      filename: currentModel === 'gpu' ? 'new_voice.wav' : 'new_voice.pt',
+      text: currentModel === 'gpu' ? '语音对应文本' : undefined,
       language: 'Chinese'
     };
     setVoiceConfigs([...voiceConfigs, newVoice]);
@@ -121,7 +139,10 @@ export default function TTSConfig() {
   const handleSaveVoiceConfigs = async () => {
     setVoiceConfigsLoading(true);
     try {
-      await configsAction('update', 'voice', { voices: voiceConfigs });
+      await configsAction('update', 'voice', { 
+        config: { voices: voiceConfigs },
+        modelType: currentModel 
+      });
       setVoiceConfigsChanged(false);
       message.success('语音配置已保存');
     } catch (error) {
@@ -149,7 +170,7 @@ export default function TTSConfig() {
   const handleOpenVoicesFolder = () => {
     try {
       // 使用configs通道的update动作来打开voices文件夹
-      configsAction('update', 'voice', { action: 'openFolder' });
+      configsAction('update', 'voice', { action: 'openFolder', modelType: currentModel });
     } catch (error) {
       message.error('打开voices文件夹失败');
       console.error('Error opening voices folder:', error);
@@ -203,9 +224,28 @@ export default function TTSConfig() {
       </div>
 
       <div className="voice-config-section">
-        <h3>语音配置管理</h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <h3>语音配置管理</h3>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <Button
+              type={currentModel === 'gpu' ? 'primary' : 'default'}
+              onClick={() => handleModelSwitch('gpu')}
+              disabled={voiceConfigsLoading}
+            >
+              N卡 (index-tts)
+            </Button>
+            <Button
+              type={currentModel === 'cpu' ? 'primary' : 'default'}
+              onClick={() => handleModelSwitch('cpu')}
+              disabled={voiceConfigsLoading}
+            >
+              CPU (Kokoro)
+            </Button>
+          </div>
+        </div>
         <p style={{ color: '#666', fontSize: '14px', marginBottom: '16px' }}>
           管理TTS服务的语音配置，可以添加、编辑和删除语音选项
+          {currentModel === 'cpu' && ' (CPU模型不支持text字段)'}
         </p>
         
         <div className="voice-config-container">
@@ -256,14 +296,20 @@ export default function TTSConfig() {
                 </div>
                 
                 <div className="voice-config-item">
-                  <label className="config-label">示例文本 (text)</label>
+                  <label className="config-label">语音对应文本 (text)</label>
                   <TextArea
                     className="config-input"
                     value={voice.text || ''}
                     onChange={(e) => handleVoiceConfigChange(voiceConfigs.length - 1 - index, 'text', e.target.value)}
-                    placeholder="输入示例文本"
+                    placeholder="输入语音对应文本"
                     rows={2}
+                    disabled={currentModel === 'cpu'}
                   />
+                  {currentModel === 'cpu' && (
+                    <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>
+                      CPU模型不支持text字段
+                    </div>
+                  )}
                 </div>
                 
                 <div className="voice-config-item">

@@ -52,7 +52,7 @@ export default async function init(ipcMain: IpcMain) {
             event.reply(
               channel,
               MESSAGE_TYPE.DATA,
-              new MessageData(action, serviceName, getVoiceConfig()),
+              new MessageData(action, serviceName, getVoiceConfig(extraData?.modelType || 'gpu')),
             );
           }
         } else if (action === 'update') {
@@ -77,22 +77,23 @@ export default async function init(ipcMain: IpcMain) {
           } else if (serviceName === 'voice') {
             if (extraData.action === 'openFolder') {
               // 打开voices文件夹
+              const modelType = extraData.modelType || 'gpu';
               const voicesFolderPath = path.join(
                 appPath,
                 'external-resources',
                 'ai-assistant-backend',
-                'index-tts',
+                modelType === 'gpu' ? 'index-tts' : 'kokoro',
                 'voices'
               );
               try {
                 await shell.openPath(voicesFolderPath);
-                event.reply(channel, MESSAGE_TYPE.INFO, '已打开voices文件夹');
+                event.reply(channel, MESSAGE_TYPE.INFO, `已打开${modelType === 'gpu' ? 'GPU' : 'CPU'} voices文件夹`);
               } catch (error) {
                 console.error('Error opening voices folder:', error);
                 event.reply(channel, MESSAGE_TYPE.ERROR, '打开voices文件夹失败');
               }
             } else {
-              setVoiceConfig(extraData);
+              setVoiceConfig(extraData.config, extraData.modelType || 'gpu');
               event.reply(channel, MESSAGE_TYPE.INFO, '语音配置已保存');
             }
           }
@@ -258,9 +259,10 @@ const ttsKokoroVoiceConfigPath = path.join(
   'voice_config.json',
 );
 
-export function getVoiceConfig(): VoiceConfigFile {
+export function getVoiceConfig(modelType: 'gpu' | 'cpu' = 'gpu'): VoiceConfigFile {
   try {
-    const voiceConfigString = readFileSync(ttsGPUVoiceConfigPath, {
+    const configPath = modelType === 'gpu' ? ttsGPUVoiceConfigPath : ttsKokoroVoiceConfigPath;
+    const voiceConfigString = readFileSync(configPath, {
       encoding: 'utf8',
     });
     return JSON.parse(voiceConfigString) as VoiceConfigFile;
@@ -270,8 +272,9 @@ export function getVoiceConfig(): VoiceConfigFile {
   }
 }
 
-export function setVoiceConfig(config: VoiceConfigFile) {
-  writeFileSync(ttsGPUVoiceConfigPath, JSON.stringify(config, null, 2), {
+export function setVoiceConfig(config: VoiceConfigFile, modelType: 'gpu' | 'cpu' = 'gpu') {
+  const configPath = modelType === 'gpu' ? ttsGPUVoiceConfigPath : ttsKokoroVoiceConfigPath;
+  writeFileSync(configPath, JSON.stringify(config, null, 2), {
     encoding: 'utf8',
   });
 }

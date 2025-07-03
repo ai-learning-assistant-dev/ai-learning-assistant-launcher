@@ -47,8 +47,8 @@ export default function useConfigs() {
     window.electron.ipcRenderer.sendMessage(channel, 'query', 'container');
   }, []);
   
-  const queryVoice = useCallback(() => {
-    window.electron.ipcRenderer.sendMessage(channel, 'query', 'voice');
+  const queryVoice = useCallback((modelType: 'gpu' | 'cpu' = 'gpu') => {
+    window.electron.ipcRenderer.sendMessage(channel, 'query', 'voice', { modelType });
   }, []);
   
   useEffect(() => {
