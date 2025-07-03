@@ -68,11 +68,15 @@ export async function ttsConfig(
       event.reply(
         channel,
         MESSAGE_TYPE.PROGRESS,
-        'TTS模型选择已更新，正在重启TTS服务',
+        'TTS模型选择已更新，正在重建TTS服务',
       );
       await removeContainer('TTS');
       const container = await createContainer('TTS');
-      event.reply(channel, MESSAGE_TYPE.INFO, 'TTS服务更新成功');
+      event.reply(
+        channel,
+        MESSAGE_TYPE.INFO,
+        'TTS服务更新成功，你可以返回上一页启动服务',
+      );
     }
   } catch (error) {
     console.error('Error in ttsConfig:', error);
