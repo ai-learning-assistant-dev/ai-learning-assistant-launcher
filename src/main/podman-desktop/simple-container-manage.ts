@@ -6,19 +6,15 @@ import {
   ActionName,
   channel,
   containerNameDict,
-  getMergedContainerConfig,
   imageNameDict,
-  podMachineName,
   ServiceName,
 } from './type-info';
 import {
-  ensureImageReady,
   ensurePodmanWorks,
+  haveNvidia,
   isImageReady,
   loadImageFromPath,
   removeImage,
-  startPodman,
-  stopPodman,
 } from './ensure-podman-works';
 import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 import { getContainerConfig } from '../configs';
@@ -115,8 +111,27 @@ export default async function init(ipcMain: IpcMain) {
         if (container) {
           if (action === 'start') {
             await improveStablebility(async () => {
-              await container.start();
-              event.reply(channel, MESSAGE_TYPE.INFO, '成功启动服务');
+              try {
+                await container.start();
+                event.reply(channel, MESSAGE_TYPE.INFO, '成功启动服务');
+              } catch (e) {
+                console.error(e);
+                if (
+                  e &&
+                  e.message &&
+                  e.message.indexOf(
+                    'unresolvable CDI devices nvidia.com/gpu=all',
+                  ) >= 0
+                ) {
+                  event.reply(
+                    channel,
+                    MESSAGE_TYPE.ERROR,
+                    '无法识别NVIDIA显卡，请修改设置后重试',
+                  );
+                } else {
+                  event.reply(channel, MESSAGE_TYPE.ERROR, '无法启动服务');
+                }
+              }
             });
           } else if (action === 'stop') {
             await improveStablebility(async () => {
@@ -159,8 +174,13 @@ export default async function init(ipcMain: IpcMain) {
               event.reply(channel, MESSAGE_TYPE.PROGRESS, '正在删除旧版服务');
               await removeContainer(serviceName);
               event.reply(channel, MESSAGE_TYPE.PROGRESS, '正在重新创建新服务');
-              await createContainer(serviceName);
-              event.reply(channel, MESSAGE_TYPE.INFO, '更新服务成功');
+              try {
+                await createContainer(serviceName);
+                event.reply(channel, MESSAGE_TYPE.INFO, '更新服务成功');
+              } catch (e) {
+                console.error(e);
+                event.reply(channel, MESSAGE_TYPE.ERROR, '更新服务失败');
+              }
             } else {
               event.reply(channel, MESSAGE_TYPE.ERROR, '更新服务失败');
             }
@@ -183,7 +203,7 @@ export default async function init(ipcMain: IpcMain) {
               return createContainer(serviceName);
             } catch (e) {
               console.debug('安装服务失败', e);
-              event.reply(channel, MESSAGE_TYPE.INFO, '安装服务失败');
+              event.reply(channel, MESSAGE_TYPE.ERROR, '安装服务失败');
               return;
             }
           });
@@ -214,10 +234,11 @@ export async function createContainer(serviceName: ServiceName) {
   const imageName = imageNameDict[serviceName];
   const containerName = containerNameDict[serviceName];
   const config = getContainerConfig()[serviceName];
+  const haveNvidiaFlag = await haveNvidia();
   return connectionGlobal.createPodmanContainer({
     image: imageName,
     name: containerName,
-    devices: [{ path: 'nvidia.com/gpu=all' }],
+    devices: haveNvidiaFlag ? [{ path: 'nvidia.com/gpu=all' }] : [],
     portmappings: config.port.map((p) => ({
       container_port: p.container,
       host_port: p.host,

@@ -335,3 +335,18 @@ export async function removeImage(serviceName: ServiceName) {
   ]);
   return result;
 }
+
+export async function haveNvidia() {
+  try {
+    const result = await commandLine.exec('nvidia-smi', [], { shell: true });
+    console.debug('haveNvidia', result);
+    if (result.stdout.indexOf('Driver Version:') >= 0) {
+      return true;
+    } else {
+      return false;
+    }
+  } catch (e) {
+    console.warn(e);
+    return false;
+  }
+}
