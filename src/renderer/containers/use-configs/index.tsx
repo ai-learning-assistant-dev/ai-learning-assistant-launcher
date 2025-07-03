@@ -8,6 +8,7 @@ import {
   channel,
   ServiceName,
   ContainerConfig,
+  VoiceConfigFile,
 } from '../../../main/configs/type-info';
 import { channel as cmdChannel } from '../../../main/cmd/type-info';
 
@@ -16,6 +17,7 @@ export default function useConfigs() {
   const [obsidianVaultConfig, setObsidianVaultConfig] =
     useState<ObsidianVaultConfig[]>();
   const [containerConfig, setContainerConfig] = useState<ContainerConfig>();
+  const [voiceConfig, setVoiceConfig] = useState<VoiceConfigFile>();
   const [loading, setLoading] = useState(false);
   function action(
     actionName: ActionName,
@@ -44,6 +46,11 @@ export default function useConfigs() {
     window.electron.ipcRenderer.sendMessage(channel, 'query', 'obsidianVault');
     window.electron.ipcRenderer.sendMessage(channel, 'query', 'container');
   }, []);
+  
+  const queryVoice = useCallback(() => {
+    window.electron.ipcRenderer.sendMessage(channel, 'query', 'voice');
+  }, []);
+  
   useEffect(() => {
     const cancel = window.electron?.ipcRenderer.on(
       channel,
@@ -72,6 +79,10 @@ export default function useConfigs() {
           } else if (actionName === 'query' && service === 'container') {
             console.debug('payload', payload);
             setContainerConfig(payload);
+            setLoading(false);
+          } else if (actionName === 'query' && service === 'voice') {
+            console.debug('voice payload', payload);
+            setVoiceConfig(payload);
             setLoading(false);
           }
         } else if (messageType === MESSAGE_TYPE.INFO) {
@@ -114,6 +125,8 @@ export default function useConfigs() {
     obsidianConfig,
     obsidianVaultConfig,
     containerConfig,
+    voiceConfig,
     loading,
+    queryVoice,
   };
 }

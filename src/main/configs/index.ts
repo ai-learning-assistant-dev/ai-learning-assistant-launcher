@@ -9,6 +9,7 @@ import {
   ObsidianConfig,
   ObsidianVaultConfig,
   ServiceName,
+  VoiceConfigFile,
 } from './type-info';
 import { isWindows } from '../exec/util';
 import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
@@ -47,6 +48,12 @@ export default async function init(ipcMain: IpcMain) {
               MESSAGE_TYPE.DATA,
               new MessageData(action, serviceName, getContainerConfig()),
             );
+          } else if (serviceName === 'voice') {
+            event.reply(
+              channel,
+              MESSAGE_TYPE.DATA,
+              new MessageData(action, serviceName, getVoiceConfig()),
+            );
           }
         } else if (action === 'update') {
           if (serviceName === 'obsidianApp') {
@@ -67,6 +74,9 @@ export default async function init(ipcMain: IpcMain) {
               await ttsConfig(event, action, serviceName, extraData);
             }
             // 修改配置
+          } else if (serviceName === 'voice') {
+            setVoiceConfig(extraData);
+            event.reply(channel, MESSAGE_TYPE.INFO, '语音配置已保存');
           }
         }
       }
@@ -208,4 +218,32 @@ export function setVaultDefaultOpen(vaultId: string) {
     obsidianConfigPath,
     JSON.stringify(config),
   );
+}
+
+// 语音配置文件路径
+const ttsVoiceConfigPath = path.join(
+  appPath,
+  'external-resources',
+  'ai-assistant-backend',
+  'index-tts',
+  'voices',
+  'voice_config.json',
+);
+
+export function getVoiceConfig(): VoiceConfigFile {
+  try {
+    const voiceConfigString = readFileSync(ttsVoiceConfigPath, {
+      encoding: 'utf8',
+    });
+    return JSON.parse(voiceConfigString) as VoiceConfigFile;
+  } catch (error) {
+    console.error('Error reading voice config:', error);
+    return { voices: [] };
+  }
+}
+
+export function setVoiceConfig(config: VoiceConfigFile) {
+  writeFileSync(ttsVoiceConfigPath, JSON.stringify(config, null, 2), {
+    encoding: 'utf8',
+  });
 }
