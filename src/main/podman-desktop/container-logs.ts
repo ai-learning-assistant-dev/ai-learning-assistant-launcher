@@ -57,7 +57,10 @@ export default async function init(ipcMain: IpcMain) {
             event.reply(
               containerLogsChannel,
               MESSAGE_TYPE.DATA,
-              new MessageData(action, serviceName, cleanMultiplexedLog(logs)),
+              new MessageData(action, serviceName, {
+                imageId: containerInfo.ImageID,
+                logs: cleanMultiplexedLog(logs),
+              }),
             );
           }
         }

@@ -1,4 +1,4 @@
-import { IpcMain } from 'electron';
+import { dialog, IpcMain } from 'electron';
 import Dockerode from 'dockerode';
 import { connect } from './connector';
 import { LibPod, PodmanContainerInfo } from './libpod-dockerode';
@@ -14,6 +14,8 @@ import {
 import {
   ensureImageReady,
   ensurePodmanWorks,
+  isImageReady,
+  loadImageFromPath,
   startPodman,
   stopPodman,
 } from './ensure-podman-works';
@@ -127,10 +129,26 @@ export default async function init(ipcMain: IpcMain) {
             });
           } else if (action === 'update') {
             // TODO 更新容器镜像版本
+            event.reply(channel, MESSAGE_TYPE.PROGRESS, '正在加载镜像');
+            const result = await updateImage(serviceName);
+            if (result) {
+              event.reply(channel, MESSAGE_TYPE.PROGRESS, '正在删除旧版服务');
+              await removeContainer(serviceName);
+              event.reply(channel, MESSAGE_TYPE.PROGRESS, '正在重新创建新服务');
+              await createContainer(serviceName);
+              event.reply(channel, MESSAGE_TYPE.INFO, '更新服务成功');
+            } else {
+              event.reply(channel, MESSAGE_TYPE.ERROR, '更新服务失败');
+            }
           }
         } else if (action === 'install') {
           console.debug('install', imageName);
-          await ensureImageReady(serviceName, event, channel);
+          if (!(await isImageReady(serviceName))) {
+            if (!(await updateImage(serviceName))) {
+              event.reply(channel, MESSAGE_TYPE.INFO, '为选择正确的镜像');
+              return;
+            }
+          }
           const newContainerInfo:
             | {
                 Id: string;
@@ -150,10 +168,6 @@ export default async function init(ipcMain: IpcMain) {
           if (newContainerInfo) {
             console.debug('安装服务成功');
             event.reply(channel, MESSAGE_TYPE.INFO, '安装服务成功');
-            await improveStablebility(async () => {
-              await startContainer(newContainerInfo.Id);
-              event.reply(channel, MESSAGE_TYPE.INFO, '成功启动服务');
-            });
           } else {
             console.debug('安装服务失败');
             event.reply(channel, MESSAGE_TYPE.ERROR, '安装服务失败');
@@ -186,13 +200,15 @@ export async function createContainer(serviceName: ServiceName) {
     })),
     command: config.command.start,
     env: config.env,
-    mounts: config.mounts.map((mount) => {
-      mount.Source = path.join(appPath, mount.Source);
-      if (isWindows()) {
-        mount.Source = `/mnt${convertPath(mount.Source, 'posix')}`;
-      }
-      return mount;
-    }),
+    mounts: config.mounts
+      ? config.mounts.map((mount) => {
+          mount.Source = path.join(appPath, mount.Source);
+          if (isWindows()) {
+            mount.Source = `/mnt${convertPath(mount.Source, 'posix')}`;
+          }
+          return mount;
+        })
+      : [],
   });
 }
 
@@ -228,4 +244,26 @@ export async function removeContainer(serviceName: ServiceName) {
     }
     await container.remove();
   }
+}
+
+export async function updateImage(serviceName: ServiceName) {
+  if (serviceName === 'TTS' || serviceName === 'ASR') {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile', 'showHiddenFiles'],
+      filters: [{ name: '', extensions: ['tar'] }],
+    });
+    const path = result.filePaths[0];
+    if (path && path.length > 0) {
+      try {
+        return loadImageFromPath(serviceName, path);
+      } catch (e) {
+        console.error(e);
+        return false;
+      }
+    } else {
+      console.warn('没有选择正确的镜像');
+      return false;
+    }
+  }
+  return false;
 }

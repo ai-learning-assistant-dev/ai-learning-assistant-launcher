@@ -74,7 +74,7 @@ async function isPodmanStart() {
   return false;
 }
 
-async function isImageReady(serviceName: ServiceName) {
+export async function isImageReady(serviceName: ServiceName) {
   console.debug('serviceName', serviceName);
   const [imageName, imageTag] = imageNameDict[serviceName].split(':');
   const matchNameRegex = RegExp(imageName + '\\s*' + imageTag);
@@ -86,13 +86,20 @@ async function isImageReady(serviceName: ServiceName) {
   return false;
 }
 
-async function loadImage(serviceName: ServiceName) {
-  const imagePath = path.join(
-    appPath,
-    'external-resources',
-    'ai-assistant-backend',
-    imagePathDict[serviceName],
-  );
+export async function loadImageFromPath(
+  serviceName: ServiceName,
+  imagePath: string,
+) {
+  try {
+    await commandLine.exec(getPodmanCli(), [
+      'image',
+      'rm',
+      imageNameDict[serviceName],
+    ]);
+  } catch (e) {
+    console.warn(e);
+  }
+
   const output = await commandLine.exec(getPodmanCli(), [
     'load',
     '-i',
@@ -112,6 +119,16 @@ async function loadImage(serviceName: ServiceName) {
   } else {
     return false;
   }
+}
+
+async function loadImage(serviceName: ServiceName) {
+  const imagePath = path.join(
+    appPath,
+    'external-resources',
+    'ai-assistant-backend',
+    imagePathDict[serviceName],
+  );
+  return loadImageFromPath(serviceName, imagePath);
 }
 
 export async function installWSLMock() {

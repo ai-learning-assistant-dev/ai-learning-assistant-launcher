@@ -72,8 +72,7 @@ export async function ttsConfig(
       );
       await removeContainer('TTS');
       const container = await createContainer('TTS');
-      await startContainer(container.Id);
-      event.reply(channel, MESSAGE_TYPE.INFO, 'TTS服务已启动');
+      event.reply(channel, MESSAGE_TYPE.INFO, 'TTS服务更新成功');
     }
   } catch (error) {
     console.error('Error in ttsConfig:', error);

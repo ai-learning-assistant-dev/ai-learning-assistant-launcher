@@ -89,7 +89,7 @@ export default function AiService() {
   ];
 
   function click(actionName: ActionName, serviceName: ServiceName) {
-    if (loading && checkingWsl) {
+    if (loading || checkingWsl) {
       notification.warning({
         message: '请等待上一个操作完成后再操作',
         placement: 'topRight',
@@ -146,7 +146,7 @@ export default function AiService() {
         header={
           <div className="header-container">
             <Link to="/hello">
-              <Button>返回</Button>
+              <Button disabled={loading}>返回</Button>
             </Link>
             <Button
               disabled={isInstallWSL}
@@ -178,11 +178,7 @@ export default function AiService() {
                 <Button
                   shape="round"
                   size="small"
-                  disabled={
-                    !isInstallWSL ||
-                    checkingWsl ||
-                    (loading && operating.serviceName === item.serviceName)
-                  }
+                  disabled={!isInstallWSL || checkingWsl || loading}
                 >
                   设置
                 </Button>

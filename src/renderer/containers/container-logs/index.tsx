@@ -20,6 +20,7 @@ export interface LogEntry {
 
 export default function ContainerLogs(props: { serviceName: ServiceName }) {
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [imageId, setImageId] = useState<string>('');
   const [loaded, setLoaded] = useState<boolean>(false);
   const logDomRef = useRef<HTMLDivElement>(null);
 
@@ -28,7 +29,11 @@ export default function ContainerLogs(props: { serviceName: ServiceName }) {
       containerLogsChannel,
       (
         messageType: MESSAGE_TYPE,
-        data: MessageData<AllAction, ServiceName, string>,
+        data: MessageData<
+          AllAction,
+          ServiceName,
+          { logs: string; imageId: string }
+        >,
       ) => {
         if (
           messageType === MESSAGE_TYPE.DATA &&
@@ -36,7 +41,7 @@ export default function ContainerLogs(props: { serviceName: ServiceName }) {
           data.service === props.serviceName
         ) {
           // console.debug('reciveLogs', data.data);
-          const newLogs = data.data
+          const newLogs = data.data.logs
             .split('\n')
             .filter((log) => log != '')
             .map<LogEntry>((log, index) => {
@@ -48,6 +53,7 @@ export default function ContainerLogs(props: { serviceName: ServiceName }) {
               };
             });
           setLogs(newLogs);
+          setImageId(data.data.imageId);
           if (!loaded) {
             setLoaded(true);
           }
@@ -78,7 +84,7 @@ export default function ContainerLogs(props: { serviceName: ServiceName }) {
   return (
     <Card
       className="logs-card"
-      title={loaded ? `服务日志 (${logs.length}条)` : `服务日志 加载中...`}
+      title={loaded ? `服务日志 (${logs.length}条)  版本ID ${imageId}` : `服务日志 加载中...`}
       size="small"
     >
       <div
