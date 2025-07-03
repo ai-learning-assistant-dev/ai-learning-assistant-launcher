@@ -244,9 +244,21 @@ export default function TTSConfig() {
           </div>
         </div>
         <p style={{ color: '#666', fontSize: '14px', marginBottom: '16px' }}>
-          管理TTS服务的语音配置，可以添加、编辑和删除语音选项
+          管理文字转服务的音色配置，可以任意的添加、编辑和删除音色选项卡。
           {currentModel === 'cpu' && ' (CPU模型不支持text字段)'}
         </p>
+        
+        <div style={{ 
+          background: '#f0f8ff', 
+          border: '1px solid #d6e4ff', 
+          borderRadius: '6px', 
+          padding: '12px', 
+          marginBottom: '16px',
+          fontSize: '13px',
+          color: '#1890ff'
+        }}>
+          💡 实际加载的语音模型可从下方日志中查看
+        </div>
         
         <div className="voice-config-container">
           <div className="voice-config-scroll" ref={scrollContainerRef}>
