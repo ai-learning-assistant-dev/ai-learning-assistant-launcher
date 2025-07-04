@@ -6,6 +6,11 @@ import {
   channel,
   ServiceName,
 } from '../../../main/podman-desktop/type-info';
+import {
+  ActionName as CmdActionName,
+  channel as cmdChannel,
+  ServiceName as CmdServiceName,
+} from '../../../main/cmd/type-info';
 import { MESSAGE_TYPE, MessageData } from '../../../main/ipc-data-type';
 
 export default function useDocker() {
@@ -57,8 +62,21 @@ export default function useDocker() {
       },
     );
 
+    const cancel2 = window.electron?.ipcRenderer.on(
+      cmdChannel,
+      (messageType: MESSAGE_TYPE, data: any) => {
+        if (messageType === MESSAGE_TYPE.DATA) {
+          const d = data as MessageData<CmdActionName, CmdServiceName, boolean>;
+          if (d.action === 'remove' && d.service === 'podman') {
+            setContainers([]);
+          }
+        }
+      },
+    );
+
     return () => {
       cancel();
+      cancel2();
     };
   }, [setContainers]);
 

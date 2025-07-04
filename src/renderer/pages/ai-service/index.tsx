@@ -153,7 +153,7 @@ export default function AiService() {
         header={
           <div className="header-container">
             <Link to="/hello">
-              <Button disabled={loading}>返回</Button>
+              <Button disabled={loading || cmdLoading}>返回</Button>
             </Link>
             <div>
               <Popconfirm
@@ -164,7 +164,7 @@ export default function AiService() {
                 cancelText="不删除"
               >
                 <Button
-                  disabled={!isInstallWSL || cmdLoading}
+                  disabled={!isInstallWSL || cmdLoading || loading}
                   type="primary"
                   shape="round"
                   danger
@@ -209,7 +209,9 @@ export default function AiService() {
                 <Button
                   shape="round"
                   size="small"
-                  disabled={!isInstallWSL || checkingWsl || loading}
+                  disabled={
+                    !isInstallWSL || checkingWsl || loading || cmdLoading
+                  }
                 >
                   设置
                 </Button>
@@ -218,7 +220,7 @@ export default function AiService() {
                 <Button
                   shape="round"
                   size="small"
-                  disabled={!isInstallWSL || checkingWsl}
+                  disabled={!isInstallWSL || checkingWsl || cmdLoading}
                   loading={
                     loading &&
                     operating.serviceName === item.serviceName &&
@@ -233,7 +235,7 @@ export default function AiService() {
                 <Button
                   shape="round"
                   size="small"
-                  disabled={!isInstallWSL || checkingWsl}
+                  disabled={!isInstallWSL || checkingWsl || cmdLoading}
                   loading={
                     loading &&
                     operating.serviceName === item.serviceName &&
@@ -248,7 +250,7 @@ export default function AiService() {
                 <Button
                   shape="round"
                   size="small"
-                  disabled={!isInstallWSL || checkingWsl}
+                  disabled={!isInstallWSL || checkingWsl || cmdLoading}
                   loading={
                     loading &&
                     operating.serviceName === item.serviceName &&
@@ -271,7 +273,7 @@ export default function AiService() {
                   <Button
                     shape="round"
                     size="small"
-                    disabled={!isInstallWSL || checkingWsl}
+                    disabled={!isInstallWSL || checkingWsl || cmdLoading}
                     loading={
                       loading &&
                       operating.serviceName === item.serviceName &&
@@ -288,7 +290,7 @@ export default function AiService() {
                 <Button
                   shape="round"
                   size="small"
-                  disabled={!isInstallWSL || checkingWsl}
+                  disabled={!isInstallWSL || checkingWsl || cmdLoading}
                   loading={
                     loading &&
                     operating.serviceName === item.serviceName &&

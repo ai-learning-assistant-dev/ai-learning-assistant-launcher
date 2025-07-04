@@ -59,6 +59,11 @@ export default async function init(ipcMain: IpcMain) {
           if (serviceName === 'podman') {
             try {
               await resetPodman();
+              event.reply(
+                channel,
+                MESSAGE_TYPE.DATA,
+                new MessageData(action, serviceName, true),
+              );
               event.reply(channel, MESSAGE_TYPE.INFO, '成功删除所有服务和缓存');
             } catch (e) {
               console.error(e);
