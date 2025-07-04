@@ -1,8 +1,8 @@
 import type { Channels } from '../ipc-data-type';
 import { ContainerCreateMountOption } from '../podman-desktop/libpod-dockerode';
 
-export type ServiceName = 'obsidianApp' | 'obsidianVault' | 'container';
-export type ActionName = 'query' | 'update';
+export type ServiceName = 'obsidianApp' | 'obsidianVault' | 'container' | 'TTS';
+export type ActionName = 'query' | 'update' | 'openConfigFolder';
 
 export const channel: Channels = 'configs';
 
@@ -56,3 +56,16 @@ export interface ObsidianConfig {
 }
 
 export type ObsidianVaultConfig = { id: string; name: string; path: string };
+
+// 语音配置接口
+export interface VoiceConfig {
+  name: string;
+  description: string;
+  filename: string;
+  text?: string;
+  language: string;
+}
+
+export interface VoiceConfigFile {
+  voices: VoiceConfig[];
+}

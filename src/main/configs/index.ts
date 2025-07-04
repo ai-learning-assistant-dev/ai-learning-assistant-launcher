@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { appPath } from '../exec';
-import { dialog, IpcMain } from 'electron';
+import { dialog, IpcMain, shell } from 'electron';
 import {
   ActionName,
   channel,
@@ -9,6 +9,7 @@ import {
   ObsidianConfig,
   ObsidianVaultConfig,
   ServiceName,
+  VoiceConfigFile,
 } from './type-info';
 import { isWindows } from '../exec/util';
 import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
@@ -47,6 +48,16 @@ export default async function init(ipcMain: IpcMain) {
               MESSAGE_TYPE.DATA,
               new MessageData(action, serviceName, getContainerConfig()),
             );
+          } else if (serviceName === 'TTS') {
+            event.reply(
+              channel,
+              MESSAGE_TYPE.DATA,
+              new MessageData(
+                action,
+                serviceName,
+                getVoiceConfig(extraData?.modelType || 'gpu'),
+              ),
+            );
           }
         } else if (action === 'update') {
           if (serviceName === 'obsidianApp') {
@@ -67,6 +78,32 @@ export default async function init(ipcMain: IpcMain) {
               await ttsConfig(event, action, serviceName, extraData);
             }
             // 修改配置
+          } else if (serviceName === 'TTS') {
+            setVoiceConfig(extraData.config, extraData.modelType || 'gpu');
+            event.reply(channel, MESSAGE_TYPE.INFO, '语音配置已保存');
+          }
+        } else if (action === 'openConfigFolder') {
+          if (serviceName === 'TTS') {
+            // 打开voices文件夹
+            const modelType = extraData.modelType || 'gpu';
+            const voicesFolderPath = path.join(
+              appPath,
+              'external-resources',
+              'ai-assistant-backend',
+              modelType === 'gpu' ? 'index-tts' : 'kokoro',
+              'voices',
+            );
+            try {
+              await shell.openPath(voicesFolderPath);
+              event.reply(
+                channel,
+                MESSAGE_TYPE.INFO,
+                `已打开${modelType === 'gpu' ? 'GPU' : 'CPU'} voices文件夹`,
+              );
+            } catch (error) {
+              console.error('Error opening voices folder:', error);
+              event.reply(channel, MESSAGE_TYPE.ERROR, '打开voices文件夹失败');
+            }
           }
         }
       }
@@ -208,4 +245,44 @@ export function setVaultDefaultOpen(vaultId: string) {
     obsidianConfigPath,
     JSON.stringify(config),
   );
+}
+
+// GPU语音配置文件路径
+const ttsGPUVoiceConfigPath = path.join(
+  appPath,
+  'external-resources',
+  'ai-assistant-backend',
+  'index-tts',
+  'voices',
+  'voice_config.json',
+);
+
+// CPU语音配置文件路径
+const ttsKokoroVoiceConfigPath = path.join(
+  appPath,
+  'external-resources',
+  'ai-assistant-backend',
+  'kokoro',
+  'voices',
+  'voice_config.json',
+);
+
+export function getVoiceConfig(modelType: 'gpu' | 'cpu' = 'gpu'): VoiceConfigFile {
+  try {
+    const configPath = modelType === 'gpu' ? ttsGPUVoiceConfigPath : ttsKokoroVoiceConfigPath;
+    const voiceConfigString = readFileSync(configPath, {
+      encoding: 'utf8',
+    });
+    return JSON.parse(voiceConfigString) as VoiceConfigFile;
+  } catch (error) {
+    console.error('Error reading voice config:', error);
+    return { voices: [] };
+  }
+}
+
+export function setVoiceConfig(config: VoiceConfigFile, modelType: 'gpu' | 'cpu' = 'gpu') {
+  const configPath = modelType === 'gpu' ? ttsGPUVoiceConfigPath : ttsKokoroVoiceConfigPath;
+  writeFileSync(configPath, JSON.stringify(config, null, 2), {
+    encoding: 'utf8',
+  });
 }
