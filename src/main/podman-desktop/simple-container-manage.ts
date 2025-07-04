@@ -73,7 +73,26 @@ export default async function init(ipcMain: IpcMain) {
   ipcMain.on(
     channel,
     async (event, action: ActionName, serviceName: ServiceName) => {
+      let imagePath: boolean | string = false;
       if (action === 'install') {
+        let imageReady = false;
+        try {
+          imageReady = await isImageReady(serviceName);
+        } catch (e) {
+          console.info(e);
+        }
+        if (!imageReady) {
+          imagePath = await selectImageFile(serviceName);
+          if (!imagePath) {
+            event.reply(
+              channel,
+              MESSAGE_TYPE.ERROR,
+              '没有选择到正确的镜像文件',
+            );
+            return;
+          }
+        }
+
         try {
           await ensurePodmanWorks(event, channel);
           if (!connectionGlobal) {
@@ -176,11 +195,19 @@ export default async function init(ipcMain: IpcMain) {
               event.reply(channel, MESSAGE_TYPE.INFO, '成功删除服务');
             });
           } else if (action === 'update') {
-            // TODO 更新容器镜像版本
-            event.reply(channel, MESSAGE_TYPE.PROGRESS, '正在加载镜像');
-            const result = await improveStablebility(() =>
-              updateImage(serviceName),
-            );
+            const result = await improveStablebility(async () => {
+              const imagePathForUpdate = await selectImageFile(serviceName);
+              if (imagePathForUpdate) {
+                event.reply(
+                  channel,
+                  MESSAGE_TYPE.PROGRESS,
+                  '正在导入镜像，这可能需要5分钟时间',
+                );
+                return loadImageFromPath(serviceName, imagePathForUpdate);
+              } else {
+                return false;
+              }
+            });
             if (result) {
               event.reply(channel, MESSAGE_TYPE.PROGRESS, '正在删除旧版服务');
               await removeContainer(serviceName);
@@ -193,21 +220,28 @@ export default async function init(ipcMain: IpcMain) {
                 event.reply(channel, MESSAGE_TYPE.ERROR, '更新服务失败');
               }
             } else {
-              event.reply(channel, MESSAGE_TYPE.ERROR, '更新服务失败');
+              event.reply(channel, MESSAGE_TYPE.ERROR, '未选择正确的镜像');
+              return;
             }
           }
         } else if (action === 'install') {
           console.debug('install', imageName);
           if (!(await isImageReady(serviceName))) {
+            event.reply(
+              channel,
+              MESSAGE_TYPE.PROGRESS,
+              '正在导入镜像，这可能需要5分钟时间',
+            );
             if (
-              !(await improveStablebility(() => {
-                return updateImage(serviceName);
+              !(await improveStablebility(async () => {
+                return loadImageFromPath(serviceName, imagePath as string);
               }))
             ) {
-              event.reply(channel, MESSAGE_TYPE.INFO, '为选择正确的镜像');
+              event.reply(channel, MESSAGE_TYPE.ERROR, '未选择正确的镜像');
               return;
             }
           }
+          event.reply(channel, MESSAGE_TYPE.PROGRESS, '正在创建容器');
           const newContainerInfo:
             | {
                 Id: string;
@@ -306,7 +340,7 @@ export async function removeContainer(serviceName: ServiceName) {
   }
 }
 
-export async function updateImage(serviceName: ServiceName) {
+export async function selectImageFile(serviceName: ServiceName) {
   if (serviceName === 'TTS' || serviceName === 'ASR') {
     const result = await dialog.showOpenDialog({
       title: '请选择后缀名为.tar的镜像文件',
@@ -316,7 +350,7 @@ export async function updateImage(serviceName: ServiceName) {
     const path = result.filePaths[0];
     if (path && path.length > 0) {
       try {
-        return loadImageFromPath(serviceName, path);
+        return path;
       } catch (e) {
         console.error(e);
         return false;
