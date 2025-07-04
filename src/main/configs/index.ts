@@ -82,29 +82,6 @@ export default async function init(ipcMain: IpcMain) {
             setVoiceConfig(extraData.config, extraData.modelType || 'gpu');
             event.reply(channel, MESSAGE_TYPE.INFO, '语音配置已保存');
           }
-        } else if (action === 'openConfigFolder') {
-          if (serviceName === 'TTS') {
-            // 打开voices文件夹
-            const modelType = extraData.modelType || 'gpu';
-            const voicesFolderPath = path.join(
-              appPath,
-              'external-resources',
-              'ai-assistant-backend',
-              modelType === 'gpu' ? 'index-tts' : 'kokoro',
-              'voices',
-            );
-            try {
-              await shell.openPath(voicesFolderPath);
-              event.reply(
-                channel,
-                MESSAGE_TYPE.INFO,
-                `已打开${modelType === 'gpu' ? 'GPU' : 'CPU'} voices文件夹`,
-              );
-            } catch (error) {
-              console.error('Error opening voices folder:', error);
-              event.reply(channel, MESSAGE_TYPE.ERROR, '打开voices文件夹失败');
-            }
-          }
         } else if (action === 'selectVoiceFile') {
           if (serviceName === 'TTS') {
             // 选择语音文件
@@ -133,20 +110,20 @@ export default async function init(ipcMain: IpcMain) {
                 const fileName = path.basename(selectedFilePath);
                 const targetFilePath = path.join(voicesFolderPath, fileName);
                 
+                // 检查选择的文件是否已经在目标文件夹中
+                if (selectedFilePath === targetFilePath) {
+                    // 文件已经在目标文件夹中，直接返回文件名
+                    event.reply(
+                      channel,
+                      MESSAGE_TYPE.DATA,
+                      new MessageData(action, serviceName, { filename: fileName })
+                    );
+                    return;
+                }
+
                 // 检查目标文件夹中是否已存在同名文件
                 if (existsSync(targetFilePath)) {
                     event.reply(channel, MESSAGE_TYPE.ERROR, `同名文件已存在于目标文件夹中，请修改文件名`);
-                  return;
-                }
-                
-                // 检查选择的文件是否已经在目标文件夹中
-                if (selectedFilePath === targetFilePath) {
-                  // 文件已经在目标文件夹中，直接返回文件名
-                  event.reply(
-                    channel,
-                    MESSAGE_TYPE.DATA,
-                    new MessageData(action, serviceName, { filename: fileName })
-                  );
                   return;
                 }
                 

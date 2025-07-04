@@ -259,7 +259,7 @@ export default function TTSConfig() {
         </div>
         <p style={{ color: '#666', fontSize: '14px', marginBottom: '16px' }}>
           管理文字转服务的音色配置，可以任意的添加、编辑和删除音色选项卡。
-          {currentModel === 'cpu' && ' (CPU模型不支持text字段)'}
+          {currentModel === 'cpu' && ' (CPU模型暂时不支持修改)'}
         </p>
         
         <div style={{ 
@@ -374,7 +374,7 @@ export default function TTSConfig() {
             <Button
               icon={<PlusOutlined />}
               onClick={handleAddVoice}
-              disabled={voiceConfigsLoading}
+              disabled={voiceConfigsLoading || currentModel === 'cpu'}
               style={{ marginRight: '8px' }}
             >
               添加语音
@@ -384,7 +384,7 @@ export default function TTSConfig() {
               icon={<SaveOutlined />}
               onClick={handleSaveVoiceConfigs}
               loading={voiceConfigsLoading}
-              disabled={!voiceConfigsChanged}
+              disabled={!voiceConfigsChanged  || currentModel === 'cpu'}
             >
               保存语音配置
             </Button>
