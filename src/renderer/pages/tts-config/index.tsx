@@ -1,7 +1,14 @@
 import { Button, Checkbox, Space, message, Input, Card } from 'antd';
 import { NavLink } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
-import { LeftOutlined, RightOutlined, SaveOutlined, DeleteOutlined, PlusOutlined, FolderOpenOutlined } from '@ant-design/icons';
+import {
+  LeftOutlined,
+  RightOutlined,
+  SaveOutlined,
+  DeleteOutlined,
+  PlusOutlined,
+  FolderOpenOutlined,
+} from '@ant-design/icons';
 import useConfigs from '../../containers/use-configs';
 import useDocker from '../../containers/use-docker';
 import ContainerLogs from '../../containers/container-logs';
@@ -18,11 +25,10 @@ export default function TTSConfig() {
     action: configsAction,
     queryVoice,
   } = useConfigs();
-  const { loading: dockerLoading, action: dockerAction } = useDocker();
   const [forceNvidia, setForceNvidia] = useState(false);
   const [forceCPU, setForceCPU] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
-  
+
   // 语音配置相关状态
   const [voiceConfigs, setVoiceConfigs] = useState<VoiceConfig[]>([]);
   const [voiceConfigsLoading, setVoiceConfigsLoading] = useState(false);
@@ -111,7 +117,11 @@ export default function TTSConfig() {
   };
 
   // 语音配置相关函数
-  const handleVoiceConfigChange = (index: number, field: keyof VoiceConfig, value: string) => {
+  const handleVoiceConfigChange = (
+    index: number,
+    field: keyof VoiceConfig,
+    value: string,
+  ) => {
     const newConfigs = [...voiceConfigs];
     newConfigs[index] = { ...newConfigs[index], [field]: value };
     setVoiceConfigs(newConfigs);
@@ -124,7 +134,7 @@ export default function TTSConfig() {
       description: '语音描述',
       filename: currentModel === 'gpu' ? 'new_voice.wav' : 'new_voice.pt',
       text: currentModel === 'gpu' ? '语音对应文本' : undefined,
-      language: 'Chinese'
+      language: 'Chinese',
     };
     setVoiceConfigs([...voiceConfigs, newVoice]);
     setVoiceConfigsChanged(true);
@@ -139,9 +149,9 @@ export default function TTSConfig() {
   const handleSaveVoiceConfigs = async () => {
     setVoiceConfigsLoading(true);
     try {
-      await configsAction('update', 'voice', { 
+      configsAction('update', 'TTS', {
         config: { voices: voiceConfigs },
-        modelType: currentModel 
+        modelType: currentModel,
       });
       setVoiceConfigsChanged(false);
       message.success('语音配置已保存');
@@ -170,7 +180,7 @@ export default function TTSConfig() {
   const handleOpenVoicesFolder = () => {
     try {
       // 使用configs通道的update动作来打开voices文件夹
-      configsAction('update', 'voice', { action: 'openFolder', modelType: currentModel });
+      configsAction('openConfigFolder', 'TTS', { modelType: currentModel });
     } catch (error) {
       message.error('打开voices文件夹失败');
       console.error('Error opening voices folder:', error);

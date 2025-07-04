@@ -48,7 +48,9 @@ export default function useConfigs() {
   }, []);
   
   const queryVoice = useCallback((modelType: 'gpu' | 'cpu' = 'gpu') => {
-    window.electron.ipcRenderer.sendMessage(channel, 'query', 'voice', { modelType });
+    window.electron.ipcRenderer.sendMessage(channel, 'query', 'TTS', {
+      modelType,
+    });
   }, []);
   
   useEffect(() => {
@@ -80,7 +82,7 @@ export default function useConfigs() {
             console.debug('payload', payload);
             setContainerConfig(payload);
             setLoading(false);
-          } else if (actionName === 'query' && service === 'voice') {
+          } else if (actionName === 'query' && service === 'TTS') {
             console.debug('voice payload', payload);
             setVoiceConfig(payload);
             setLoading(false);

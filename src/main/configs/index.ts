@@ -48,11 +48,15 @@ export default async function init(ipcMain: IpcMain) {
               MESSAGE_TYPE.DATA,
               new MessageData(action, serviceName, getContainerConfig()),
             );
-          } else if (serviceName === 'voice') {
+          } else if (serviceName === 'TTS') {
             event.reply(
               channel,
               MESSAGE_TYPE.DATA,
-              new MessageData(action, serviceName, getVoiceConfig(extraData?.modelType || 'gpu')),
+              new MessageData(
+                action,
+                serviceName,
+                getVoiceConfig(extraData?.modelType || 'gpu'),
+              ),
             );
           }
         } else if (action === 'update') {
@@ -74,27 +78,31 @@ export default async function init(ipcMain: IpcMain) {
               await ttsConfig(event, action, serviceName, extraData);
             }
             // 修改配置
-          } else if (serviceName === 'voice') {
-            if (extraData.action === 'openFolder') {
-              // 打开voices文件夹
-              const modelType = extraData.modelType || 'gpu';
-              const voicesFolderPath = path.join(
-                appPath,
-                'external-resources',
-                'ai-assistant-backend',
-                modelType === 'gpu' ? 'index-tts' : 'kokoro',
-                'voices'
+          } else if (serviceName === 'TTS') {
+            setVoiceConfig(extraData.config, extraData.modelType || 'gpu');
+            event.reply(channel, MESSAGE_TYPE.INFO, '语音配置已保存');
+          }
+        } else if (action === 'openConfigFolder') {
+          if (serviceName === 'TTS') {
+            // 打开voices文件夹
+            const modelType = extraData.modelType || 'gpu';
+            const voicesFolderPath = path.join(
+              appPath,
+              'external-resources',
+              'ai-assistant-backend',
+              modelType === 'gpu' ? 'index-tts' : 'kokoro',
+              'voices',
+            );
+            try {
+              await shell.openPath(voicesFolderPath);
+              event.reply(
+                channel,
+                MESSAGE_TYPE.INFO,
+                `已打开${modelType === 'gpu' ? 'GPU' : 'CPU'} voices文件夹`,
               );
-              try {
-                await shell.openPath(voicesFolderPath);
-                event.reply(channel, MESSAGE_TYPE.INFO, `已打开${modelType === 'gpu' ? 'GPU' : 'CPU'} voices文件夹`);
-              } catch (error) {
-                console.error('Error opening voices folder:', error);
-                event.reply(channel, MESSAGE_TYPE.ERROR, '打开voices文件夹失败');
-              }
-            } else {
-              setVoiceConfig(extraData.config, extraData.modelType || 'gpu');
-              event.reply(channel, MESSAGE_TYPE.INFO, '语音配置已保存');
+            } catch (error) {
+              console.error('Error opening voices folder:', error);
+              event.reply(channel, MESSAGE_TYPE.ERROR, '打开voices文件夹失败');
             }
           }
         }
