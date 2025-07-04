@@ -107,7 +107,7 @@ export default async function init(ipcMain: IpcMain) {
           );
           return;
         }
-        console.debug(event, action, serviceName);
+        console.debug(action, serviceName);
         const imageName = imageNameDict[serviceName];
         const containerName = containerNameDict[serviceName];
 
