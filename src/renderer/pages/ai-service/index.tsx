@@ -1,4 +1,11 @@
-import { Button, List, Modal, notification, Popconfirm, Typography } from 'antd';
+import {
+  Button,
+  List,
+  Modal,
+  notification,
+  Popconfirm,
+  Typography,
+} from 'antd';
 import { Link, NavLink } from 'react-router-dom';
 import './index.scss';
 import type { ContainerInfo } from 'dockerode';
@@ -148,24 +155,48 @@ export default function AiService() {
             <Link to="/hello">
               <Button disabled={loading}>返回</Button>
             </Link>
-            <Button
-              disabled={isInstallWSL}
-              type="primary"
-              shape="round"
-              loading={
-                checkingWsl ||
-                (cmdLoading &&
-                  cmdOperating.serviceName === 'WSL' &&
-                  cmdOperating.actionName === 'install')
-              }
-              onClick={() => clickCmd('install', 'WSL')}
-            >
-              {checkingWsl
-                ? '正在检查WSL安装状态'
-                : isInstallWSL
-                  ? '已启用Windows自带的WSL组件'
-                  : '开启本地AI服务前请点我启用Windows自带的WSL组件'}
-            </Button>
+            <div>
+              <Popconfirm
+                title="删除所有服务和缓存"
+                description="你确定要删除所有服务和缓存吗？删除后再次安装会需要很长时间！"
+                onConfirm={() => clickCmd('remove', 'podman')}
+                okText="确认删除"
+                cancelText="不删除"
+              >
+                <Button
+                  disabled={!isInstallWSL || cmdLoading}
+                  type="primary"
+                  shape="round"
+                  danger
+                  loading={
+                    cmdLoading &&
+                    cmdOperating.serviceName === 'podman' &&
+                    cmdOperating.actionName === 'remove'
+                  }
+                >
+                  删除所有服务和缓存
+                </Button>
+              </Popconfirm>
+              <div style={{ width: '20px', display: 'inline-block' }}></div>
+              <Button
+                disabled={isInstallWSL}
+                type="primary"
+                shape="round"
+                loading={
+                  checkingWsl ||
+                  (cmdLoading &&
+                    cmdOperating.serviceName === 'WSL' &&
+                    cmdOperating.actionName === 'install')
+                }
+                onClick={() => clickCmd('install', 'WSL')}
+              >
+                {checkingWsl
+                  ? '正在检查WSL安装状态'
+                  : isInstallWSL
+                    ? '已启用Windows自带的WSL组件'
+                    : '开启本地AI服务前请点我启用Windows自带的WSL组件'}
+              </Button>
+            </div>
           </div>
         }
         bordered

@@ -6,6 +6,7 @@ import { getObsidianConfig, setVaultDefaultOpen } from '../configs';
 import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 import path from 'node:path';
 import { statSync } from 'node:fs';
+import { resetPodman } from '../podman-desktop/ensure-podman-works';
 
 const commandLine = new Exec();
 
@@ -55,8 +56,21 @@ export default async function init(ipcMain: IpcMain) {
           const result = await commandLine.exec('echo %cd%');
           event.reply(channel, MESSAGE_TYPE.INFO, '成功停止');
         } else if (action === 'remove') {
-          const result = await commandLine.exec('echo %cd%');
-          event.reply(channel, MESSAGE_TYPE.INFO, '成功删除');
+          if (serviceName === 'podman') {
+            try {
+              await resetPodman();
+              event.reply(channel, MESSAGE_TYPE.INFO, '成功删除所有服务和缓存');
+            } catch (e) {
+              console.error(e);
+              event.reply(
+                channel,
+                MESSAGE_TYPE.ERROR,
+                '删除所有服务和缓存失败',
+              );
+            }
+          } else {
+            event.reply(channel, MESSAGE_TYPE.INFO, '成功删除');
+          }
         } else if (action === 'install') {
           if (serviceName === 'WSL') {
             event.reply(

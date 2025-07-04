@@ -115,6 +115,15 @@ export async function loadImageFromPath(
       imageNameDict[serviceName],
     ]);
     console.debug('podman tag', output2);
+    console.debug('remove default image tag');
+    if (id !== imageNameDict[serviceName]) {
+      const output3 = await commandLine.exec(getPodmanCli(), [
+        'image',
+        'rm',
+        id,
+      ]);
+      console.debug('podman image rm', output3);
+    }
     return true;
   } else {
     return false;
@@ -349,4 +358,8 @@ export async function haveNvidia() {
     console.warn(e);
     return false;
   }
+}
+
+export async function resetPodman() {
+  return commandLine.exec(getPodmanCli(), ['machine', 'reset', '--force']);
 }

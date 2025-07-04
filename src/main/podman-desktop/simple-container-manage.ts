@@ -15,6 +15,8 @@ import {
   isImageReady,
   loadImageFromPath,
   removeImage,
+  startPodman,
+  stopPodman,
 } from './ensure-podman-works';
 import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 import { getContainerConfig } from '../configs';
@@ -27,7 +29,7 @@ import convertPath from '@stdlib/utils-convert-path';
 let connectionGlobal: LibPod & Dockerode;
 
 /** 解决 ipcMain 的监听函数不显示错误日志问题 */
-async function improveStablebility(func: () => Promise<any>) {
+async function improveStablebility<T>(func: () => Promise<T>) {
   try {
     return await func();
   } catch (e) {
@@ -35,9 +37,16 @@ async function improveStablebility(func: () => Promise<any>) {
     if (e) {
       try {
         console.warn(e);
-        // await stopPodman();
-        // await wait(1000);
-        // await startPodman();
+        if (
+          e &&
+          e.message &&
+          (e.message.indexOf('socket hang up') >= 0 ||
+            e.message.indexOf('exitCode: 125') >= 0)
+        ) {
+          await stopPodman();
+          await wait(1000);
+          await startPodman();
+        }
         await wait(1000);
         connectionGlobal = await connect();
         await wait(1000);
@@ -169,7 +178,9 @@ export default async function init(ipcMain: IpcMain) {
           } else if (action === 'update') {
             // TODO 更新容器镜像版本
             event.reply(channel, MESSAGE_TYPE.PROGRESS, '正在加载镜像');
-            const result = await updateImage(serviceName);
+            const result = await improveStablebility(() =>
+              updateImage(serviceName),
+            );
             if (result) {
               event.reply(channel, MESSAGE_TYPE.PROGRESS, '正在删除旧版服务');
               await removeContainer(serviceName);
@@ -188,7 +199,11 @@ export default async function init(ipcMain: IpcMain) {
         } else if (action === 'install') {
           console.debug('install', imageName);
           if (!(await isImageReady(serviceName))) {
-            if (!(await updateImage(serviceName))) {
+            if (
+              !(await improveStablebility(() => {
+                return updateImage(serviceName);
+              }))
+            ) {
               event.reply(channel, MESSAGE_TYPE.INFO, '为选择正确的镜像');
               return;
             }
@@ -294,6 +309,7 @@ export async function removeContainer(serviceName: ServiceName) {
 export async function updateImage(serviceName: ServiceName) {
   if (serviceName === 'TTS' || serviceName === 'ASR') {
     const result = await dialog.showOpenDialog({
+      title: '请选择后缀名为.tar的镜像文件',
       properties: ['openFile', 'showHiddenFiles'],
       filters: [{ name: '', extensions: ['tar'] }],
     });
