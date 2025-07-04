@@ -159,7 +159,18 @@ export async function installPodman() {
 }
 
 export async function initPodman() {
-  const output = await commandLine.exec(getPodmanCli(), ['machine', 'init']);
+  const podmanMachineImagePath = path.join(
+    appPath,
+    'external-resources',
+    'ai-assistant-backend',
+    'podman_machine.tar.zst',
+  );
+  const imagePathArgs = isWindows() ? ['--image', podmanMachineImagePath] : [];
+  const output = await commandLine.exec(getPodmanCli(), [
+    'machine',
+    'init',
+    ...imagePathArgs,
+  ]);
   console.debug('initPodman', output);
   return true;
 }
@@ -200,7 +211,9 @@ export async function setupCDI() {
   await commandLine.exec(getPodmanCli(), [
     'machine',
     'ssh',
-    `sudo curl -s -L https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo` +
+    `curl -s -L https://mirrors.ustc.edu.cn/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo` +
+      ` | sed 's#nvidia.github.io/libnvidia-container/stable/#mirrors.ustc.edu.cn/libnvidia-container/stable/#g'` +
+      ` | sed 's#nvidia.github.io/libnvidia-container/experimental/#mirrors.ustc.edu.cn/libnvidia-container/experimental/#g'` +
       ` | sudo tee /etc/yum.repos.d/nvidia-container-toolkit.repo`,
   ]);
   await commandLine.exec(getPodmanCli(), [
