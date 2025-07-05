@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom';
 import useConfigs from '../../containers/use-configs';
 import useDocker from '../../containers/use-docker';
 import ContainerLogs from '../../containers/container-logs';
+import './index.scss';
 
 export default function ASRConfig() {
   const {
