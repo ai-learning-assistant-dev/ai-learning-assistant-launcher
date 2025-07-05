@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, copyFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { appPath } from '../exec';
 import { dialog, IpcMain, shell } from 'electron';
@@ -82,9 +82,9 @@ export default async function init(ipcMain: IpcMain) {
             setVoiceConfig(extraData.config, extraData.modelType || 'gpu');
             event.reply(channel, MESSAGE_TYPE.INFO, '语音配置已保存');
           }
-        } else if (action === 'openConfigFolder') {
+        } else if (action === 'selectVoiceFile') {
           if (serviceName === 'TTS') {
-            // 打开voices文件夹
+            // 选择语音文件
             const modelType = extraData.modelType || 'gpu';
             const voicesFolderPath = path.join(
               appPath,
@@ -93,16 +93,53 @@ export default async function init(ipcMain: IpcMain) {
               modelType === 'gpu' ? 'index-tts' : 'kokoro',
               'voices',
             );
+            
             try {
-              await shell.openPath(voicesFolderPath);
-              event.reply(
-                channel,
-                MESSAGE_TYPE.INFO,
-                `已打开${modelType === 'gpu' ? 'GPU' : 'CPU'} voices文件夹`,
-              );
+              // 显示文件选择对话框
+              const result = await dialog.showOpenDialog({
+                properties: ['openFile'],
+                filters: [
+                  { name: '语音文件', extensions: modelType === 'gpu' ? ['wav'] : ['pt'] },
+                  { name: '所有文件', extensions: ['*'] }
+                ],
+                title: '选择语音文件'
+              });
+              
+              if (!result.canceled && result.filePaths.length > 0) {
+                const selectedFilePath = result.filePaths[0];
+                const fileName = path.basename(selectedFilePath);
+                const targetFilePath = path.join(voicesFolderPath, fileName);
+                
+                // 检查选择的文件是否已经在目标文件夹中
+                if (selectedFilePath === targetFilePath) {
+                    // 文件已经在目标文件夹中，直接返回文件名
+                    event.reply(
+                      channel,
+                      MESSAGE_TYPE.DATA,
+                      new MessageData(action, serviceName, { filename: fileName })
+                    );
+                    return;
+                }
+
+                // 检查目标文件夹中是否已存在同名文件
+                if (existsSync(targetFilePath)) {
+                    event.reply(channel, MESSAGE_TYPE.ERROR, `同名文件已存在于目标文件夹中，请修改文件名`);
+                  return;
+                }
+                
+                // 复制文件到目标文件夹
+                copyFileSync(selectedFilePath, targetFilePath);
+                
+                // 返回文件名给前端
+                event.reply(
+                  channel,
+                  MESSAGE_TYPE.DATA,
+                  new MessageData(action, serviceName, { filename: fileName })
+                );
+              }
             } catch (error) {
-              console.error('Error opening voices folder:', error);
-              event.reply(channel, MESSAGE_TYPE.ERROR, '打开voices文件夹失败');
+              console.error('Error selecting voice file:', error);
+              event.reply(channel, MESSAGE_TYPE.ERROR, '选择语音文件失败');
             }
           }
         }

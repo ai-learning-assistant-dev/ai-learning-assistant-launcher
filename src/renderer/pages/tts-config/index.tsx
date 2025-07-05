@@ -7,7 +7,6 @@ import {
   SaveOutlined,
   DeleteOutlined,
   PlusOutlined,
-  FolderOpenOutlined,
 } from '@ant-design/icons';
 import useConfigs from '../../containers/use-configs';
 import useDocker from '../../containers/use-docker';
@@ -24,6 +23,7 @@ export default function TTSConfig() {
     loading: configsLoading,
     action: configsAction,
     queryVoice,
+    selectedVoiceFile,
   } = useConfigs();
   const [forceNvidia, setForceNvidia] = useState(false);
   const [forceCPU, setForceCPU] = useState(false);
@@ -57,6 +57,21 @@ export default function TTSConfig() {
       setVoiceConfigsChanged(false);
     }
   }, [voiceConfig]);
+
+  // 当选择语音文件时，自动创建新的语音配置
+  useEffect(() => {
+    if (selectedVoiceFile) {
+      const newVoice: VoiceConfig = {
+        name: '新语音',
+        description: '语音描述',
+        filename: selectedVoiceFile,
+        text: currentModel === 'gpu' ? '语音对应文本' : undefined,
+        language: 'Chinese',
+      };
+      setVoiceConfigs([...voiceConfigs, newVoice]);
+      setVoiceConfigsChanged(true);
+    }
+  }, [selectedVoiceFile, currentModel]);
 
   const loadVoiceConfigs = async () => {
     setVoiceConfigsLoading(true);
@@ -128,16 +143,14 @@ export default function TTSConfig() {
     setVoiceConfigsChanged(true);
   };
 
-  const handleAddVoice = () => {
-    const newVoice: VoiceConfig = {
-      name: '新语音',
-      description: '语音描述',
-      filename: currentModel === 'gpu' ? 'new_voice.wav' : 'new_voice.pt',
-      text: currentModel === 'gpu' ? '语音对应文本' : undefined,
-      language: 'Chinese',
-    };
-    setVoiceConfigs([...voiceConfigs, newVoice]);
-    setVoiceConfigsChanged(true);
+  const handleAddVoice = async () => {
+    try {
+      // 调用文件选择功能
+      configsAction('selectVoiceFile', 'TTS', { modelType: currentModel });
+    } catch (error) {
+      message.error('选择语音文件失败');
+      console.error('Error selecting voice file:', error);
+    }
   };
 
   const handleDeleteVoice = (index: number) => {
@@ -176,16 +189,7 @@ export default function TTSConfig() {
     }
   };
 
-  // 打开voices文件夹
-  const handleOpenVoicesFolder = () => {
-    try {
-      // 使用configs通道的update动作来打开voices文件夹
-      configsAction('openConfigFolder', 'TTS', { modelType: currentModel });
-    } catch (error) {
-      message.error('打开voices文件夹失败');
-      console.error('Error opening voices folder:', error);
-    }
-  };
+
 
   return (
     <div className="tts-config">
@@ -255,7 +259,7 @@ export default function TTSConfig() {
         </div>
         <p style={{ color: '#666', fontSize: '14px', marginBottom: '16px' }}>
           管理文字转服务的音色配置，可以任意的添加、编辑和删除音色选项卡。
-          {currentModel === 'cpu' && ' (CPU模型不支持text字段)'}
+          {currentModel === 'cpu' && ' (CPU模型暂时不支持修改)'}
         </p>
         
         <div style={{ 
@@ -368,17 +372,9 @@ export default function TTSConfig() {
           
           <div>
             <Button
-              icon={<FolderOpenOutlined />}
-              onClick={handleOpenVoicesFolder}
-              disabled={voiceConfigsLoading}
-              style={{ marginRight: '8px' }}
-            >
-              导入语音
-            </Button>
-            <Button
               icon={<PlusOutlined />}
               onClick={handleAddVoice}
-              disabled={voiceConfigsLoading}
+              disabled={voiceConfigsLoading || currentModel === 'cpu'}
               style={{ marginRight: '8px' }}
             >
               添加语音
@@ -388,7 +384,7 @@ export default function TTSConfig() {
               icon={<SaveOutlined />}
               onClick={handleSaveVoiceConfigs}
               loading={voiceConfigsLoading}
-              disabled={!voiceConfigsChanged}
+              disabled={!voiceConfigsChanged  || currentModel === 'cpu'}
             >
               保存语音配置
             </Button>

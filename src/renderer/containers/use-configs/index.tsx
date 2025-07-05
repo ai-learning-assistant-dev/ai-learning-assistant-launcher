@@ -19,6 +19,7 @@ export default function useConfigs() {
   const [containerConfig, setContainerConfig] = useState<ContainerConfig>();
   const [voiceConfig, setVoiceConfig] = useState<VoiceConfigFile>();
   const [loading, setLoading] = useState(false);
+  const [selectedVoiceFile, setSelectedVoiceFile] = useState<string | null>(null);
   function action(
     actionName: ActionName,
     serviceName: ServiceName,
@@ -86,6 +87,12 @@ export default function useConfigs() {
             console.debug('voice payload', payload);
             setVoiceConfig(payload);
             setLoading(false);
+          } else if (actionName === 'selectVoiceFile' && service === 'TTS') {
+            console.debug('selected voice file payload', payload);
+            setSelectedVoiceFile(payload.filename);
+            setLoading(false);
+            // 清理状态，避免重复创建
+            setTimeout(() => setSelectedVoiceFile(null), 100);
           }
         } else if (messageType === MESSAGE_TYPE.INFO) {
           notification.success({
@@ -130,5 +137,6 @@ export default function useConfigs() {
     voiceConfig,
     loading,
     queryVoice,
+    selectedVoiceFile,
   };
 }
