@@ -20,6 +20,8 @@ export default function useConfigs() {
   const [voiceConfig, setVoiceConfig] = useState<VoiceConfigFile>();
   const [loading, setLoading] = useState(false);
   const [selectedVoiceFile, setSelectedVoiceFile] = useState<string | null>(null);
+  const [voiceFileList, setVoiceFileList] = useState<string[]>([]);
+  
   function action(
     actionName: ActionName,
     serviceName: ServiceName,
@@ -51,6 +53,18 @@ export default function useConfigs() {
   const queryVoice = useCallback((modelType: 'gpu' | 'cpu' = 'gpu') => {
     window.electron.ipcRenderer.sendMessage(channel, 'query', 'TTS', {
       modelType,
+    });
+  }, []);
+  
+  const initVoiceFileList = useCallback((modelType: 'gpu' | 'cpu' = 'gpu') => {
+    window.electron.ipcRenderer.sendMessage(channel, 'initVoiceFileList', 'TTS', {
+      modelType,
+    });
+  }, []);
+  
+  const deleteVoiceFile = useCallback((filename: string) => {
+    window.electron.ipcRenderer.sendMessage(channel, 'deleteVoiceFile', 'TTS', {
+      filename,
     });
   }, []);
   
@@ -93,6 +107,10 @@ export default function useConfigs() {
             setLoading(false);
             // 清理状态，避免重复创建
             setTimeout(() => setSelectedVoiceFile(null), 100);
+          } else if (actionName === 'initVoiceFileList' && service === 'TTS') {
+            console.debug('voice file list payload', payload);
+            setVoiceFileList(payload.fileList || []);
+            setLoading(false);
           }
         } else if (messageType === MESSAGE_TYPE.INFO) {
           notification.success({
@@ -138,5 +156,8 @@ export default function useConfigs() {
     loading,
     queryVoice,
     selectedVoiceFile,
+    voiceFileList,
+    initVoiceFileList,
+    deleteVoiceFile,
   };
 }

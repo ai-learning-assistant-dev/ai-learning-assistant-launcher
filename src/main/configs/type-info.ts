@@ -2,7 +2,7 @@ import type { Channels } from '../ipc-data-type';
 import { ContainerCreateMountOption } from '../podman-desktop/libpod-dockerode';
 
 export type ServiceName = 'obsidianApp' | 'obsidianVault' | 'container' | 'TTS';
-export type ActionName = 'query' | 'update' | 'selectVoiceFile';
+export type ActionName = 'query' | 'update' | 'selectVoiceFile' | 'initVoiceFileList' | 'deleteVoiceFile';
 
 export const channel: Channels = 'configs';
 

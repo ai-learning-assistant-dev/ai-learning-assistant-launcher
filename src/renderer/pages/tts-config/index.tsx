@@ -24,6 +24,9 @@ export default function TTSConfig() {
     action: configsAction,
     queryVoice,
     selectedVoiceFile,
+    voiceFileList,
+    initVoiceFileList,
+    deleteVoiceFile,
   } = useConfigs();
   const [forceNvidia, setForceNvidia] = useState(false);
   const [forceCPU, setForceCPU] = useState(false);
@@ -45,9 +48,10 @@ export default function TTSConfig() {
     }
   }, [containerConfig]);
 
-  // 加载语音配置
+  // 加载语音配置和初始化文件列表
   useEffect(() => {
     loadVoiceConfigs();
+    initVoiceFileList(currentModel);
   }, []);
 
   // 当voiceConfig更新时，同步到本地状态
@@ -89,10 +93,11 @@ export default function TTSConfig() {
   const handleModelSwitch = (modelType: 'gpu' | 'cpu') => {
     if (modelType !== currentModel) {
       setCurrentModel(modelType);
-      // 切换模型时重新加载配置
+      // 切换模型时重新加载配置和文件列表
       setVoiceConfigsLoading(true);
       try {
         queryVoice(modelType);
+        initVoiceFileList(modelType);
       } catch (error) {
         message.error('加载语音配置失败');
         console.error('Error loading voice configs:', error);
@@ -154,9 +159,15 @@ export default function TTSConfig() {
   };
 
   const handleDeleteVoice = (index: number) => {
+    const voiceToDelete = voiceConfigs[index];
     const newConfigs = voiceConfigs.filter((_, i) => i !== index);
     setVoiceConfigs(newConfigs);
     setVoiceConfigsChanged(true);
+    
+    // 记录删除文件操作
+    if (voiceToDelete && voiceToDelete.filename) {
+      deleteVoiceFile(voiceToDelete.filename);
+    }
   };
 
   const handleSaveVoiceConfigs = async () => {
@@ -188,8 +199,6 @@ export default function TTSConfig() {
       scrollContainerRef.current.scrollBy({ left: 320, behavior: 'smooth' });
     }
   };
-
-
 
   return (
     <div className="tts-config">
