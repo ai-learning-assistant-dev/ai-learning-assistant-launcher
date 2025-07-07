@@ -95,3 +95,6 @@ out/
 *.exe
 *.zip
 NUL
+
+local/
+external-resouces/ai-assistant-backend/

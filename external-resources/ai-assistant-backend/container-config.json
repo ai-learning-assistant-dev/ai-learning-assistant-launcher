@@ -2,16 +2,64 @@
   "ASR": {
     "port": [
       {
-        "container": 8000,
-        "host": 8000
+        "container": 9000,
+        "host": 9000
       }
-    ]
+    ],
+    "command": {
+      "start": [
+        "sh",
+        "./start.sh"
+      ],
+      "stop": [
+        "sh",
+        "./stop.sh"
+      ]
+    },
+    "env": {
+      "SERVICE_TYPE": "asr"
+    }
   },
   "TTS": {
     "port": [
       {
-        "container": 9000,
-        "host": 9000
+        "container": 8000,
+        "host": 8000
+      }
+    ],
+    "command": {
+      "start": [
+        "sh",
+        "./start.sh"
+      ],
+      "stop": [
+        "sh",
+        "./stop.sh"
+      ]
+    },
+    "env": {
+      "SERVICE_TYPE": "tts"
+    },
+    "gpuConfig": {
+      "forceNvidia": false,
+      "forceCPU": false
+    },
+    "mounts": [
+      {
+        "Destination": "/app/tts/models/kokoro/voices",
+        "Source": "external-resources/ai-assistant-backend/kokoro/voices",
+        "Propagation": "rprivate",
+        "Type": "bind",
+        "RW": true,
+        "Options": ["rbind"]
+      },
+      {
+        "Destination": "/app/tts/models/index-tts/voices",
+        "Source": "external-resources/ai-assistant-backend/index-tts/voices",
+        "Propagation": "rprivate",
+        "Type": "bind",
+        "RW": true,
+        "Options": ["rbind"]
       }
     ]
   },

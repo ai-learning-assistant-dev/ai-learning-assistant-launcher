@@ -1,5 +1,12 @@
-import { Button, List, Modal, notification, Typography } from 'antd';
-import { Link } from 'react-router-dom';
+import {
+  Button,
+  List,
+  Modal,
+  notification,
+  Popconfirm,
+  Typography,
+} from 'antd';
+import { Link, NavLink } from 'react-router-dom';
 import './index.scss';
 import type { ContainerInfo } from 'dockerode';
 import { useEffect, useState } from 'react';
@@ -21,6 +28,7 @@ interface ContainerItem {
   name: string;
   serviceName: ServiceName;
   state: '还未安装' | '已经停止' | '正在运行';
+  port: number;
 }
 
 function getState(container?: ContainerInfo): ContainerItem['state'] {
@@ -35,7 +43,12 @@ function getState(container?: ContainerInfo): ContainerItem['state'] {
 
 export default function AiService() {
   const { containers, action, loading } = useDocker();
-  const { isInstallWSL, action: cmdAction, loading: cmdLoading } = useCmd();
+  const {
+    isInstallWSL,
+    checkingWsl,
+    action: cmdAction,
+    loading: cmdLoading,
+  } = useCmd();
   const [showRebootModal, setShowRebootModal] = useState(false);
   const [operating, setOperating] = useState<{
     serviceName: ServiceName;
@@ -62,25 +75,28 @@ export default function AiService() {
   )[0];
 
   const containerInfos: ContainerItem[] = [
-    {
-      name: '对话机器人',
-      serviceName: 'LLM',
-      state: getState(llmContainer),
-    },
+    // {
+    //   name: '对话机器人',
+    //   serviceName: 'LLM',
+    //   state: getState(llmContainer),
+    //   port: 3000,
+    // },
     {
       name: '语音转文字',
       serviceName: 'ASR',
       state: getState(asrContainer),
+      port: 9000,
     },
     {
       name: '文字转语音',
       serviceName: 'TTS',
       state: getState(ttsContainer),
+      port: 8000,
     },
   ];
 
   function click(actionName: ActionName, serviceName: ServiceName) {
-    if (loading) {
+    if (loading || checkingWsl) {
       notification.warning({
         message: '请等待上一个操作完成后再操作',
         placement: 'topRight',
@@ -137,23 +153,50 @@ export default function AiService() {
         header={
           <div className="header-container">
             <Link to="/hello">
-              <Button>返回</Button>
+              <Button disabled={loading || cmdLoading}>返回</Button>
             </Link>
-            <Button
-              disabled={isInstallWSL}
-              type="primary"
-              shape="round"
-              loading={
-                cmdLoading &&
-                cmdOperating.serviceName === 'WSL' &&
-                cmdOperating.actionName === 'install'
-              }
-              onClick={() => clickCmd('install', 'WSL')}
-            >
-              {isInstallWSL
-                ? '已启用Windows自带的WSL组件'
-                : '开启本地AI服务前请点我启用Windows自带的WSL组件'}
-            </Button>
+            <div>
+              <Popconfirm
+                title="删除所有服务和缓存"
+                description="你确定要删除所有服务和缓存吗？删除后再次安装会需要很长时间！"
+                onConfirm={() => clickCmd('remove', 'podman')}
+                okText="确认删除"
+                cancelText="不删除"
+              >
+                <Button
+                  disabled={!isInstallWSL || cmdLoading || loading}
+                  type="primary"
+                  shape="round"
+                  danger
+                  loading={
+                    cmdLoading &&
+                    cmdOperating.serviceName === 'podman' &&
+                    cmdOperating.actionName === 'remove'
+                  }
+                >
+                  删除所有服务和缓存
+                </Button>
+              </Popconfirm>
+              <div style={{ width: '20px', display: 'inline-block' }}></div>
+              <Button
+                disabled={isInstallWSL}
+                type="primary"
+                shape="round"
+                loading={
+                  checkingWsl ||
+                  (cmdLoading &&
+                    cmdOperating.serviceName === 'WSL' &&
+                    cmdOperating.actionName === 'install')
+                }
+                onClick={() => clickCmd('install', 'WSL')}
+              >
+                {checkingWsl
+                  ? '正在检查WSL安装状态'
+                  : isInstallWSL
+                    ? '已启用Windows自带的WSL组件'
+                    : '开启本地AI服务前请点我启用Windows自带的WSL组件'}
+              </Button>
+            </div>
           </div>
         }
         bordered
@@ -161,11 +204,23 @@ export default function AiService() {
         renderItem={(item) => (
           <List.Item
             actions={[
+              `访问地址：http://127.0.0.1:${item.port}`,
+              <NavLink key="config" to={`/${item.serviceName}-config`}>
+                <Button
+                  shape="round"
+                  size="small"
+                  disabled={
+                    !isInstallWSL || checkingWsl || loading || cmdLoading
+                  }
+                >
+                  设置
+                </Button>
+              </NavLink>,
               item.state !== '还未安装' && (
                 <Button
                   shape="round"
                   size="small"
-                  disabled={!isInstallWSL}
+                  disabled={!isInstallWSL || checkingWsl || cmdLoading}
                   loading={
                     loading &&
                     operating.serviceName === item.serviceName &&
@@ -180,7 +235,7 @@ export default function AiService() {
                 <Button
                   shape="round"
                   size="small"
-                  disabled={!isInstallWSL}
+                  disabled={!isInstallWSL || checkingWsl || cmdLoading}
                   loading={
                     loading &&
                     operating.serviceName === item.serviceName &&
@@ -195,43 +250,54 @@ export default function AiService() {
                 <Button
                   shape="round"
                   size="small"
-                  disabled={!isInstallWSL}
+                  disabled={!isInstallWSL || checkingWsl || cmdLoading}
                   loading={
                     loading &&
                     operating.serviceName === item.serviceName &&
                     operating.actionName === 'start'
                   }
+                  type="primary"
                   onClick={() => click('start', item.serviceName)}
                 >
                   启动
                 </Button>
               ),
               item.state === '已经停止' && (
-                <Button
-                  shape="round"
-                  size="small"
-                  disabled={!isInstallWSL}
-                  loading={
-                    loading &&
-                    operating.serviceName === item.serviceName &&
-                    operating.actionName === 'remove'
-                  }
-                  onClick={() => click('remove', item.serviceName)}
+                <Popconfirm
+                  title="删除容器"
+                  description="你确定要删除容器？删除后再次安装会需要较长时间！"
+                  onConfirm={() => click('remove', item.serviceName)}
+                  okText="确认删除"
+                  cancelText="不删除"
                 >
-                  删除
-                </Button>
+                  <Button
+                    shape="round"
+                    size="small"
+                    disabled={!isInstallWSL || checkingWsl || cmdLoading}
+                    loading={
+                      loading &&
+                      operating.serviceName === item.serviceName &&
+                      operating.actionName === 'remove'
+                    }
+                    color="danger"
+                    danger
+                  >
+                    删除
+                  </Button>
+                </Popconfirm>
               ),
               item.state === '还未安装' && (
                 <Button
                   shape="round"
                   size="small"
-                  disabled={!isInstallWSL}
+                  disabled={!isInstallWSL || checkingWsl || cmdLoading}
                   loading={
                     loading &&
                     operating.serviceName === item.serviceName &&
                     operating.actionName === 'install'
                   }
                   onClick={() => click('install', item.serviceName)}
+                  type="primary"
                 >
                   安装
                 </Button>

@@ -6,6 +6,11 @@ import {
   channel,
   ServiceName,
 } from '../../../main/podman-desktop/type-info';
+import {
+  ActionName as CmdActionName,
+  channel as cmdChannel,
+  ServiceName as CmdServiceName,
+} from '../../../main/cmd/type-info';
 import { MESSAGE_TYPE, MessageData } from '../../../main/ipc-data-type';
 
 export default function useDocker() {
@@ -35,10 +40,14 @@ export default function useDocker() {
           notification.error({ message: data, placement: 'topRight' });
           setLoading(false);
         } else if (messageType === MESSAGE_TYPE.DATA) {
-          setContainers(
-            (data as MessageData<string, string, Dockerode.ContainerInfo[]>)
-              .data,
-          );
+          const d = data as MessageData<
+            ActionName,
+            ServiceName,
+            Dockerode.ContainerInfo[] | string
+          >;
+          if (d.action === 'query') {
+            setContainers(d.data as Dockerode.ContainerInfo[]);
+          }
         } else if (messageType === MESSAGE_TYPE.INFO) {
           notification.success({ message: data, placement: 'topRight' });
           queryContainers();
@@ -53,8 +62,21 @@ export default function useDocker() {
       },
     );
 
+    const cancel2 = window.electron?.ipcRenderer.on(
+      cmdChannel,
+      (messageType: MESSAGE_TYPE, data: any) => {
+        if (messageType === MESSAGE_TYPE.DATA) {
+          const d = data as MessageData<CmdActionName, CmdServiceName, boolean>;
+          if (d.action === 'remove' && d.service === 'podman') {
+            setContainers([]);
+          }
+        }
+      },
+    );
+
     return () => {
       cancel();
+      cancel2();
     };
   }, [setContainers]);
 

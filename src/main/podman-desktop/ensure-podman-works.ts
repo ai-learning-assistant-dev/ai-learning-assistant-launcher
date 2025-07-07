@@ -4,6 +4,8 @@ import { appPath, Exec } from '../exec';
 import { isWindows } from '../exec/util';
 import { imageNameDict, imagePathDict, ServiceName } from './type-info';
 import { Channels, MESSAGE_TYPE } from '../ipc-data-type';
+import { isWSLInstall } from '../cmd';
+import { wait } from '../util';
 
 const commandLine = new Exec();
 
@@ -29,15 +31,6 @@ export async function getPodmanSocketPath(
   return socketPath;
 }
 
-async function isWSLInstall() {
-  const output = await commandLine.exec('wsl', ['--status']);
-  console.debug('isWSLInstall', output);
-  if (output.stdout.indexOf('Wsl/WSL_E_WSL_OPTIONAL_COMPONENT_REQUIRED') >= 0) {
-    return false;
-  }
-  return true;
-}
-
 async function isPodmanInstall() {
   const output = await commandLine.exec(getPodmanCli(), ['--version']);
   console.debug('isPodmanInstall', output);
@@ -58,96 +51,107 @@ async function isPodmanInit() {
 
 async function isPodmanStart() {
   const output = await commandLine.exec(getPodmanCli(), ['machine', 'list']);
-  console.debug('isPodmanStart', output, output.stdout.indexOf('Currently running'));
+  console.debug(
+    'isPodmanStart',
+    output,
+    output.stdout.indexOf('Currently running'),
+  );
   if (output.stdout.indexOf('Currently running') >= 0) {
     return true;
+  } else if (output.stdout.indexOf('Currently starting') >= 0) {
+    // 启动podman大约需要10秒，但是这个命令会立即返回
+    await wait(10000);
+    const output2 = await commandLine.exec(getPodmanCli(), ['machine', 'list']);
+    console.debug(
+      'isPodmanStart2',
+      output2,
+      output2.stdout.indexOf('Currently running'),
+    );
+    if (output2.stdout.indexOf('Currently running') >= 0) {
+      return true;
+    }
   }
   return false;
 }
 
-async function isImageReady(serviceName: ServiceName) {
+export async function isImageReady(serviceName: ServiceName) {
   console.debug('serviceName', serviceName);
+  const [imageName, imageTag] = imageNameDict[serviceName].split(':');
+  const matchNameRegex = RegExp(imageName + '\\s*' + imageTag);
   const output = await commandLine.exec(getPodmanCli(), ['image', 'list']);
   console.debug('isImageReady', output);
-  if (
-    output.stdout.indexOf(imageNameDict[serviceName].replace(':latest', '')) >=
-    0
-  ) {
+  if (matchNameRegex.test(output.stdout)) {
     return true;
   }
   return false;
 }
 
-async function loadImage(serviceName: ServiceName) {
-  const imagePath = path.join(
-      appPath,
-      'external-resources',
-      'ai-assistant-backend',
-      imagePathDict[serviceName],
-    )
+export async function loadImageFromPath(
+  serviceName: ServiceName,
+  imagePath: string,
+) {
+  try {
+    await commandLine.exec(getPodmanCli(), [
+      'image',
+      'rm',
+      imageNameDict[serviceName],
+    ]);
+  } catch (e) {
+    console.warn(e);
+  }
+
   const output = await commandLine.exec(getPodmanCli(), [
     'load',
     '-i',
-    imagePath
+    imagePath,
   ]);
-  console.debug("loadImage",output)
-  const id = output.stdout.split(":").pop();
-  if(output.stdout.indexOf("Loaded image")>=0 &&id&&id.length > 25){
+  console.debug('loadImage', output);
+  const id = output.stdout.replace('Loaded image:', '').trim();
+  if (output.stdout.indexOf('Loaded image:') >= 0 && id && id.length > 3) {
+    console.debug('tag image');
     const output2 = await commandLine.exec(getPodmanCli(), [
       'tag',
       id,
       imageNameDict[serviceName],
     ]);
-    console.debug("podman tag", output2)
+    console.debug('podman tag', output2);
+    console.debug('remove default image tag');
+    if (id !== imageNameDict[serviceName]) {
+      const output3 = await commandLine.exec(getPodmanCli(), [
+        'image',
+        'rm',
+        id,
+      ]);
+      console.debug('podman image rm', output3);
+    }
     return true;
-  }else{
+  } else {
     return false;
   }
+}
+
+async function loadImage(serviceName: ServiceName) {
+  const imagePath = path.join(
+    appPath,
+    'external-resources',
+    'ai-assistant-backend',
+    imagePathDict[serviceName],
+  );
+  return loadImageFromPath(serviceName, imagePath);
 }
 
 export async function installWSLMock() {
   return false;
 }
 
-export async function installWSL() {
-  try {
-    const result1 = await commandLine.exec(
-      'dism.exe',
-      [
-        '/online',
-        '/enable-feature',
-        '/featurename:Microsoft-Windows-Subsystem-Linux',
-        '/all',
-        '/norestart',
-      ],
-      { isAdmin: true },
-    );
-    console.debug('installWSL', result1);
-  } catch (e) {
-    console.warn(e);
-  }
-
-  try {
-    const result2 = await commandLine.exec(
-      'dism.exe',
-      [
-        '/online',
-        '/enable-feature',
-        '/featurename:VirtualMachinePlatform',
-        '/all',
-        '/norestart',
-      ],
-      { isAdmin: true },
-    );
-  } catch (e) {
-    console.warn(e);
-  }
-  return true;
-}
-
 export async function installPodman() {
   await commandLine.exec(
-    path.join(appPath, 'external-resources', 'ai-assistant-backend', 'install_podman.exe'),
+    path.join(
+      appPath,
+      'external-resources',
+      'ai-assistant-backend',
+      'install_podman.exe',
+    ),
     ['/s'],
     { isAdmin: true },
   );
@@ -155,7 +159,18 @@ export async function installPodman() {
 }
 
 export async function initPodman() {
-  const output = await commandLine.exec(getPodmanCli(), ['machine', 'init']);
+  const podmanMachineImagePath = path.join(
+    appPath,
+    'external-resources',
+    'ai-assistant-backend',
+    'podman_machine.tar.zst',
+  );
+  const imagePathArgs = isWindows() ? ['--image', podmanMachineImagePath] : [];
+  const output = await commandLine.exec(getPodmanCli(), [
+    'machine',
+    'init',
+    ...imagePathArgs,
+  ]);
   console.debug('initPodman', output);
   return true;
 }
@@ -196,7 +211,9 @@ export async function setupCDI() {
   await commandLine.exec(getPodmanCli(), [
     'machine',
     'ssh',
-    `sudo curl -s -L https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo` +
+    `curl -s -L https://mirrors.ustc.edu.cn/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo` +
+      ` | sed 's#nvidia.github.io/libnvidia-container/stable/#mirrors.ustc.edu.cn/libnvidia-container/stable/#g'` +
+      ` | sed 's#nvidia.github.io/libnvidia-container/experimental/#mirrors.ustc.edu.cn/libnvidia-container/experimental/#g'` +
       ` | sudo tee /etc/yum.repos.d/nvidia-container-toolkit.repo`,
   ]);
   await commandLine.exec(getPodmanCli(), [
@@ -216,7 +233,7 @@ export async function ensurePodmanWorks(
   event: IpcMainEvent,
   channel: Channels,
 ) {
-  event.reply(channel,MESSAGE_TYPE.PROGRESS,"正在启动WSL，这需要一点时间")
+  event.reply(channel, MESSAGE_TYPE.PROGRESS, '正在启动WSL，这需要一点时间');
   await checkAndSetup(isWSLInstall, installWSLMock, {
     event,
     channel,
@@ -313,7 +330,7 @@ async function checkAndSetup(
       progress &&
         progress.event.reply(
           progress.channel,
-          MESSAGE_TYPE.PROGRESS_ERROR,
+          MESSAGE_TYPE.ERROR,
           setupErrorMessage,
         );
       throw e;
@@ -323,11 +340,47 @@ async function checkAndSetup(
     progress &&
       progress.event.reply(
         progress.channel,
-        MESSAGE_TYPE.PROGRESS_ERROR,
+        MESSAGE_TYPE.ERROR,
         checkErrorMessage,
       );
     console.error(checkErrorMessage);
     throw new Error(checkErrorMessage || '错误');
   }
   return checked;
+}
+
+export async function removeImage(serviceName: ServiceName) {
+  const result = await commandLine.exec(getPodmanCli(), [
+    'image',
+    'rm',
+    imageNameDict[serviceName],
+  ]);
+  console.debug(result);
+  const result2 = await commandLine.exec(getPodmanCli(), [
+    'image',
+    'prune',
+    '--all',
+    '--force',
+  ]);
+  console.debug(result2);
+  return result;
+}
+
+export async function haveNvidia() {
+  try {
+    const result = await commandLine.exec('nvidia-smi', [], { shell: true });
+    console.debug('haveNvidia', result);
+    if (result.stdout.indexOf('Driver Version:') >= 0) {
+      return true;
+    } else {
+      return false;
+    }
+  } catch (e) {
+    console.warn(e);
+    return false;
+  }
+}
+
+export async function resetPodman() {
+  return commandLine.exec(getPodmanCli(), ['machine', 'reset', '--force']);
 }

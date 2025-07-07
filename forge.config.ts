@@ -11,12 +11,12 @@ import { FuseV1Options, FuseVersion } from '@electron/fuses';
 import { mainConfig } from './webpack.main.config';
 import { rendererConfig } from './webpack.renderer.config';
 
-
-import path from 'node:path'
-import cpy from 'cpy'
+import path from 'node:path';
+import cpy from 'cpy';
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
+    icon: path.join(__dirname, 'icons', 'icon'),
   },
   rebuildConfig: {},
   makers: [
@@ -56,31 +56,33 @@ const config: ForgeConfig = {
     }),
   ],
   hooks: {
-    async postPackage(config: ForgeConfig, packageResult: { outputPaths: string[] }) {
+    async postPackage(
+      config: ForgeConfig,
+      packageResult: { outputPaths: string[] },
+    ) {
       const { outputPaths } = packageResult;
-      console.debug("buildPath", outputPaths)
+      console.debug('buildPath', outputPaths);
       const buildPath = outputPaths[0];
       try {
         await cpy(
-          path.join(
-            __dirname,
-            'external-resources',
-            "**"
-          ),
-          path.join(
-            buildPath,
-            'external-resources'
-          ),
-          {
-
-          }
-        )
+          [
+            path.join(__dirname, 'external-resources', '**'),
+            '!' +
+              path.join(
+                __dirname,
+                'external-resources',
+                'ai-assistant-backend',
+                'ai-voice.tar',
+              ),
+          ],
+          path.join(buildPath, 'external-resources'),
+        );
       } catch (e) {
         console.error(e);
         throw e;
       }
-    }
-  }
+    },
+  },
 };
 
 export default config;

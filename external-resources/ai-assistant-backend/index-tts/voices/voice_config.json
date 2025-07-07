@@ -1,0 +1,32 @@
+{
+  "voices": [
+    {
+      "name": "男性声音1",
+      "description": "男性声音，声音偏平稳",
+      "filename": "male1.wav",
+      "text": "秋天的风暴把它连叶带根全部吹走",
+      "language": "Chinese"
+    },
+    {
+      "name": "女性声音1",
+      "description": "女性声音，声音带情绪",
+      "filename": "female1.wav",
+      "text": "咦，树上只有自己呀，一定是听错了。",
+      "language": "Chinese"
+    },
+    {
+      "name": "女性声音2",
+      "description": "女性声音，比较平稳",
+      "filename": "female2.wav",
+      "text": "那个可能就是1月初的时候，开机有延迟导致的",
+      "language": "Chinese"
+    },
+    {
+      "name": "女性声音3",
+      "description": "女性声音，比较平稳",
+      "filename": "female3.wav",
+      "text": "能用的办法试了个遍，沙子还是哗哗地往下掉。",
+      "language": "Chinese"
+    }
+  ]
+}

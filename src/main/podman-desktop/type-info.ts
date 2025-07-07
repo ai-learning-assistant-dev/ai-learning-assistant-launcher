@@ -1,4 +1,4 @@
-import type { ContainerConfig } from '../configs';
+import type { ContainerConfig } from '../configs/type-info';
 import { Channels } from '../ipc-data-type';
 
 export type ServiceName = 'TTS' | 'ASR' | 'LLM';
@@ -8,29 +8,31 @@ export type ActionName =
   | 'start'
   | 'stop'
   | 'remove'
-  | 'update';
+  | 'update'
+  | 'logs';
 
 export const containerNameDict: Record<ServiceName, string> = {
-  ASR: 'ASR_TTS',
-  TTS: 'ASR_TTS',
-  LLM: '',
+  ASR: 'ASR',
+  TTS: 'TTS',
+  LLM: 'LLM',
 };
 
 export const imageNameDict: Record<ServiceName, string> = {
   ASR: 'ai-voice-backend:latest',
   TTS: 'ai-voice-backend:latest',
-  LLM: '',
+  LLM: 'LLM',
 };
 
 export const imagePathDict: Record<ServiceName, string> = {
   ASR: 'ai-voice.tar',
   TTS: 'ai-voice.tar',
-  LLM: '',
+  LLM: 'LLM',
 };
 
 export const podMachineName = 'podman-machine-default';
 
 export const channel: Channels = 'docker';
+export const containerLogsChannel: Channels = 'container-logs';
 
 /** For N Service in One Container
  * merge all config for list service into one container
@@ -41,6 +43,11 @@ export function getMergedContainerConfig(
 ) {
   const mergedConfig: ContainerConfig['ASR'] = {
     port: [],
+    command: {
+      start: [],
+      stop: [],
+    },
+    env: { }
   };
 
   const containerName = containerNameDict[serviceName];
@@ -64,6 +71,26 @@ export function getMergedContainerConfig(
         0
       ) {
         mergedConfig.port.push(p);
+      }
+    }
+
+    for (const c of config.command.start) {
+      if (
+        mergedConfig.command.start.findIndex(
+          (item) => item === c,
+        ) < 0
+      ) {
+        mergedConfig.command.start.push(c);
+      }
+    }
+
+    for (const c of config.command.stop) {
+      if (
+        mergedConfig.command.stop.findIndex(
+          (item) => item === c,
+        ) < 0
+      ) {
+        mergedConfig.command.stop.push(c);
       }
     }
   }
