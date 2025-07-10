@@ -135,6 +135,13 @@ export default async function init(ipcMain: IpcMain) {
                   MESSAGE_TYPE.DATA,
                   new MessageData(action, serviceName, { filename: fileName })
                 );
+              } else if (result.canceled) {
+                // 用户取消选择，发送取消响应给前端
+                event.reply(
+                  channel,
+                  MESSAGE_TYPE.DATA,
+                  new MessageData(action, serviceName, { canceled: true })
+                );
               }
             } catch (error) {
               console.error('Error selecting voice file:', error);
