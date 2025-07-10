@@ -366,9 +366,10 @@ export function getObsidianVaultConfig() {
   const vaults: ObsidianVaultConfig[] = [];
   for (const key in config.vaults) {
     if (Object.prototype.hasOwnProperty.call(config.vaults, key)) {
+      const p = path.parse(config.vaults[key].path);
       vaults.push({
         id: key,
-        name: path.parse(config.vaults[key].path).name,
+        name: p.base,
         path: config.vaults[key].path,
       });
     }
