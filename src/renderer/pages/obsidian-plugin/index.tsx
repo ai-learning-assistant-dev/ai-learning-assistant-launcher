@@ -51,9 +51,9 @@ export default function ObsidianPlugin() {
         }
         bordered
       >
-        {obsidianPlugins?.map((plugin) => (
+        {obsidianPlugins?.map((plugin, index) => (
           <List.Item
-            key={plugin.id}
+            key={index}
             actions={[
               plugin.manageByLauncher && !plugin.isInstalled && (
                 <Button
