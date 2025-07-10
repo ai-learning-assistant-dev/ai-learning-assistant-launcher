@@ -15,7 +15,7 @@ import { MESSAGE_TYPE, MessageData } from '../../../main/ipc-data-type';
 
 export default function useDocker() {
   const [containers, setContainers] = useState<Dockerode.ContainerInfo[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   function action(actionName: ActionName, serviceName: ServiceName) {
     if (loading) {
       notification.warning({
@@ -47,6 +47,12 @@ export default function useDocker() {
           >;
           if (d.action === 'query') {
             setContainers(d.data as Dockerode.ContainerInfo[]);
+            notification.success({
+              message: '获取服务状态成功!',
+              placement: 'topRight',
+              duration: 2,
+            });
+            setLoading(false);
           }
         } else if (messageType === MESSAGE_TYPE.INFO) {
           notification.success({ message: data, placement: 'topRight' });
@@ -82,6 +88,11 @@ export default function useDocker() {
 
   useEffect(() => {
     queryContainers();
+    notification.success({
+      message: '正在获取服务状态，请稍等!',
+      placement: 'topRight',
+      duration: 2,
+    });
   }, []);
 
   return {
