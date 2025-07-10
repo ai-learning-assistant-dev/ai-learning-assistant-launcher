@@ -66,11 +66,11 @@ export default async function init(ipcMain: IpcMain) {
         }
       } else {
         console.debug('还没连接到docker');
-        event.reply(
-          containerLogsChannel,
-          MESSAGE_TYPE.WARNING,
-          '还没连接到docker',
-        );
+        // event.reply(
+        //   containerLogsChannel,
+        //   MESSAGE_TYPE.WARNING,
+        //   '还没连接到docker',
+        // );
         connectionGlobal = await connect();
       }
     },

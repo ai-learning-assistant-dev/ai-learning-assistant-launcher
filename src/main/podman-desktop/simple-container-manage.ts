@@ -33,15 +33,16 @@ async function improveStablebility<T>(func: () => Promise<T>) {
   try {
     return await func();
   } catch (e) {
+    console.debug('稳定器检测到任务执行出错，正在尝试重启podman');
     console.warn(e);
     if (e) {
       try {
-        console.warn(e);
         if (
           e &&
           e.message &&
           (e.message.indexOf('socket hang up') >= 0 ||
-            e.message.indexOf('exitCode: 125') >= 0)
+            e.message.indexOf('exitCode: 125') >= 0 ||
+            e.message.indexOf('connect ENOENT') >= 0)
         ) {
           await stopPodman();
           await wait(1000);
@@ -56,7 +57,6 @@ async function improveStablebility<T>(func: () => Promise<T>) {
         throw e;
       }
     } else {
-      console.error(e);
       throw e;
     }
   }
