@@ -15,8 +15,16 @@ import { MESSAGE_TYPE, MessageData } from '../../../main/ipc-data-type';
 
 export default function useDocker() {
   const [containers, setContainers] = useState<Dockerode.ContainerInfo[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [initing, setIniting] = useState(true);
   function action(actionName: ActionName, serviceName: ServiceName) {
+    if (initing) {
+      notification.warning({
+        message: '正在获取服务状态，请稍等',
+        placement: 'topRight',
+      });
+      return;
+    }
     if (loading) {
       notification.warning({
         message: '请等待上一个操作完成后再操作',
@@ -47,12 +55,9 @@ export default function useDocker() {
           >;
           if (d.action === 'query') {
             setContainers(d.data as Dockerode.ContainerInfo[]);
-            notification.success({
-              message: '获取服务状态成功!',
-              placement: 'topRight',
-              duration: 2,
-            });
-            setLoading(false);
+            if (initing) {
+              setIniting(false);
+            }
           }
         } else if (messageType === MESSAGE_TYPE.INFO) {
           notification.success({ message: data, placement: 'topRight' });
@@ -84,20 +89,16 @@ export default function useDocker() {
       cancel();
       cancel2();
     };
-  }, [setContainers]);
+  }, [initing, setContainers, setIniting, setLoading]);
 
   useEffect(() => {
     queryContainers();
-    notification.success({
-      message: '正在获取服务状态，请稍等!',
-      placement: 'topRight',
-      duration: 2,
-    });
   }, []);
 
   return {
     containers,
     action,
     loading,
+    initing,
   };
 }
