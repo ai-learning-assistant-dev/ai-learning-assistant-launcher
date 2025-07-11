@@ -47,6 +47,7 @@ export default function useDocker() {
         if (messageType === MESSAGE_TYPE.ERROR) {
           notification.error({ message: data, placement: 'topRight' });
           setLoading(false);
+          setIniting(false);
         } else if (messageType === MESSAGE_TYPE.DATA) {
           const d = data as MessageData<
             ActionName,
