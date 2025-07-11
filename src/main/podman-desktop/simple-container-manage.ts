@@ -156,6 +156,16 @@ export default async function init(ipcMain: IpcMain) {
                     MESSAGE_TYPE.ERROR,
                     '无法识别NVIDIA显卡，请修改设置后重试',
                   );
+                } else if (
+                  e &&
+                  e.message &&
+                  e.message.indexOf('No such file or directory') >= 0
+                ) {
+                  await reCreateContainerAndStart(
+                    event,
+                    container,
+                    serviceName,
+                  );
                 } else {
                   event.reply(channel, MESSAGE_TYPE.ERROR, '无法启动服务');
                 }
@@ -249,10 +259,20 @@ export default async function init(ipcMain: IpcMain) {
               }
             | undefined = await improveStablebility(async () => {
             try {
-              return createContainer(serviceName);
+              // 这里不要简化成return createContainer(serviceName);会导致无法捕获错误
+              const result = await createContainer(serviceName);
+              return result;
             } catch (e) {
               console.debug('安装服务失败', e);
-              event.reply(channel, MESSAGE_TYPE.ERROR, '安装服务失败');
+              if (e && e.message && e.message.indexOf('ENOENT') >= 0) {
+                event.reply(
+                  channel,
+                  MESSAGE_TYPE.ERROR,
+                  '启动器安装目录缺少语音转文字配置文件，请重新下载安装启动器',
+                );
+              } else {
+                throw e;
+              }
               return;
             }
           });
@@ -361,4 +381,76 @@ export async function selectImageFile(serviceName: ServiceName) {
     }
   }
   return false;
+}
+
+async function reCreateContainerAndStart(
+  event: Electron.IpcMainEvent,
+  container: Dockerode.Container,
+  serviceName: ServiceName,
+) {
+  console.debug('正在重新创建服务', serviceName);
+  await container.remove();
+  let newContainerInfo;
+  try {
+    newContainerInfo = await createContainer(serviceName);
+  } catch (e) {
+    console.error(e);
+    if (e && e.message && e.message.indexOf('ENOENT') >= 0) {
+      // 这里用INFO是为了触发前端页面刷新
+      event.reply(
+        channel,
+        MESSAGE_TYPE.INFO,
+        '启动器安装目录缺少语音转文字配置文件，请重新下载安装启动器',
+      );
+    } else {
+      // 这里用INFO是为了触发前端页面刷新
+      event.reply(channel, MESSAGE_TYPE.INFO, '重新创建服务失败');
+    }
+    return;
+  }
+
+  const containerName = containerNameDict[serviceName];
+
+  let containerInfos: PodmanContainerInfo[] = [];
+  containerInfos = await improveStablebility(async () => {
+    return connectionGlobal.listPodmanContainers({
+      all: true,
+    });
+  });
+  const containerInfo = containerInfos.filter(
+    (item) => item.Names.indexOf(containerName) >= 0,
+  )[0];
+  const newContainer =
+    containerInfo && connectionGlobal.getContainer(newContainerInfo.Id);
+  if (newContainer) {
+    try {
+      await newContainer.start();
+      event.reply(channel, MESSAGE_TYPE.INFO, '成功启动服务');
+    } catch (e) {
+      console.error(e);
+      if (
+        e &&
+        e.message &&
+        e.message.indexOf('unresolvable CDI devices nvidia.com/gpu=all') >= 0
+      ) {
+        event.reply(
+          channel,
+          MESSAGE_TYPE.ERROR,
+          '无法识别NVIDIA显卡，请修改设置后重试',
+        );
+      } else if (
+        e &&
+        e.message &&
+        e.message.indexOf('No such file or directory') >= 0
+      ) {
+        event.reply(
+          channel,
+          MESSAGE_TYPE.ERROR,
+          '启动器安装目录缺少语音转文字配置文件，请重新下载安装启动器',
+        );
+      }
+    }
+  } else {
+    event.reply(channel, MESSAGE_TYPE.ERROR, '重新创建服务失败');
+  }
 }
