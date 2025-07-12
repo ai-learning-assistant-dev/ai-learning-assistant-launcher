@@ -103,10 +103,16 @@ export default function useConfigs() {
             setLoading(false);
           } else if (actionName === 'selectVoiceFile' && service === 'TTS') {
             console.debug('selected voice file payload', payload);
-            setSelectedVoiceFile(payload.filename);
-            setLoading(false);
-            // 清理状态，避免重复创建
-            setTimeout(() => setSelectedVoiceFile(null), 100);
+            if (payload.canceled) {
+              // 用户取消选择，只重置loading状态
+              setLoading(false);
+            } else {
+              // 用户选择了文件
+              setSelectedVoiceFile(payload.filename);
+              setLoading(false);
+              // 清理状态，避免重复创建
+              setTimeout(() => setSelectedVoiceFile(null), 100);
+            }
           } else if (actionName === 'initVoiceFileList' && service === 'TTS') {
             console.debug('voice file list payload', payload);
             setVoiceFileList(payload.fileList || []);

@@ -42,7 +42,7 @@ function getState(container?: ContainerInfo): ContainerItem['state'] {
 }
 
 export default function AiService() {
-  const { containers, action, loading } = useDocker();
+  const { containers, action, loading, initing } = useDocker();
   const {
     isInstallWSL,
     checkingWsl,
@@ -292,9 +292,10 @@ export default function AiService() {
                   size="small"
                   disabled={!isInstallWSL || checkingWsl || cmdLoading}
                   loading={
-                    loading &&
-                    operating.serviceName === item.serviceName &&
-                    operating.actionName === 'install'
+                    initing ||
+                    (loading &&
+                      operating.serviceName === item.serviceName &&
+                      operating.actionName === 'install')
                   }
                   onClick={() => click('install', item.serviceName)}
                   type="primary"

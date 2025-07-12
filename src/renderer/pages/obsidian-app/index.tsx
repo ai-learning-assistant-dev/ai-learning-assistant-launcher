@@ -65,14 +65,12 @@ export default function ObsidianApp() {
                 安装阅读器
               </Button>
             ),
-            !isInstallObsidian && (
-              <Button
-                key={1}
-                onClick={() => configsAction('update', 'obsidianApp')}
-              >
-                定位阅读器
-              </Button>
-            ),
+            <Button
+              key={1}
+              onClick={() => configsAction('update', 'obsidianApp')}
+            >
+              {isInstallObsidian ? '重新定位阅读器' : '定位阅读器'}
+            </Button>,
             isInstallObsidian && (
               <Button
                 key={2}

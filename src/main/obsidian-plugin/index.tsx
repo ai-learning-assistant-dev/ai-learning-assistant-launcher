@@ -219,10 +219,16 @@ async function copyPluginToVault(pluginId: string, vaultId: string) {
     (item) => item.id === pluginId,
   )[0];
   if (plugin && templatePlugin) {
+    let dirName = path.parse(templatePlugin.path).base;
     if (plugin.isInstalled) {
+      dirName = path.parse(plugin.path).base;
       // rmSync(plugin.path, { recursive: true });
     }
-    const dirName = path.parse(templatePlugin.path).base;
+    console.debug(
+      'cpy',
+      path.join(templatePlugin.path, '**'),
+      path.join(vaultConfig.path, '.obsidian', 'plugins', dirName),
+    );
     await cpy(
       path.join(templatePlugin.path, '**'),
       path.join(vaultConfig.path, '.obsidian', 'plugins', dirName),

@@ -33,22 +33,30 @@ async function improveStablebility<T>(func: () => Promise<T>) {
   try {
     return await func();
   } catch (e) {
+    console.debug('稳定器检测到任务执行出错，正在尝试重启podman');
     console.warn(e);
     if (e) {
       try {
-        console.warn(e);
         if (
           e &&
           e.message &&
           (e.message.indexOf('socket hang up') >= 0 ||
-            e.message.indexOf('exitCode: 125') >= 0)
+            e.message.indexOf('exitCode: 125') >= 0 ||
+            e.message.indexOf('connect ENOENT') >= 0)
         ) {
           await stopPodman();
           await wait(1000);
           await startPodman();
         }
         await wait(1000);
-        connectionGlobal = await connect();
+        try {
+          connectionGlobal = await connect();
+        } catch (e) {
+          console.warn('无法创建podman连接');
+          console.warn(e);
+          connectionGlobal = null;
+          throw e;
+        }
         await wait(1000);
         return func();
       } catch (e) {
@@ -56,7 +64,6 @@ async function improveStablebility<T>(func: () => Promise<T>) {
         throw e;
       }
     } else {
-      console.error(e);
       throw e;
     }
   }
@@ -73,206 +80,253 @@ export default async function init(ipcMain: IpcMain) {
   ipcMain.on(
     channel,
     async (event, action: ActionName, serviceName: ServiceName) => {
-      let imagePath: boolean | string = false;
-      if (action === 'install') {
-        let imageReady = false;
-        try {
-          imageReady = await isImageReady(serviceName);
-        } catch (e) {
-          console.info(e);
-        }
-        if (!imageReady) {
-          imagePath = await selectImageFile(serviceName);
-          if (!imagePath) {
-            event.reply(
-              channel,
-              MESSAGE_TYPE.ERROR,
-              '没有选择到正确的镜像文件',
-            );
+      try {
+        let imagePath: boolean | string = false;
+        if (action === 'install') {
+          let imageReady = false;
+          try {
+            imageReady = await isImageReady(serviceName);
+          } catch (e) {
+            console.info(e);
+          }
+          if (!imageReady) {
+            imagePath = await selectImageFile(serviceName);
+            if (!imagePath) {
+              event.reply(
+                channel,
+                MESSAGE_TYPE.ERROR,
+                '没有选择到正确的镜像文件',
+              );
+              return;
+            }
+          }
+
+          try {
+            await ensurePodmanWorks(event, channel);
+            if (!connectionGlobal) {
+              connectionGlobal = await connect();
+            }
+          } catch (e) {
+            console.error(e);
+            console.debug('安装podman失败');
+            event.reply(channel, MESSAGE_TYPE.ERROR, '安装podman失败');
             return;
           }
         }
 
-        try {
-          await ensurePodmanWorks(event, channel);
-          if (!connectionGlobal) {
-            connectionGlobal = await connect();
+        // 即使一切准备正常，还有可能遇到 ECONNRESET 错误，所以还要掉一个真实的业务接口测试一下
+
+        if (connectionGlobal) {
+          console.debug('podman is ready');
+          let containerInfos: PodmanContainerInfo[] = [];
+          try {
+            containerInfos = await improveStablebility(async () => {
+              const result = await connectionGlobal.listPodmanContainers({
+                all: true,
+              });
+              return result;
+            });
+          } catch (e) {
+            console.debug('无法获取容器列表');
+            console.error(e);
           }
-        } catch (e) {
-          console.error(e);
-          console.debug('安装podman失败');
-          event.reply(channel, MESSAGE_TYPE.ERROR, '安装podman失败');
-          return;
-        }
-      }
+          console.debug('containerInfos', containerInfos);
 
-      // 即使一切准备正常，还有可能遇到 ECONNRESET 错误，所以还要掉一个真实的业务接口测试一下
+          if (action === 'query') {
+            event.reply(
+              channel,
+              MESSAGE_TYPE.DATA,
+              new MessageData(action, serviceName, containerInfos),
+            );
+            return;
+          }
+          console.debug(action, serviceName);
+          const imageName = imageNameDict[serviceName];
+          const containerName = containerNameDict[serviceName];
 
-      if (connectionGlobal) {
-        console.debug('podman is ready');
-        let containerInfos: PodmanContainerInfo[] = [];
-        containerInfos = await improveStablebility(async () => {
-          return connectionGlobal.listPodmanContainers({
-            all: true,
-          });
-        });
-        console.debug('containerInfos', containerInfos);
+          const containerInfo = containerInfos.filter(
+            (item) => item.Names.indexOf(containerName) >= 0,
+          )[0];
+          const container =
+            containerInfo && connectionGlobal.getContainer(containerInfo.Id);
+          console.debug('container', container);
+          if (container) {
+            if (action === 'start') {
+              await improveStablebility(async () => {
+                try {
+                  await container.start();
+                  event.reply(channel, MESSAGE_TYPE.INFO, '成功启动服务');
+                } catch (e) {
+                  console.error(e);
+                  if (
+                    e &&
+                    e.message &&
+                    e.message.indexOf(
+                      'unresolvable CDI devices nvidia.com/gpu=all',
+                    ) >= 0
+                  ) {
+                    event.reply(
+                      channel,
+                      MESSAGE_TYPE.ERROR,
+                      '无法识别NVIDIA显卡，请修改设置后重试',
+                    );
+                  } else if (
+                    e &&
+                    e.message &&
+                    e.message.indexOf('No such file or directory') >= 0
+                  ) {
+                    await reCreateContainerAndStart(
+                      event,
+                      container,
+                      serviceName,
+                    );
+                  } else {
+                    event.reply(channel, MESSAGE_TYPE.ERROR, '无法启动服务');
+                  }
+                }
+              });
+            } else if (action === 'stop') {
+              await improveStablebility(async () => {
+                await container.stop();
+                event.reply(channel, MESSAGE_TYPE.INFO, '成功停止服务');
+              });
+            } else if (action === 'remove') {
+              await improveStablebility(async () => {
+                await container.remove();
+                const imageName = imageNameDict[serviceName];
+                const containerName = containerNameDict[serviceName];
+                let containersHaveSameImage = [];
+                containerInfos.forEach((item) => {
+                  containersHaveSameImage = containersHaveSameImage.concat(
+                    item.Names,
+                  );
+                });
 
-        if (action === 'query') {
-          event.reply(
-            channel,
-            MESSAGE_TYPE.DATA,
-            new MessageData(action, serviceName, containerInfos),
-          );
-          return;
-        }
-        console.debug(action, serviceName);
-        const imageName = imageNameDict[serviceName];
-        const containerName = containerNameDict[serviceName];
+                containersHaveSameImage = containersHaveSameImage.filter(
+                  (item) => {
+                    return (
+                      item !== containerName ||
+                      imageNameDict[item] !== imageName
+                    );
+                  },
+                );
 
-        const containerInfo = containerInfos.filter(
-          (item) => item.Names.indexOf(containerName) >= 0,
-        )[0];
-        const container =
-          containerInfo && connectionGlobal.getContainer(containerInfo.Id);
-        console.debug('container', container);
-        if (container) {
-          if (action === 'start') {
-            await improveStablebility(async () => {
-              try {
-                await container.start();
-                event.reply(channel, MESSAGE_TYPE.INFO, '成功启动服务');
-              } catch (e) {
-                console.error(e);
-                if (
-                  e &&
-                  e.message &&
-                  e.message.indexOf(
-                    'unresolvable CDI devices nvidia.com/gpu=all',
-                  ) >= 0
-                ) {
+                console.debug(
+                  'containersHaveSameImage',
+                  containersHaveSameImage,
+                );
+
+                if (containersHaveSameImage.length === 0) {
+                  await removeImage(serviceName);
+                }
+
+                event.reply(channel, MESSAGE_TYPE.INFO, '成功删除服务');
+              });
+            } else if (action === 'update') {
+              const result = await improveStablebility(async () => {
+                const imagePathForUpdate = await selectImageFile(serviceName);
+                if (imagePathForUpdate) {
                   event.reply(
                     channel,
-                    MESSAGE_TYPE.ERROR,
-                    '无法识别NVIDIA显卡，请修改设置后重试',
+                    MESSAGE_TYPE.PROGRESS,
+                    '正在导入镜像，这可能需要5分钟时间',
                   );
+                  return loadImageFromPath(serviceName, imagePathForUpdate);
                 } else {
-                  event.reply(channel, MESSAGE_TYPE.ERROR, '无法启动服务');
+                  return false;
                 }
-              }
-            });
-          } else if (action === 'stop') {
-            await improveStablebility(async () => {
-              await container.stop();
-              event.reply(channel, MESSAGE_TYPE.INFO, '成功停止服务');
-            });
-          } else if (action === 'remove') {
-            await improveStablebility(async () => {
-              await container.remove();
-              const imageName = imageNameDict[serviceName];
-              const containerName = containerNameDict[serviceName];
-              let containersHaveSameImage = [];
-              containerInfos.forEach((item) => {
-                containersHaveSameImage = containersHaveSameImage.concat(
-                  item.Names,
-                );
               });
-
-              containersHaveSameImage = containersHaveSameImage.filter(
-                (item) => {
-                  return (
-                    item !== containerName || imageNameDict[item] !== imageName
-                  );
-                },
-              );
-
-              console.debug('containersHaveSameImage', containersHaveSameImage);
-
-              if (containersHaveSameImage.length === 0) {
-                await removeImage(serviceName);
-              }
-
-              event.reply(channel, MESSAGE_TYPE.INFO, '成功删除服务');
-            });
-          } else if (action === 'update') {
-            const result = await improveStablebility(async () => {
-              const imagePathForUpdate = await selectImageFile(serviceName);
-              if (imagePathForUpdate) {
+              if (result) {
+                event.reply(channel, MESSAGE_TYPE.PROGRESS, '正在删除旧版服务');
+                await removeContainer(serviceName);
                 event.reply(
                   channel,
                   MESSAGE_TYPE.PROGRESS,
-                  '正在导入镜像，这可能需要5分钟时间',
+                  '正在重新创建新服务',
                 );
-                return loadImageFromPath(serviceName, imagePathForUpdate);
+                try {
+                  await createContainer(serviceName);
+                  event.reply(channel, MESSAGE_TYPE.INFO, '更新服务成功');
+                } catch (e) {
+                  console.error(e);
+                  event.reply(channel, MESSAGE_TYPE.ERROR, '更新服务失败');
+                }
               } else {
-                return false;
+                event.reply(channel, MESSAGE_TYPE.ERROR, '未选择正确的镜像');
+                return;
+              }
+            }
+          } else if (action === 'install') {
+            console.debug('install', imageName);
+            if (!(await isImageReady(serviceName))) {
+              event.reply(
+                channel,
+                MESSAGE_TYPE.PROGRESS,
+                '正在导入镜像，这可能需要5分钟时间',
+              );
+              if (
+                !(await improveStablebility(async () => {
+                  return loadImageFromPath(serviceName, imagePath as string);
+                }))
+              ) {
+                event.reply(channel, MESSAGE_TYPE.ERROR, '未选择正确的镜像');
+                return;
+              }
+            }
+            event.reply(channel, MESSAGE_TYPE.PROGRESS, '正在创建容器');
+            const newContainerInfo:
+              | {
+                  Id: string;
+                  Warnings: string[];
+                }
+              | undefined = await improveStablebility(async () => {
+              try {
+                // 这里不要简化成return createContainer(serviceName);会导致无法捕获错误
+                const result = await createContainer(serviceName);
+                return result;
+              } catch (e) {
+                console.debug('安装服务失败', e);
+                if (e && e.message && e.message.indexOf('ENOENT') >= 0) {
+                  event.reply(
+                    channel,
+                    MESSAGE_TYPE.ERROR,
+                    '启动器安装目录缺少语音转文字配置文件，请重新下载安装启动器',
+                  );
+                } else {
+                  throw e;
+                }
+                return;
               }
             });
-            if (result) {
-              event.reply(channel, MESSAGE_TYPE.PROGRESS, '正在删除旧版服务');
-              await removeContainer(serviceName);
-              event.reply(channel, MESSAGE_TYPE.PROGRESS, '正在重新创建新服务');
-              try {
-                await createContainer(serviceName);
-                event.reply(channel, MESSAGE_TYPE.INFO, '更新服务成功');
-              } catch (e) {
-                console.error(e);
-                event.reply(channel, MESSAGE_TYPE.ERROR, '更新服务失败');
-              }
-            } else {
-              event.reply(channel, MESSAGE_TYPE.ERROR, '未选择正确的镜像');
-              return;
-            }
-          }
-        } else if (action === 'install') {
-          console.debug('install', imageName);
-          if (!(await isImageReady(serviceName))) {
-            event.reply(
-              channel,
-              MESSAGE_TYPE.PROGRESS,
-              '正在导入镜像，这可能需要5分钟时间',
-            );
-            if (
-              !(await improveStablebility(async () => {
-                return loadImageFromPath(serviceName, imagePath as string);
-              }))
-            ) {
-              event.reply(channel, MESSAGE_TYPE.ERROR, '未选择正确的镜像');
-              return;
-            }
-          }
-          event.reply(channel, MESSAGE_TYPE.PROGRESS, '正在创建容器');
-          const newContainerInfo:
-            | {
-                Id: string;
-                Warnings: string[];
-              }
-            | undefined = await improveStablebility(async () => {
-            try {
-              return createContainer(serviceName);
-            } catch (e) {
-              console.debug('安装服务失败', e);
-              event.reply(channel, MESSAGE_TYPE.ERROR, '安装服务失败');
-              return;
-            }
-          });
 
-          console.debug('newContainerInfo', newContainerInfo);
-          if (newContainerInfo) {
-            console.debug('安装服务成功');
-            event.reply(channel, MESSAGE_TYPE.INFO, '安装服务成功');
+            console.debug('newContainerInfo', newContainerInfo);
+            if (newContainerInfo) {
+              console.debug('安装服务成功');
+              event.reply(channel, MESSAGE_TYPE.INFO, '安装服务成功');
+            } else {
+              console.debug('安装服务失败');
+              event.reply(channel, MESSAGE_TYPE.ERROR, '安装服务失败');
+            }
           } else {
-            console.debug('安装服务失败');
-            event.reply(channel, MESSAGE_TYPE.ERROR, '安装服务失败');
+            console.debug('没找到容器');
+            event.reply(channel, MESSAGE_TYPE.WARNING, '没找到容器');
           }
         } else {
-          console.debug('没找到容器');
-          event.reply(channel, MESSAGE_TYPE.WARNING, '没找到容器');
+          if (action !== 'query') {
+            event.reply(channel, MESSAGE_TYPE.WARNING, '还没连接到docker');
+          } else if (action === 'query') {
+            event.reply(
+              channel,
+              MESSAGE_TYPE.DATA,
+              new MessageData(action, serviceName, []),
+            );
+            return;
+          }
+          console.debug('还没连接到docker');
         }
-      } else {
-        console.debug('还没连接到docker');
-        event.reply(channel, MESSAGE_TYPE.WARNING, '还没连接到docker');
-        connectionGlobal = await connect();
+      } catch (e) {
+        console.error(e);
+        event.reply(channel, MESSAGE_TYPE.ERROR, '出现错误');
       }
     },
   );
@@ -361,4 +415,76 @@ export async function selectImageFile(serviceName: ServiceName) {
     }
   }
   return false;
+}
+
+async function reCreateContainerAndStart(
+  event: Electron.IpcMainEvent,
+  container: Dockerode.Container,
+  serviceName: ServiceName,
+) {
+  console.debug('正在重新创建服务', serviceName);
+  await container.remove();
+  let newContainerInfo;
+  try {
+    newContainerInfo = await createContainer(serviceName);
+  } catch (e) {
+    console.error(e);
+    if (e && e.message && e.message.indexOf('ENOENT') >= 0) {
+      // 这里用INFO是为了触发前端页面刷新
+      event.reply(
+        channel,
+        MESSAGE_TYPE.INFO,
+        '启动器安装目录缺少语音转文字配置文件，请重新下载安装启动器',
+      );
+    } else {
+      // 这里用INFO是为了触发前端页面刷新
+      event.reply(channel, MESSAGE_TYPE.INFO, '重新创建服务失败');
+    }
+    return;
+  }
+
+  const containerName = containerNameDict[serviceName];
+
+  let containerInfos: PodmanContainerInfo[] = [];
+  containerInfos = await improveStablebility(async () => {
+    return connectionGlobal.listPodmanContainers({
+      all: true,
+    });
+  });
+  const containerInfo = containerInfos.filter(
+    (item) => item.Names.indexOf(containerName) >= 0,
+  )[0];
+  const newContainer =
+    containerInfo && connectionGlobal.getContainer(newContainerInfo.Id);
+  if (newContainer) {
+    try {
+      await newContainer.start();
+      event.reply(channel, MESSAGE_TYPE.INFO, '成功启动服务');
+    } catch (e) {
+      console.error(e);
+      if (
+        e &&
+        e.message &&
+        e.message.indexOf('unresolvable CDI devices nvidia.com/gpu=all') >= 0
+      ) {
+        event.reply(
+          channel,
+          MESSAGE_TYPE.ERROR,
+          '无法识别NVIDIA显卡，请修改设置后重试',
+        );
+      } else if (
+        e &&
+        e.message &&
+        e.message.indexOf('No such file or directory') >= 0
+      ) {
+        event.reply(
+          channel,
+          MESSAGE_TYPE.ERROR,
+          '启动器安装目录缺少语音转文字配置文件，请重新下载安装启动器',
+        );
+      }
+    }
+  } else {
+    event.reply(channel, MESSAGE_TYPE.ERROR, '重新创建服务失败');
+  }
 }
