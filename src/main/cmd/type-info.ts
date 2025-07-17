@@ -1,6 +1,6 @@
 import type { Channels } from '../ipc-data-type';
 
-export type ServiceName = 'WSL' | 'podman' | 'obsidianApp';
+export type ServiceName = 'WSL' | 'podman' | 'obsidianApp' | 'lm-studio';
 export type ActionName =
   | 'query'
   | 'install'

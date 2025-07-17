@@ -7,6 +7,7 @@ export default function useCmd() {
   const [isInstallWSL, setIsInstallWSL] = useState<boolean>(true);
   const [checkingWsl, setCheckingWsl] = useState<boolean>(true);
   const [isInstallObsidian, setIsInstallObsidian] = useState<boolean>(true);
+  const [isInstallLMStudio, setIsInstallLMStudio] = useState<boolean>(true);
   const [loading, setLoading] = useState(false);
   function action(
     actionName: ActionName,
@@ -33,6 +34,7 @@ export default function useCmd() {
     setCheckingWsl(true);
     window.electron.ipcRenderer.sendMessage(channel, 'query', 'WSL');
     window.electron.ipcRenderer.sendMessage(channel, 'query', 'obsidianApp');
+    window.electron.ipcRenderer.sendMessage(channel, 'query', 'lm-studio');
   }, [setCheckingWsl]);
   useEffect(() => {
     const cancel = window.electron?.ipcRenderer.on(
@@ -56,6 +58,8 @@ export default function useCmd() {
               setIsInstallWSL(payload);
               setCheckingWsl(false);
             } else if (service === 'obsidianApp') {
+              setIsInstallObsidian(payload);
+            } else if (service === 'lm-studio') {
               setIsInstallObsidian(payload);
             }
           } else if (actionName === 'install') {
@@ -105,6 +109,7 @@ export default function useCmd() {
   return {
     isInstallWSL,
     isInstallObsidian,
+    isInstallLMStudio,
     checkingWsl,
     action,
     loading,
