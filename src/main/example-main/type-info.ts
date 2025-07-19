@@ -15,3 +15,5 @@ export interface ExampleData {
   name: ServiceName,
   status: 'good' | 'bad'
 }
+
+export const installExampleHandle = `${channel}installExample`;
