@@ -9,6 +9,7 @@ import ObsidianPlugin from './pages/obsidian-plugin';
 import TTSConfig from './pages/tts-config';
 import ASRConfig from './pages/asr-config';
 import LMService from './pages/lm-service';
+import ExamplePage from './pages/example-page';
 
 export default function App() {
   return (
@@ -25,6 +26,7 @@ export default function App() {
             path="/obsidian-plugin/:vaultId"
             element={<ObsidianPlugin />}
           />
+          <Route path="/example" element={<ExamplePage />} />
           <Route index element={<Hello />} />
         </Routes>
       </Router>

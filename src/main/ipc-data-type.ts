@@ -6,7 +6,8 @@ export type Channels =
   | 'wsl'
   | 'configs'
   | 'obsidian-plugin'
-  | 'lm-studio';
+  | 'lm-studio'
+  | 'example';
 
 export enum MESSAGE_TYPE {
   /** 阻断性错误，会把转圈中的按钮变成不转圈 */
@@ -43,18 +44,24 @@ import {
   ActionName as ActionNameLMStudio,
   ServiceName as ServiceNameLMStudio,
 } from './lm-studio/type-info';
+import {
+  ActionName as ActionNameExampleMain,
+  ServiceName as ServiceNameExampleMain,
+} from './example-main/type-info';
 export type AllAction =
   | ActionNamePodman
   | ActionNameCmd
   | ActionNameConfigs
   | ActionNameObsidianPlugin
-  | ActionNameLMStudio;
+  | ActionNameLMStudio
+  | ActionNameExampleMain;
 export type AllService =
   | ServiceNamePodman
   | ServiceNameCmd
   | ServiceNameConfigs
   | ServiceNameObsidianPlugin
-  | ServiceNameLMStudio;
+  | ServiceNameLMStudio
+  | ServiceNameExampleMain;
 
 export class MessageData<
   A extends AllAction = AllAction,
