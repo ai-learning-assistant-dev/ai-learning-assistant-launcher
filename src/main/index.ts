@@ -4,6 +4,7 @@ import initPodman from './podman-desktop/simple-container-manage';
 import initCmd from './cmd';
 import initConfigs from './configs';
 import initObsidianPlugin, { updateTemplate } from './obsidian-plugin';
+import initWorkspace from './workspace';
 import initContainerLogs from './podman-desktop/container-logs';
 import initLMStudio from './lm-studio';
 import initExampleMain from './example-main';
@@ -32,6 +33,8 @@ initPodman(ipcMain);
 initCmd(ipcMain);
 initConfigs(ipcMain);
 initObsidianPlugin(ipcMain);
+// Initialize modules
+initWorkspace(ipcMain);  // 添加这行注册workspace模块
 initContainerLogs(ipcMain);
 initLMStudio(ipcMain);
 initExampleMain(ipcMain)
