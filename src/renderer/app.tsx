@@ -8,6 +8,8 @@ import { App as AntdApp } from 'antd';
 import ObsidianPlugin from './pages/obsidian-plugin';
 import TTSConfig from './pages/tts-config';
 import ASRConfig from './pages/asr-config';
+import LMService from './pages/lm-service';
+import ExamplePage from './pages/example-page';
 
 export default function App() {
   return (
@@ -15,6 +17,7 @@ export default function App() {
       <Router>
         <Routes>
           <Route path="/ai-service" element={<AiService />} />
+          <Route path="/lm-service" element={<LMService />} />
           <Route path="/hello" element={<Hello />} />
           <Route path="/obsidian-app" element={<ObsidianApp />} />
           <Route path="/TTS-config" element={<TTSConfig />} />
@@ -23,6 +26,7 @@ export default function App() {
             path="/obsidian-plugin/:vaultId"
             element={<ObsidianPlugin />}
           />
+          <Route path="/example" element={<ExamplePage />} />
           <Route index element={<Hello />} />
         </Routes>
       </Router>

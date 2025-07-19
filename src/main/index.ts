@@ -5,6 +5,8 @@ import initCmd from './cmd';
 import initConfigs from './configs';
 import initObsidianPlugin, { updateTemplate } from './obsidian-plugin';
 import initContainerLogs from './podman-desktop/container-logs';
+import initLMStudio from './lm-studio';
+import initExampleMain from './example-main';
 import path from 'node:path';
 import { appPath, autoAdaptEncodingForWindows } from './exec';
 
@@ -31,6 +33,8 @@ initCmd(ipcMain);
 initConfigs(ipcMain);
 initObsidianPlugin(ipcMain);
 initContainerLogs(ipcMain);
+initLMStudio(ipcMain);
+initExampleMain(ipcMain)
 updateTemplate();
 
 const createWindow = (): void => {

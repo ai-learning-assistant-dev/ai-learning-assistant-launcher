@@ -18,6 +18,14 @@ export default function Hello() {
         <NavLink to="/ai-service">
           <Button>学习助手工具箱</Button>
         </NavLink>
+        <br />
+        <NavLink to="/lm-service">
+          <Button>AI大模型</Button>
+        </NavLink>
+        <br />
+        <NavLink to="/example" style={{position: "absolute", top: 20, left: 20}}>
+          <Button>代码示例页</Button>
+        </NavLink>
       </div>
     </div>
   );
