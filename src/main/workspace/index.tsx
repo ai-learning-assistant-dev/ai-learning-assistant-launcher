@@ -45,7 +45,7 @@ export default async function init(ipcMain: IpcMain) {
           }
         }else if (action === 'get-directory-structure') {
           const vaultPath = getVaultPath(vaultId);
-          const tree = buildDirectoryTree(vaultPath);
+          const tree = getDirectoryTreeWithRoot(vaultPath);
           event.reply(
             channel, 
             MESSAGE_TYPE.DATA, 
@@ -86,6 +86,24 @@ function getVaultPath(vaultId: string): string {
   }
   return vaultConfig.path;
 }
+
+function getDirectoryTreeWithRoot(dirPath: string): DirectoryNode[] {
+  if (!dirPath || !existsSync(dirPath)) {
+    throw new Error(`无效的路径: ${dirPath}`);
+  }
+  
+  // 获取根目录信息
+  const rootDirName = path.basename(dirPath);
+  const rootNode: DirectoryNode = {
+    title: rootDirName,
+    value: dirPath,
+    key: dirPath,
+    children: buildDirectoryTree(dirPath), // 使用原函数获取子目录
+    isLeaf: false
+  };
+  
+  return [rootNode];
+}
 // 添加目录树构建函数
 function buildDirectoryTree(dirPath: string): DirectoryNode[] {
   if (!dirPath || !existsSync(dirPath)) {
@@ -104,38 +122,32 @@ function buildDirectoryTree(dirPath: string): DirectoryNode[] {
       continue;
     }
     
-    if (stat.isDirectory()) {
-      nodes.push({
-        title: file,
-        value: fullPath,
-        key: fullPath,
-        children: buildDirectoryTree(fullPath),
-        isLeaf: false
-      });
-    } else {
-      nodes.push({
-        title: file,
-        value: fullPath,
-        key: fullPath,
-        isLeaf: true
-      });
-    }
+    nodes.push({
+      title: file,
+      value: fullPath,
+      key: fullPath,
+      children: buildDirectoryTree(fullPath),
+      isLeaf: false
+    });
   }
   
   return nodes;
 }
 
 // 新增获取文件列表的函数
-function getFileList(dirPath: string): DirectoryNode[] {
+function getFileList(dirPath: string, rootPath?: string): DirectoryNode[] {
   if (!dirPath || !existsSync(dirPath)) {
     throw new Error(`无效的路径: ${dirPath}`);
   }
   
+  // 如果是首次调用，设置rootPath为dirPath
+  const basePath = rootPath || dirPath;
   const nodes: DirectoryNode[] = [];
   const files = readdirSync(dirPath);
   
   for (const file of files) {
     const fullPath = path.join(dirPath, file);
+    const relativePath = path.relative(basePath, fullPath); // 计算相对路径
     const stat = statSync(fullPath);
 
     // 跳过特定排除目录
@@ -144,19 +156,18 @@ function getFileList(dirPath: string): DirectoryNode[] {
     }
     
     if (stat.isDirectory()) {
-      // 返回目录节点，包含children但不展开
       nodes.push({
-        title: file,
-        value: fullPath,
-        key: fullPath,
+        title: file,            // 保持文件名作为显示
+        value: relativePath,    // 使用相对路径作为值
+        key: relativePath,      // 使用相对路径作为key
         isLeaf: false,
-        children: getFileList(fullPath), // 先不加载子目录，保持性能
+        children: getFileList(fullPath, basePath), // 传递basePath保持一致性
       });
     } else if (stat.isFile()) {
       nodes.push({
-        title: file,
-        value: fullPath,
-        key: fullPath,
+        title: file,            // 保持文件名作为显示
+        value: relativePath,    // 使用相对路径作为值
+        key: relativePath,      // 使用相对路径作为key
         isLeaf: true
       });
     }
