@@ -5,6 +5,7 @@ import { plugins } from './webpack.plugins';
 
 rules.push();
 
+
 export const rendererConfig: Configuration = {
   module: {
     rules,

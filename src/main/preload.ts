@@ -3,6 +3,7 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 import { AllAction, AllService, Channels, MESSAGE_TYPE, MessageData } from './ipc-data-type';
 import 'electron-log/preload';
+import { installExampleHandle, ServiceName as ServiceNameExample } from './example-main/type-info';
 
 const electronHandler = {
   ipcRenderer: {
@@ -26,3 +27,46 @@ const electronHandler = {
 contextBridge.exposeInMainWorld('electron', electronHandler);
 
 export type ElectronHandler = typeof electronHandler;
+
+interface ErrorMessage {
+  name: string;
+  message: string;
+  extra: unknown;
+}
+
+function decodeError(error: ErrorMessage): Error {
+  const e = new Error(error.message);
+  e.name = error.name;
+  Object.assign(e, error.extra);
+  return e;
+}
+
+async function ipcInvoke<T>(channel: string, ...args: unknown[]): Promise<T> {
+  const { error, result } = await ipcRenderer.invoke(channel, ...args);
+  if (error) {
+    throw decodeError(error);
+  }
+  return result;
+}
+
+/** 比ipcRenderer.send多了返回值，更接近正常的函数调用，不需要在另一个监听事件中异步监听
+ * 适合于renderer代码要按照顺序调用很多个main中的函数的情况，也适合不需要吧操作结果广播到其他模块的场景
+ */
+const mainHandle = {
+  installExampleHandle: async (service: ServiceNameExample): Promise<boolean> => {
+    return ipcInvoke(installExampleHandle, service);
+  }
+}
+
+export type MainHandle = typeof mainHandle;
+
+export function initExposure(): void {
+
+  contextBridge.exposeInMainWorld(
+    'mainHandle',
+    mainHandle
+  );
+
+}
+
+initExposure();

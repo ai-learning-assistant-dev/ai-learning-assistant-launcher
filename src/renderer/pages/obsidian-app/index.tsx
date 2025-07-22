@@ -36,6 +36,9 @@ export default function ObsidianApp() {
           <List.Item
             key={vault.id}
             actions={[
+              <NavLink key="workspace" to={`/workspace-manage/${vault.id}`}>
+                <Button>工作区管理</Button>
+              </NavLink>,
               <NavLink key={0} to={`/obsidian-plugin/${vault.id}`}>
                 <Button>插件情况</Button>
               </NavLink>,
