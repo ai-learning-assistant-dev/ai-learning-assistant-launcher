@@ -16,13 +16,8 @@ import { useParams, NavLink } from 'react-router-dom';
 import { ArrowLeftOutlined, PlusOutlined, SaveOutlined, UpOutlined, DownOutlined  } from '@ant-design/icons';
 import './index.scss';
 import useWorkspace from '../../containers/use-workspace';
-import { DirectoryNode } from '../../../main/workspace/type-info';
+import { DirectoryNode, WorkspaceConfig, Persona } from '../../../main/workspace/type-info';
 
-export interface WorkspaceConfig {
-  version: string;
-  personas?: Persona[];
-  excludedPaths?: string[];
-}
 
 // 添加默认配置常量
 const DEFAULT_WORKSPACE_CONFIG: WorkspaceConfig = {
@@ -30,16 +25,11 @@ const DEFAULT_WORKSPACE_CONFIG: WorkspaceConfig = {
   personas: [{
     id: 'default-persona',
     name: '默认人设',
-    description: '这是一个示例人设'
+    prompt: '这是一个示例人设'
   }],
   excludedPaths: []
 };
 
-interface Persona {
-  id: string;
-  name: string;
-  description: string;
-}
 
 export default function WorkspaceManage() {
   const { vaultId } = useParams();
@@ -161,7 +151,7 @@ export default function WorkspaceManage() {
     const newPersona = {
       id: Date.now().toString(),
       name: '默认人设',
-      description: '这是一个示例人设'
+      prompt: '这是一个示例人设'
     };
     
     setPersonas([...personas, newPersona]);
@@ -307,8 +297,8 @@ export default function WorkspaceManage() {
                   </Form.Item>
                   <Form.Item label="人设描述" className="persona-form-item">
                     <Input.TextArea
-                      value={persona.description}
-                      onChange={(e) => updatePersona(persona.id, 'description', e.target.value)}
+                      value={persona.prompt}
+                      onChange={(e) => updatePersona(persona.id, 'prompt', e.target.value)}
                       autoSize={{ minRows: 3 }}
                       style={{ resize: 'none' }}
                     />

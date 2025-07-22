@@ -12,16 +12,6 @@ const EXCLUDED_DIRS = new Set([
   'copilot-custom-prompts'
 ]);
 
-export interface WorkspaceConfig {
-  version?: string;
-  personas?: Array<{
-    id: string;
-    name: string;
-    description: string;
-  }>;
-  excludedPaths?: string[];
-}
-
 export default async function init(ipcMain: IpcMain) {
   ipcMain.on(
     channel,

@@ -1,8 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { message } from 'antd';
-import { WorkspaceConfig } from '../../pages/workspace-manage';
 import { MESSAGE_TYPE, MessageData } from '../../../main/ipc-data-type';
-import { ActionName, channel, ServiceName, DirectoryNode } from '../../../main/workspace/type-info';
+import { ActionName, channel, ServiceName, DirectoryNode, WorkspaceConfig } from '../../../main/workspace/type-info';
 
 interface UseWorkspaceReturn {
   loading: boolean;

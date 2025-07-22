@@ -5,17 +5,16 @@ export type ActionName = 'save-config' | 'load-config' | 'get-directory-structur
 
 export const channel: Channels = 'workspace';
 
-export interface WorkspaceData {
-  path: string;
-  config?: {
-    version?: string;
-    personas?: Array<{
-      id: string;
-      name: string;
-      description: string;
-    }>;
-    excludedPaths?: string[];
-  };
+export interface WorkspaceConfig {
+  version: string;
+  personas?: Persona[];
+  excludedPaths?: string[];
+}
+
+export interface Persona {
+  id: string;
+  name: string;
+  prompt: string;
 }
 
 export interface DirectoryNode {
