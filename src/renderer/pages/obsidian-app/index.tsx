@@ -36,12 +36,15 @@ export default function ObsidianApp() {
           <List.Item
             key={vault.id}
             actions={[
-              <NavLink key={0} to={`/obsidian-plugin/${vault.id}`}>
+              <NavLink key={0} to="/showcase">
+                <Button>工作区管理</Button>
+              </NavLink>,
+              <NavLink key={1} to={`/obsidian-plugin/${vault.id}`}>
                 <Button>插件情况</Button>
               </NavLink>,
               isInstallObsidian && (
                 <Button
-                  key={1}
+                  key={2}
                   onClick={() => cmdAction('start', 'obsidianApp', vault.id)}
                 >
                   用阅读器打开

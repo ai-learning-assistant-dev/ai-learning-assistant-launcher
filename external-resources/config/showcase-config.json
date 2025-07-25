@@ -1,0 +1,28 @@
+{
+  "items": [
+    {
+      "id": "1",
+      "title": "数学工作区",
+      "description": "D:/math",
+      "link": "https://obsidian.md"
+    },
+    {
+      "id": "2",
+      "title": "语文工作区",
+      "description": "D:/chinese",
+      "link": "https://www.baidu.com"
+    },
+    {
+      "id": "1753459861502",
+      "title": "ss",
+      "description": "ss",
+      "link": "ss"
+    },
+    {
+      "id": "1753459959343",
+      "title": "aaa",
+      "description": "aaa",
+      "link": "aaa"
+    }
+  ]
+}

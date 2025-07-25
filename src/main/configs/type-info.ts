@@ -1,8 +1,8 @@
 import type { Channels } from '../ipc-data-type';
 import { ContainerCreateMountOption } from '../podman-desktop/libpod-dockerode';
 
-export type ServiceName = 'obsidianApp' | 'obsidianVault' | 'container' | 'TTS';
-export type ActionName = 'query' | 'update' | 'selectVoiceFile' | 'initVoiceFileList' | 'deleteVoiceFile';
+export type ServiceName = 'obsidianApp' | 'obsidianVault' | 'container' | 'TTS' | 'showcase';
+export type ActionName = 'query' | 'update' | 'selectVoiceFile' | 'initVoiceFileList' | 'deleteVoiceFile' | 'addWorkspace';
 
 export const channel: Channels = 'configs';
 

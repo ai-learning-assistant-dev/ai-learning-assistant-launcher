@@ -14,6 +14,7 @@ import {
 import { isWindows } from '../exec/util';
 import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 import { ttsConfig } from './tts-config';
+import { showcaseConfig } from './showcase-config';
 
 // 临时文件操作记录
 interface FileOperation {
@@ -69,6 +70,12 @@ export default async function init(ipcMain: IpcMain) {
                 getVoiceConfig(extraData?.modelType || 'gpu'),
               ),
             );
+          } else if (serviceName === 'showcase') {
+            await showcaseConfig(event, action, serviceName, extraData);
+          }
+        } else if (action === 'addWorkspace') {
+          if (serviceName === 'showcase') {
+            await showcaseConfig(event, action, serviceName, extraData);
           }
         } else if (action === 'update') {
           if (serviceName === 'obsidianApp') {

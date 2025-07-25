@@ -10,6 +10,7 @@ import {
   ContainerConfig,
   VoiceConfigFile,
 } from '../../../main/configs/type-info';
+import { ShowcaseConfig } from '../../../main/configs/showcase-config';
 import { channel as cmdChannel } from '../../../main/cmd/type-info';
 
 export default function useConfigs() {
@@ -18,6 +19,7 @@ export default function useConfigs() {
     useState<ObsidianVaultConfig[]>();
   const [containerConfig, setContainerConfig] = useState<ContainerConfig>();
   const [voiceConfig, setVoiceConfig] = useState<VoiceConfigFile>();
+  const [showcaseConfig, setShowcaseConfig] = useState<ShowcaseConfig>();
   const [loading, setLoading] = useState(false);
   const [selectedVoiceFile, setSelectedVoiceFile] = useState<string | null>(null);
   const [voiceFileList, setVoiceFileList] = useState<string[]>([]);
@@ -48,6 +50,10 @@ export default function useConfigs() {
     window.electron.ipcRenderer.sendMessage(channel, 'query', 'obsidianApp');
     window.electron.ipcRenderer.sendMessage(channel, 'query', 'obsidianVault');
     window.electron.ipcRenderer.sendMessage(channel, 'query', 'container');
+  }, []);
+  
+  const queryShowcase = useCallback(() => {
+    window.electron.ipcRenderer.sendMessage(channel, 'query', 'showcase');
   }, []);
   
   const queryVoice = useCallback((modelType: 'gpu' | 'cpu' = 'gpu') => {
@@ -117,6 +123,18 @@ export default function useConfigs() {
             console.debug('voice file list payload', payload);
             setVoiceFileList(payload.fileList || []);
             setLoading(false);
+          } else if (actionName === 'query' && service === 'showcase') {
+            console.debug('showcase payload', payload);
+            setShowcaseConfig(payload);
+            setLoading(false);
+          } else if (actionName === 'update' && service === 'showcase') {
+            console.debug('showcase update payload', payload);
+            setShowcaseConfig(payload);
+            setLoading(false);
+          } else if (actionName === 'addWorkspace' && service === 'showcase') {
+            console.debug('showcase addWorkspace payload', payload);
+            setShowcaseConfig(payload);
+            setLoading(false);
           }
         } else if (messageType === MESSAGE_TYPE.INFO) {
           notification.success({
@@ -159,8 +177,10 @@ export default function useConfigs() {
     obsidianVaultConfig,
     containerConfig,
     voiceConfig,
+    showcaseConfig,
     loading,
     queryVoice,
+    queryShowcase,
     selectedVoiceFile,
     voiceFileList,
     initVoiceFileList,

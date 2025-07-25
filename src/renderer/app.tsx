@@ -8,6 +8,9 @@ import { App as AntdApp } from 'antd';
 import ObsidianPlugin from './pages/obsidian-plugin';
 import TTSConfig from './pages/tts-config';
 import ASRConfig from './pages/asr-config';
+import Showcase from './pages/showcase';
+import WorkspaceConfig from './pages/workspace-config';
+import AddWorkspace from './pages/add-workspace';
 
 export default function App() {
   return (
@@ -17,6 +20,9 @@ export default function App() {
           <Route path="/ai-service" element={<AiService />} />
           <Route path="/hello" element={<Hello />} />
           <Route path="/obsidian-app" element={<ObsidianApp />} />
+          <Route path="/showcase" element={<Showcase />} />
+          <Route path="/add-workspace" element={<AddWorkspace />} />
+          <Route path="/workspace-config/:itemId" element={<WorkspaceConfig />} />
           <Route path="/TTS-config" element={<TTSConfig />} />
           <Route path="/ASR-config" element={<ASRConfig />} />
           <Route
