@@ -70,5 +70,26 @@
         "host": 7000
       }
     ]
+  },
+  "PDF": {
+    "port": [
+      {
+        "container": 5000,
+        "host": 5000
+      }
+    ],
+    "command": {
+      "start": [
+        "sh",
+        "./start.sh"
+      ],
+      "stop": [
+        "sh",
+        "./stop.sh"
+      ]
+    },
+    "env": {
+      "SERVICE_TYPE": "pdf"
+    }
   }
 }

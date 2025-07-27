@@ -73,6 +73,9 @@ export default function AiService() {
   const asrContainer = containers.filter(
     (item) => item.Names.indexOf(containerNameDict.ASR) >= 0,
   )[0];
+  const pdfContainer = containers.filter(
+    (item) => item.Names.indexOf(containerNameDict.PDF) >= 0,
+  )[0];
 
   const containerInfos: ContainerItem[] = [
     // {
@@ -92,6 +95,12 @@ export default function AiService() {
       serviceName: 'TTS',
       state: getState(ttsContainer),
       port: 8000,
+    },
+    {
+      name: 'PDF处理服务',
+      serviceName: 'PDF',
+      state: getState(pdfContainer),
+      port: 5000,
     },
   ];
 

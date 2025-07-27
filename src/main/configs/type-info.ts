@@ -47,6 +47,18 @@ export interface ContainerConfig {
     env?: Record<string, string>;
     mounts?: Array<ContainerCreateMountOption>;
   };
+  PDF: {
+    port: {
+      container: number;
+      host: number;
+    }[];
+    command: {
+      start: string[];
+      stop: string[];
+    };
+    env?: Record<string, string>;
+    mounts?: Array<ContainerCreateMountOption>;
+  };
 }
 
 export interface ObsidianConfig {

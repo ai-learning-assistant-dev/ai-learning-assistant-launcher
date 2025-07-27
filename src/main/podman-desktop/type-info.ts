@@ -1,7 +1,7 @@
 import type { ContainerConfig } from '../configs/type-info';
 import { Channels } from '../ipc-data-type';
 
-export type ServiceName = 'TTS' | 'ASR' | 'LLM';
+export type ServiceName = 'TTS' | 'ASR' | 'LLM' | 'PDF';
 export type ActionName =
   | 'query'
   | 'install'
@@ -15,18 +15,21 @@ export const containerNameDict: Record<ServiceName, string> = {
   ASR: 'ASR',
   TTS: 'TTS',
   LLM: 'LLM',
+  PDF: 'PDF',
 };
 
 export const imageNameDict: Record<ServiceName, string> = {
   ASR: 'ai-voice-backend:latest',
   TTS: 'ai-voice-backend:latest',
   LLM: 'LLM',
+  PDF: 'pdf-service:latest',
 };
 
 export const imagePathDict: Record<ServiceName, string> = {
   ASR: 'ai-voice.tar',
   TTS: 'ai-voice.tar',
   LLM: 'LLM',
+  PDF: 'pdf-service.tar',
 };
 
 export const podMachineName = 'podman-machine-default';

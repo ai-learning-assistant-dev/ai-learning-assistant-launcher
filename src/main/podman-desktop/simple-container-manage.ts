@@ -290,7 +290,7 @@ export default async function init(ipcMain: IpcMain) {
                   event.reply(
                     channel,
                     MESSAGE_TYPE.ERROR,
-                    '启动器安装目录缺少语音转文字配置文件，请重新下载安装启动器',
+                    '启动器安装目录缺少服务配置文件，请重新下载安装启动器',
                   );
                 } else {
                   throw e;
@@ -413,6 +413,24 @@ export async function selectImageFile(serviceName: ServiceName) {
       console.warn('没有选择正确的镜像');
       return false;
     }
+  } else if (serviceName === 'PDF') {
+    const result = await dialog.showOpenDialog({
+      title: '请选择PDF服务的镜像文件',
+      properties: ['openFile', 'showHiddenFiles'],
+      filters: [{ name: 'PDF服务镜像', extensions: ['tar'] }],
+    });
+    const path = result.filePaths[0];
+    if (path && path.length > 0) {
+      try {
+        return path;
+      } catch (e) {
+        console.error(e);
+        return false;
+      }
+    } else {
+      console.warn('没有选择正确的PDF镜像');
+      return false;
+    }
   }
   return false;
 }
@@ -434,7 +452,7 @@ async function reCreateContainerAndStart(
       event.reply(
         channel,
         MESSAGE_TYPE.INFO,
-        '启动器安装目录缺少语音转文字配置文件，请重新下载安装启动器',
+        '启动器安装目录缺少服务配置文件，请重新下载安装启动器',
       );
     } else {
       // 这里用INFO是为了触发前端页面刷新
@@ -480,7 +498,7 @@ async function reCreateContainerAndStart(
         event.reply(
           channel,
           MESSAGE_TYPE.ERROR,
-          '启动器安装目录缺少语音转文字配置文件，请重新下载安装启动器',
+          '启动器安装目录缺少服务配置文件，请重新下载安装启动器',
         );
       }
     }
