@@ -22,7 +22,7 @@ export const imageNameDict: Record<ServiceName, string> = {
   ASR: 'ai-voice-backend:latest',
   TTS: 'ai-voice-backend:latest',
   LLM: 'LLM',
-  PDF: 'pdf-service:latest',
+  PDF: 'mineru-pipeline:latest',
 };
 
 export const imagePathDict: Record<ServiceName, string> = {
