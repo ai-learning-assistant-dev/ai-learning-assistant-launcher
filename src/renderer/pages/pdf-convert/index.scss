@@ -1,0 +1,49 @@
+.pdf-convert {
+  padding: 20px;
+  max-width: 800px;
+  margin: 0 auto;
+
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 24px;
+
+    h3 {
+      margin: 0;
+    }
+  }
+
+  .upload-section {
+    .ant-upload-list {
+      margin-top: 8px;
+    }
+  }
+
+  .convert-section {
+    text-align: center;
+    padding: 16px 0;
+  }
+
+  .result-section {
+    .success-card {
+      border-color: #52c41a;
+      .ant-card-head {
+        background-color: #f6ffed;
+        border-color: #52c41a;
+      }
+    }
+
+    .error-card {
+      border-color: #ff4d4f;
+      .ant-card-head {
+        background-color: #fff2f0;
+        border-color: #ff4d4f;
+      }
+    }
+  }
+
+  .info-section {
+    margin-top: 16px;
+  }
+} 

@@ -10,7 +10,7 @@ services:
       MINERU_MODEL_SOURCE: local
     entrypoint: mineru-api
     command:
-      --host 0.0.0.0
+      --host 127.0.0.1
       --port 5000
       # parameters for sglang-engine
       # --enable-torch-compile  # You can also enable torch.compile to accelerate inference speed by approximately 15%

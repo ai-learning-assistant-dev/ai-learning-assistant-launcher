@@ -225,6 +225,18 @@ export default function AiService() {
                   设置
                 </Button>
               </NavLink>,
+              item.serviceName === 'PDF' && item.state === '正在运行' && (
+                <NavLink key="convert" to="/pdf-convert">
+                  <Button
+                    shape="round"
+                    size="small"
+                    type="primary"
+                    disabled={!isInstallWSL || checkingWsl || loading || cmdLoading}
+                  >
+                    转换PDF
+                  </Button>
+                </NavLink>
+              ),
               item.state !== '还未安装' && (
                 <Button
                   shape="round"

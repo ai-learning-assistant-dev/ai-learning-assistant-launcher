@@ -5,7 +5,8 @@ export type Channels =
   | 'cmd'
   | 'wsl'
   | 'configs'
-  | 'obsidian-plugin';
+  | 'obsidian-plugin'
+  | 'pdf-convert';
 
 export enum MESSAGE_TYPE {
   /** 阻断性错误，会把转圈中的按钮变成不转圈 */
@@ -42,12 +43,14 @@ export type AllAction =
   | ActionNamePodman
   | ActionNameCmd
   | ActionNameConfigs
-  | ActionNameObsidianPlugin;
+  | ActionNameObsidianPlugin
+  | 'convert';
 export type AllService =
   | ServiceNamePodman
   | ServiceNameCmd
   | ServiceNameConfigs
-  | ServiceNameObsidianPlugin;
+  | ServiceNameObsidianPlugin
+  | 'PDF';
 
 export class MessageData<
   A extends AllAction = AllAction,

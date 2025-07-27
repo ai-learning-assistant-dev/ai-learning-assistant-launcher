@@ -338,7 +338,9 @@ export async function createContainer(serviceName: ServiceName) {
   const containerName = containerNameDict[serviceName];
   const config = getContainerConfig()[serviceName];
   const haveNvidiaFlag = await haveNvidia();
-  return connectionGlobal.createPodmanContainer({
+  
+  // 基础配置
+  const containerOptions: any = {
     image: imageName,
     name: containerName,
     devices: haveNvidiaFlag ? [{ path: 'nvidia.com/gpu=all' }] : [],
@@ -357,7 +359,16 @@ export async function createContainer(serviceName: ServiceName) {
           return mount;
         })
       : [],
-  });
+  };
+
+  // 为PDF容器添加特殊配置
+  if (serviceName === 'PDF') {
+    containerOptions.privileged = true; // 启用特权模式以支持ipc: host等配置
+    // 添加重启策略
+    containerOptions.restart_policy = 'always';
+  }
+
+  return connectionGlobal.createPodmanContainer(containerOptions);
 }
 
 export async function startContainer(containerId: string) {

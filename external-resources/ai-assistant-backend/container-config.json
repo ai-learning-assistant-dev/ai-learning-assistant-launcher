@@ -80,8 +80,11 @@
     ],
     "command": {
       "start": [
-        "sh",
-        "./start.sh"
+        "mineru-api",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "5000"
       ],
       "stop": [
         "sh",
@@ -89,7 +92,7 @@
       ]
     },
     "env": {
-      "SERVICE_TYPE": "pdf"
+      "MINERU_MODEL_SOURCE": "local"
     }
   }
 }

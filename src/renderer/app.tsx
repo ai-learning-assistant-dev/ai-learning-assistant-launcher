@@ -8,6 +8,7 @@ import { App as AntdApp } from 'antd';
 import ObsidianPlugin from './pages/obsidian-plugin';
 import TTSConfig from './pages/tts-config';
 import ASRConfig from './pages/asr-config';
+import PdfConvert from './pages/pdf-convert';
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
           <Route path="/obsidian-app" element={<ObsidianApp />} />
           <Route path="/TTS-config" element={<TTSConfig />} />
           <Route path="/ASR-config" element={<ASRConfig />} />
+          <Route path="/pdf-convert" element={<PdfConvert />} />
           <Route
             path="/obsidian-plugin/:vaultId"
             element={<ObsidianPlugin />}

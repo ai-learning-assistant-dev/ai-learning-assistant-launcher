@@ -5,6 +5,7 @@ import initCmd from './cmd';
 import initConfigs from './configs';
 import initObsidianPlugin, { updateTemplate } from './obsidian-plugin';
 import initContainerLogs from './podman-desktop/container-logs';
+import initPdfConvert from './pdf-convert';
 import path from 'node:path';
 import { appPath, autoAdaptEncodingForWindows } from './exec';
 
@@ -26,13 +27,6 @@ autoAdaptEncodingForWindows();
 app.commandLine.appendSwitch('--enable-logging', 'file');
 app.commandLine.appendSwitch('--log-file', path.join(appPath, 'chrome.log'));
 
-initPodman(ipcMain);
-initCmd(ipcMain);
-initConfigs(ipcMain);
-initObsidianPlugin(ipcMain);
-initContainerLogs(ipcMain);
-updateTemplate();
-
 const createWindow = (): void => {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
@@ -53,7 +47,15 @@ const createWindow = (): void => {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.on('ready', createWindow);
+app.whenReady().then(() => {
+  initPodman(ipcMain);
+  initCmd(ipcMain);
+  initConfigs(ipcMain);
+  initObsidianPlugin(ipcMain);
+  initContainerLogs(ipcMain);
+  initPdfConvert(ipcMain);
+  createWindow();
+});
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits

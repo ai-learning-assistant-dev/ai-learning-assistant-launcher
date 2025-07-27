@@ -299,6 +299,7 @@ let containerConfigBuff: ContainerConfig = {
     ],
   },
   LLM: { port: [], command: { start: [], stop: [] } },
+  PDF: { port: [], command: { start: [], stop: [] } },
 };
 export function getContainerConfig() {
   const containerConfigString = readFileSync(containerConfigPath, {
