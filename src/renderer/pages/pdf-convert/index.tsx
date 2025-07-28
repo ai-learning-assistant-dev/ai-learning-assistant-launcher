@@ -187,7 +187,7 @@ export default function PdfConvert() {
             )}
             
             <Text type="secondary">
-              支持选择多个PDF文件进行批量转换
+              支持选择多个PDF文件进行批量转换，文件名中不能携带逗号等特殊符号。
             </Text>
           </div>
 
