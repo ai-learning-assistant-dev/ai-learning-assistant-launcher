@@ -219,12 +219,37 @@ export default function AiService() {
                   shape="round"
                   size="small"
                   disabled={
-                    !isInstallWSL || checkingWsl || loading || cmdLoading
+                    !isInstallWSL || checkingWsl || loading || cmdLoading || (item.serviceName === 'PDF' && item.state === '正在运行')
                   }
                 >
                   设置
                 </Button>
               </NavLink>,
+              item.serviceName === 'PDF' && item.state === '正在运行'
+                ? (
+                  <Button
+                    shape="round"
+                    size="small"
+                    disabled={true}
+                  >
+                    更新
+                  </Button>
+                )
+                : (item.state !== '还未安装' && (
+                  <Button
+                    shape="round"
+                    size="small"
+                    disabled={!isInstallWSL || checkingWsl || cmdLoading}
+                    loading={
+                      loading &&
+                      operating.serviceName === item.serviceName &&
+                      operating.actionName === 'update'
+                    }
+                    onClick={() => click('update', item.serviceName)}
+                  >
+                    更新
+                  </Button>
+                )),
               item.serviceName === 'PDF' && item.state === '正在运行' && (
                 <NavLink key="convert" to="/pdf-convert">
                   <Button
@@ -238,21 +263,6 @@ export default function AiService() {
                 </NavLink>
               ),
               item.state !== '还未安装' && (
-                <Button
-                  shape="round"
-                  size="small"
-                  disabled={!isInstallWSL || checkingWsl || cmdLoading}
-                  loading={
-                    loading &&
-                    operating.serviceName === item.serviceName &&
-                    operating.actionName === 'update'
-                  }
-                  onClick={() => click('update', item.serviceName)}
-                >
-                  更新
-                </Button>
-              ),
-              item.state === '正在运行' && (
                 <Button
                   shape="round"
                   size="small"
