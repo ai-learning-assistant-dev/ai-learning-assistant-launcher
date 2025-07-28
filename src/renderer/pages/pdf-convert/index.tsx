@@ -224,17 +224,6 @@ export default function PdfConvert() {
               </Card>
             </div>
           )}
-
-          <div className="info-section">
-            <Card title="使用说明" type="inner">
-              <Space direction="vertical">
-                <Text>• 支持PDF文件转换为Markdown格式</Text>
-                <Text>• 自动检测翻译正确性</Text>
-                <Text>• 支持表格和公式解析</Text>
-                <Text>• 请确保PDF服务正在运行（端口5000）</Text>
-              </Space>
-            </Card>
-          </div>
         </Space>
       </Card>
     </div>
