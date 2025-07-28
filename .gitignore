@@ -97,4 +97,7 @@ out/
 NUL
 
 local/
-external-resouces/ai-assistant-backend/
+external-resources/ai-assistant-backend/
+
+# 忽略Obsidian配置文件
+external-resources/config/obsidian-config.json
