@@ -2,7 +2,7 @@ import { IpcMain } from 'electron';
 import { ActionName, channel, ServiceName } from './type-info';
 import { appPath, Exec } from '../exec';
 import { isMac, isWindows } from '../exec/util';
-import { getObsidianConfig, setVaultDefaultOpen } from '../configs';
+import { getObsidianConfig, setVaultDefaultOpen, getObsidianVaultConfig } from '../configs';
 import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 import path from 'node:path';
 import { statSync } from 'node:fs';
@@ -31,13 +31,26 @@ export default async function init(ipcMain: IpcMain) {
               setVaultDefaultOpen(vaultId);
             }
             let obsidianPath = getObsidianConfig().obsidianApp.bin;
-
+            let vaultName  = null;
+    
+            // 获取仓库路径
+            if (vaultId) {
+              const vaults = getObsidianVaultConfig();
+              const vault = vaults.find(v => v.id === vaultId);
+              if (vault) {
+                // 获取路径中的最后一个文件夹名称
+                vaultName  = path.basename(vault.path);
+              }
+            }
             try {
               obsidianPath = obsidianPath.replace(
                 '%localappdata%',
                 process.env.LOCALAPPDATA,
               );
-              const result = commandLine.exec(obsidianPath, [], {});
+              // 如果有仓库路径，则传递给Obsidian作为参数
+              const args = vaultName ? [`obsidian://open/?vault=${encodeURIComponent(vaultName)}`] : [];
+              const result = commandLine.exec(obsidianPath, args, {});
+              // const result = commandLine.exec(obsidianPath, [], {});
               event.reply(channel, MESSAGE_TYPE.INFO, '成功启动obsidian');
             } catch (e) {
               console.warn('启动obsidian失败', e);
