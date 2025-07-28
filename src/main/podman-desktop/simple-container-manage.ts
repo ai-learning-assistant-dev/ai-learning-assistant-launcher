@@ -361,11 +361,22 @@ export async function createContainer(serviceName: ServiceName) {
       : [],
   };
 
-  // 为PDF容器添加特殊配置
+  // 添加PDF容器的特殊配置
   if (serviceName === 'PDF') {
-    containerOptions.privileged = true; // 启用特权模式以支持ipc: host等配置
-    // 添加重启策略
-    containerOptions.restart_policy = 'always';
+    // 从配置文件读取配置
+    const pdfConfig = config as any; // 类型断言以访问PDF特有的配置
+    if (pdfConfig.privileged !== undefined) {
+      containerOptions.privileged = pdfConfig.privileged;
+    }
+    if (pdfConfig.restart_policy) {
+      containerOptions.restart_policy = pdfConfig.restart_policy;
+    }
+    if (pdfConfig.ipc) {
+      containerOptions.ipc = pdfConfig.ipc;
+    }
+    if (pdfConfig.ulimits) {
+      containerOptions.ulimits = pdfConfig.ulimits;
+    }
   }
 
   return connectionGlobal.createPodmanContainer(containerOptions);

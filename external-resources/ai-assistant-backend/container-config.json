@@ -93,6 +93,13 @@
     },
     "env": {
       "MINERU_MODEL_SOURCE": "local"
-    }
+    },
+    "ulimits": {
+      "memlock": -1,
+      "stack": 67108864
+    },
+    "ipc": "host",
+    "privileged": true,
+    "restart_policy": "always"
   }
 }

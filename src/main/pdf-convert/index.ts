@@ -1,4 +1,4 @@
-import { IpcMain } from 'electron';
+import { IpcMain, dialog } from 'electron';
 import { Exec } from '../exec';
 import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 import path from 'node:path';
@@ -8,8 +8,10 @@ import { v4 as uuidv4 } from 'uuid';
 
 const exec = new Exec();
 const channel = 'pdf-convert';
+const selectFilesChannel = 'select-pdf-files';
 
 export default async function init(ipcMain: IpcMain) {
+  // PDF转换服务
   ipcMain.on(
     channel,
     async (event, action: string, serviceName: string, filePaths: string[]) => {
@@ -111,6 +113,45 @@ export default async function init(ipcMain: IpcMain) {
             channel,
             MESSAGE_TYPE.ERROR,
             `PDF转换失败: ${error instanceof Error ? error.message : '未知错误'}`
+          );
+        }
+      }
+    }
+  );
+
+  // 文件选择服务
+  ipcMain.on(
+    selectFilesChannel,
+    async (event, action: string) => {
+      console.debug(`select-pdf-files action: ${action}`);
+      
+      if (action === 'select') {
+        try {
+          const result = await dialog.showOpenDialog({
+            title: '请选择PDF文件',
+            properties: ['openFile', 'multiSelections'],
+            filters: [{ name: 'PDF文件', extensions: ['pdf'] }],
+          });
+
+          if (!result.canceled && result.filePaths.length > 0) {
+            event.reply(
+              selectFilesChannel,
+              MESSAGE_TYPE.DATA,
+              new MessageData(action, 'select', result.filePaths)
+            );
+          } else {
+            event.reply(
+              selectFilesChannel,
+              MESSAGE_TYPE.WARNING,
+              '未选择文件'
+            );
+          }
+        } catch (error) {
+          console.error('文件选择失败:', error);
+          event.reply(
+            selectFilesChannel,
+            MESSAGE_TYPE.ERROR,
+            `文件选择失败: ${error instanceof Error ? error.message : '未知错误'}`
           );
         }
       }

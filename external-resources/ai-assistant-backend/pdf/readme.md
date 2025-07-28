@@ -90,3 +90,5 @@ curl -X 'POST' \
   -F 'table_enable=true' \
   -F 'formula_enable=true' \
   -F 'files=@国内民营企业“软件工…实践经验与能力分析.pdf;type=application/pdf'
+
+你应该在提交文件列表给容器时，提交该文件的绝对路径，修改handleFileSelect，使得它可以直接将绝对路径添加到fileList中，不要使用IPC通信从主进程获取文件路径，考虑使用dialog来实现文件浏览器

@@ -58,6 +58,13 @@ export interface ContainerConfig {
     };
     env?: Record<string, string>;
     mounts?: Array<ContainerCreateMountOption>;
+    ulimits?: {
+      memlock: number;
+      stack: number;
+    };
+    ipc?: string;
+    privileged?: boolean;
+    restart_policy?: string;
   };
 }
 

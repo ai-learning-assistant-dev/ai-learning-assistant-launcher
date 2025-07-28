@@ -14,9 +14,22 @@
     }
   }
 
-  .upload-section {
-    .ant-upload-list {
-      margin-top: 8px;
+  .file-section {
+    .file-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .file-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .ant-list-item {
+      padding: 12px 16px;
     }
   }
 

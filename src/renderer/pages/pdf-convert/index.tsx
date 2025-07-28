@@ -1,5 +1,5 @@
-import { Button, Upload, message, Card, Typography, Space, Spin } from 'antd';
-import { UploadOutlined, FileTextOutlined } from '@ant-design/icons';
+import { Button, message, Card, Typography, Space, List } from 'antd';
+import { FileTextOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { NavLink } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import './index.scss';
@@ -12,24 +12,29 @@ interface ConversionResult {
   translationCorrect?: boolean;
 }
 
+interface FileItem {
+  name: string;
+  path: string;
+}
+
 export default function PdfConvert() {
-  const [fileList, setFileList] = useState<any[]>([]);
+  const [fileList, setFileList] = useState<FileItem[]>([]);
   const [converting, setConverting] = useState(false);
   const [result, setResult] = useState<ConversionResult | null>(null);
 
-  const handleFileSelect = (info: any) => {
-    const { fileList: newFileList } = info;
-    
-    // 只允许选择PDF文件
-    const validFiles = newFileList.filter((file: any) => {
-      const isPDF = file.type === 'application/pdf' || file.name?.toLowerCase().endsWith('.pdf');
-      if (!isPDF) {
-        message.error(`${file.name} 不是PDF文件`);
-      }
-      return isPDF;
-    });
+  const handleFileSelect = async () => {
+    try {
+      // 通过IPC调用主进程的文件选择对话框
+      window.electron.ipcRenderer.sendMessage('select-pdf-files', 'select');
+    } catch (error) {
+      console.error('选择文件失败:', error);
+      message.error('选择文件失败');
+    }
+  };
 
-    setFileList(validFiles);
+  const removeFile = (index: number) => {
+    const newFileList = fileList.filter((_, i) => i !== index);
+    setFileList(newFileList);
   };
 
   const convertPdfToMarkdown = async () => {
@@ -42,26 +47,8 @@ export default function PdfConvert() {
     setResult(null);
 
     try {
-      // 获取文件路径 - 尝试多种方式
-      const filePaths = fileList.map((file) => {
-        console.debug('文件对象:', file);
-        console.debug('originFileObj:', file.originFileObj);
-        
-        // 尝试多种方式获取文件路径
-        const path = file.originFileObj?.path || 
-                    file.originFileObj?.name || 
-                    file.name ||
-                    file.path;
-        
-        console.debug('获取到的路径:', path);
-        return path;
-      }).filter(path => path && path !== 'undefined');
-      
-      console.debug('最终文件路径列表:', filePaths);
-      
-      if (filePaths.length === 0) {
-        throw new Error('无法获取有效的文件路径');
-      }
+      // 获取文件路径
+      const filePaths = fileList.map((file) => file.path);
       
       // 通过IPC调用主进程的PDF转换服务
       window.electron.ipcRenderer.sendMessage('pdf-convert', 'convert', 'PDF', filePaths);
@@ -79,7 +66,7 @@ export default function PdfConvert() {
 
   // 监听IPC响应
   useEffect(() => {
-    const cancel = window.electron?.ipcRenderer.on(
+    const cancel1 = window.electron?.ipcRenderer.on(
       'pdf-convert',
       (messageType: any, data: any) => {
         console.debug('PDF转换响应:', messageType, data);
@@ -110,18 +97,39 @@ export default function PdfConvert() {
       }
     );
 
-    return () => {
-      if (cancel) cancel();
-    };
-  }, []);
+    const cancel2 = window.electron?.ipcRenderer.on(
+      'select-pdf-files',
+      (messageType: any, data: any) => {
+        console.debug('文件选择响应:', messageType, data);
+        
+        if (messageType === 'data') {
+          const filePaths = data.data;
+          if (filePaths && filePaths.length > 0) {
+            // 将文件路径转换为FileItem格式
+            const newFiles: FileItem[] = filePaths.map((filePath: string) => ({
+              name: filePath.split(/[\\/]/).pop() || filePath, // 获取文件名
+              path: filePath
+            }));
+            
+            // 合并到现有文件列表，避免重复
+            const existingPaths = fileList.map(f => f.path);
+            const uniqueNewFiles = newFiles.filter(f => !existingPaths.includes(f.path));
+            
+            setFileList([...fileList, ...uniqueNewFiles]);
+          }
+        } else if (messageType === 'error') {
+          message.error(data);
+        } else if (messageType === 'warning') {
+          message.warning(data);
+        }
+      }
+    );
 
-  const uploadProps = {
-    beforeUpload: () => false, // 阻止自动上传
-    onChange: handleFileSelect,
-    fileList,
-    accept: '.pdf',
-    multiple: true,
-  };
+    return () => {
+      if (cancel1) cancel1();
+      if (cancel2) cancel2();
+    };
+  }, [fileList]);
 
   return (
     <div className="pdf-convert">
@@ -134,11 +142,50 @@ export default function PdfConvert() {
         </div>
 
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
-          <div className="upload-section">
-            <Text strong>选择PDF文件：</Text>
-            <Upload {...uploadProps} listType="text">
-              <Button icon={<UploadOutlined />}>选择PDF文件</Button>
-            </Upload>
+          <div className="file-section">
+            <div className="file-header">
+              <Text strong>选择PDF文件：</Text>
+              <Button 
+                type="primary" 
+                icon={<PlusOutlined />} 
+                onClick={handleFileSelect}
+                disabled={converting}
+              >
+                选择PDF文件
+              </Button>
+            </div>
+            
+            {fileList.length > 0 && (
+              <List
+                size="small"
+                bordered
+                dataSource={fileList}
+                renderItem={(file, index) => (
+                  <List.Item
+                    actions={[
+                      <Button
+                        key="delete"
+                        type="text"
+                        danger
+                        icon={<DeleteOutlined />}
+                        onClick={() => removeFile(index)}
+                        disabled={converting}
+                      >
+                        删除
+                      </Button>
+                    ]}
+                  >
+                    <div className="file-item">
+                      <Text>{file.name}</Text>
+                      <Text type="secondary" style={{ fontSize: '12px' }}>
+                        {file.path}
+                      </Text>
+                    </div>
+                  </List.Item>
+                )}
+              />
+            )}
+            
             <Text type="secondary">
               支持选择多个PDF文件进行批量转换
             </Text>
