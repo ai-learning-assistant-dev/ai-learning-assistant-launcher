@@ -10,6 +10,8 @@ interface UseWorkspaceReturn {
   getDirectoryStructure: (vaultId: string) => Promise<DirectoryNode[]>;
   getFileList: (path: string) => Promise<DirectoryNode[]>;
   deleteWorkspaceConfig: (path: string) => Promise<void>;
+  getWorkspaceList: (vaultId: string) => Promise<DirectoryNode[]>;
+  createWorkspace: (vaultId: string) => Promise<void>; // 添加这一行
 }
 export function useWorkspace(): UseWorkspaceReturn {
   const [loading, setLoading] = useState(false);
@@ -30,6 +32,8 @@ export function useWorkspace(): UseWorkspaceReturn {
             setPendingPromise(null);
           }
           setLoading(false);
+          // 显示错误消息
+          message.error(data.toString());
         } 
         else if (messageType === MESSAGE_TYPE.INFO) {
           // 处理成功信息
@@ -38,6 +42,7 @@ export function useWorkspace(): UseWorkspaceReturn {
             setPendingPromise(null);
           }
           setLoading(false);
+          message.success(data.toString());
         }
         else if (messageType === MESSAGE_TYPE.DATA) {
           const response = data as MessageData<ActionName, ServiceName, any>;
@@ -84,10 +89,8 @@ export function useWorkspace(): UseWorkspaceReturn {
   const saveWorkspaceConfig = useCallback(async (path: string, config: WorkspaceConfig) => {
     try {
       await sendIpcMessage<void>('save-config', path, { config });
-      message.success('工作区配置文件保存成功');
     } catch (error) {
       console.error('保存配置失败: ' + error);
-      message.error('保存失败: ' + (error as Error).message);
     }
   }, [sendIpcMessage]);
 
@@ -114,9 +117,27 @@ export function useWorkspace(): UseWorkspaceReturn {
   const deleteWorkspaceConfig = useCallback(async (path: string) => {
     try {
       await sendIpcMessage<void>('delete-config', path);
-      message.success('配置删除成功');
+      // message.success('配置删除成功');
     } catch (error) {
       console.error('配置删除失败: ' + error);
+    }
+  }, [sendIpcMessage]);
+
+  const getWorkspaceList = useCallback(async (vaultId: string): Promise<DirectoryNode[]> => {
+    try {
+      const result = await sendIpcMessage<DirectoryNode[]>('get-workspace-list', vaultId);
+      return result;
+    } catch (error) {
+      console.error('获取工作区列表失败: ' + error);
+      return [];
+    }
+  }, [sendIpcMessage]);
+
+  const createWorkspace = useCallback(async (vaultId: string) => {
+    try {
+      await sendIpcMessage<void>('create-workspace', vaultId);
+    } catch (error) {
+      console.error('创建工作区失败: ' + error);
     }
   }, [sendIpcMessage]);
 
@@ -126,7 +147,9 @@ export function useWorkspace(): UseWorkspaceReturn {
     saveWorkspaceConfig,
     getDirectoryStructure,
     getFileList,
-    deleteWorkspaceConfig
+    deleteWorkspaceConfig,
+    getWorkspaceList,
+    createWorkspace,
   };
 }
 

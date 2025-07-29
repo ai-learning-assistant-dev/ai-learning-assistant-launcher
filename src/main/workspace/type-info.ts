@@ -1,7 +1,13 @@
 import type { Channels } from '../ipc-data-type';
 
 export type ServiceName = 'workspace' | 'all';
-export type ActionName = 'save-config' | 'load-config' | 'get-directory-structure' | 'get-file-list' | 'delete-config';
+export type ActionName = 'save-config' 
+            | 'load-config' 
+            | 'get-directory-structure' 
+            | 'get-file-list' 
+            | 'delete-config' 
+            | 'get-workspace-list'
+            | 'create-workspace';
 
 export const channel: Channels = 'workspace';
 

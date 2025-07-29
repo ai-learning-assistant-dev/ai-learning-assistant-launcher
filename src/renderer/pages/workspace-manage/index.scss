@@ -151,3 +151,43 @@
   }
 
 }
+
+
+.workspace-config-panel {
+  background-color: #fafafa;
+  padding: 16px;
+  border: 1px solid #e8e8e8;
+  border-radius: 4px;
+  margin: 0 16px 16px 16px;
+  
+  .config-actions {
+    margin-bottom: 16px;
+  }
+  
+  .section-title {
+    font-size: 16px;
+    font-weight: 500;
+    margin: 16px 0 8px 0;
+    color: rgba(0, 0, 0, 0.85);
+  }
+  
+  .persona-card {
+    margin-bottom: 16px;
+    
+    .persona-header {
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      
+      .persona-title {
+        font-weight: 500;
+      }
+    }
+    
+    .persona-form-item {
+      margin-bottom: 12px;
+    }
+  }
+}
