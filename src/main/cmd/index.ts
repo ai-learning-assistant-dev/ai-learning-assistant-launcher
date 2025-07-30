@@ -7,6 +7,7 @@ import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 import path from 'node:path';
 import { statSync } from 'node:fs';
 import { resetPodman } from '../podman-desktop/ensure-podman-works';
+import { RunResult } from '@podman-desktop/api';
 
 const commandLine = new Exec();
 
@@ -53,9 +54,7 @@ export default async function init(ipcMain: IpcMain) {
             event.reply(channel, MESSAGE_TYPE.INFO, '成功启动');
           }
         } else if (action === 'stop') {
-           
           const result = await commandLine.exec('echo %cd%');
-          
           event.reply(channel, MESSAGE_TYPE.INFO, '成功停止');
         } else if (action === 'remove') {
           if (serviceName === 'podman') {
@@ -106,6 +105,21 @@ export default async function init(ipcMain: IpcMain) {
                 new MessageData(action, serviceName, false),
               );
             }
+          } else if (serviceName === 'lm-studio') {
+            try {
+              const result = await installLMStudio();
+              event.reply(
+                channel,
+                MESSAGE_TYPE.DATA,
+                new MessageData(action, serviceName, result),
+              );
+            } catch (e) {
+              event.reply(
+                channel,
+                MESSAGE_TYPE.DATA,
+                new MessageData(action, serviceName, false),
+              );
+            }
           } else {
             const result = await commandLine.exec('echo %cd%');
             event.reply(channel, MESSAGE_TYPE.INFO, '安装成功');
@@ -121,13 +135,13 @@ export default async function init(ipcMain: IpcMain) {
             event.reply(
               channel,
               MESSAGE_TYPE.DATA,
-              new MessageData(action, serviceName, await isObsidianInstall()),
+              new MessageData(action, serviceName, false),
             );
           } else if (serviceName === 'lm-studio') {
             event.reply(
               channel,
               MESSAGE_TYPE.DATA,
-              new MessageData(action, serviceName, true),
+              new MessageData(action, serviceName, await isLMStudioInstall()),
             );
           } else {
             const result = await commandLine.exec('echo %cd%');
@@ -387,6 +401,37 @@ export async function isObsidianInstall() {
     }
   } catch (e) {
     console.warn('检查obsidian失败', e);
+    return false;
+  }
+}
+
+export async function installLMStudio() {
+  const result = await commandLine.exec(
+    path.join(
+      appPath,
+      'external-resources',
+      'ai-assistant-backend',
+      'install_lm_studio.exe',
+    ),
+    ['/s'],
+  );
+  console.debug(result);
+  return true;
+}
+
+export async function isLMStudioInstall() {
+  try {
+    const result = await Promise.race([
+      new Promise<RunResult>((resolve, reject) =>
+        setTimeout(() => reject('命令超时'), 4000),
+      ),
+      // 如果用户安装lmstudio然后又卸载了lmstudio，那么这个命令会一直卡着，也不报错，所以要用一个4000ms的报错promise与它竞赛
+      commandLine.exec('lms', ['ls']),
+    ]);
+    console.debug(isLMStudioInstall, result);
+    return true;
+  } catch (e) {
+    console.warn(e);
     return false;
   }
 }

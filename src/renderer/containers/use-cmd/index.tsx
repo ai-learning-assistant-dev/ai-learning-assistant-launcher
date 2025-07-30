@@ -69,6 +69,9 @@ export default function useCmd() {
             } else if (service === 'obsidianApp') {
               setIsInstallObsidian(payload);
               setLoading(false);
+            } else if (service === 'lm-studio') {
+              setIsInstallLMStudio(payload);
+              setLoading(false);
             }
           }
         } else if (messageType === MESSAGE_TYPE.INFO) {

@@ -12,7 +12,10 @@ import { MESSAGE_TYPE, MessageData } from '../../../main/ipc-data-type';
 
 export default function useLMStudio() {
   const [lMModels, setLMModels] = useState<LMModel[]>([]);
-  const [lmServerStatus, setLmServerStatus] = useState<ServerStatus>({running: false, port: 1234});
+  const [lmServerStatus, setLmServerStatus] = useState<ServerStatus>({
+    running: false,
+    port: 1234,
+  });
   const [loading, setLoading] = useState(false);
   const [initing, setIniting] = useState(true);
   function action(actionName: ActionName, serviceName: ServiceName) {

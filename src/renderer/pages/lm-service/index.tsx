@@ -118,28 +118,6 @@ export default function LMService() {
               <Button disabled={loading || cmdLoading}>返回</Button>
             </Link>
             <div>
-              <Popconfirm
-                title="删除所有模型和缓存"
-                description="你确定要删除所有模型和缓存吗？删除后再次安装会需要很长时间！"
-                onConfirm={() => clickCmd('remove', 'lm-studio')}
-                okText="确认删除"
-                cancelText="不删除"
-              >
-                <Button
-                  disabled={!isInstallWSL || cmdLoading || loading}
-                  type="primary"
-                  shape="round"
-                  danger
-                  loading={
-                    cmdLoading &&
-                    cmdOperating.serviceName === 'lm-studio' &&
-                    cmdOperating.actionName === 'remove'
-                  }
-                >
-                  删除所有服务和缓存
-                </Button>
-              </Popconfirm>
-              <div style={{ width: '20px', display: 'inline-block' }}></div>
               <Button
                 disabled={isInstallLMStudio}
                 type="primary"
@@ -164,38 +142,17 @@ export default function LMService() {
         renderItem={(item) => (
           <List.Item
             actions={[
-              `http://127.0.0.1:${lmServerStatus.port}`,
-              <NavLink key="config" to={`/${item.serviceName}-config`}>
-                <Button
-                  shape="round"
-                  size="small"
-                  disabled={
-                    !isInstallWSL || checkingWsl || loading || cmdLoading
-                  }
-                >
-                  设置
-                </Button>
-              </NavLink>,
-              item.state !== '还未安装' && (
-                <Button
-                  shape="round"
-                  size="small"
-                  disabled={!isInstallWSL || checkingWsl || cmdLoading}
-                  loading={
-                    loading &&
-                    operating.serviceName === item.serviceName &&
-                    operating.actionName === 'update'
-                  }
-                  onClick={() => click('update', item.serviceName)}
-                >
-                  更新
-                </Button>
-              ),
+              `http://127.0.0.1:${lmServerStatus.port}${initing}${loading}`,
               item.state === '已经加载' && (
                 <Button
                   shape="round"
                   size="small"
-                  disabled={!isInstallWSL || checkingWsl || cmdLoading || !isInstallLMStudio}
+                  disabled={
+                    !isInstallWSL ||
+                    checkingWsl ||
+                    cmdLoading ||
+                    !isInstallLMStudio
+                  }
                   loading={
                     loading &&
                     operating.serviceName === item.serviceName &&
@@ -210,7 +167,12 @@ export default function LMService() {
                 <Button
                   shape="round"
                   size="small"
-                  disabled={!isInstallWSL || checkingWsl || cmdLoading || !isInstallLMStudio}
+                  disabled={
+                    !isInstallWSL ||
+                    checkingWsl ||
+                    cmdLoading ||
+                    !isInstallLMStudio
+                  }
                   loading={
                     loading &&
                     operating.serviceName === item.serviceName &&
@@ -224,16 +186,19 @@ export default function LMService() {
               ),
               item.state === '已经安装' && (
                 <Popconfirm
-                  title="删除容器"
-                  description="你确定要删除模型？删除后再次安装会需要较长时间！"
-                  onConfirm={() => click('remove', item.serviceName)}
-                  okText="确认删除"
-                  cancelText="不删除"
+                  title="删除模型"
+                  description="请使用LM Studio软件进行删除模型的操作"
+                  okText="知道了"
                 >
                   <Button
                     shape="round"
                     size="small"
-                    disabled={!isInstallWSL || checkingWsl || cmdLoading}
+                    disabled={
+                      !isInstallWSL ||
+                      checkingWsl ||
+                      cmdLoading ||
+                      !isInstallLMStudio
+                    }
                     loading={
                       loading &&
                       operating.serviceName === item.serviceName &&
@@ -250,7 +215,12 @@ export default function LMService() {
                 <Button
                   shape="round"
                   size="small"
-                  disabled={!isInstallWSL || checkingWsl || cmdLoading}
+                  disabled={
+                    !isInstallWSL ||
+                    checkingWsl ||
+                    cmdLoading ||
+                    !isInstallLMStudio
+                  }
                   loading={
                     initing ||
                     (loading &&
