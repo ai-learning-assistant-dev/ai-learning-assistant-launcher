@@ -25,7 +25,6 @@ interface ModelItem {
   name: string;
   serviceName: ServiceName;
   state: '还未安装' | '已经安装' | '已经加载';
-  port: number;
 }
 
 function getState(lMModel?: LMModel): ModelItem['state'] {
@@ -39,7 +38,7 @@ function getState(lMModel?: LMModel): ModelItem['state'] {
 }
 
 export default function LMService() {
-  const { lMModels, action, loading, initing } = useLMStudio();
+  const { lmServerStatus, lMModels, action, loading, initing } = useLMStudio();
   const {
     isInstallWSL,
     checkingWsl,
@@ -77,13 +76,11 @@ export default function LMService() {
       name: 'qwen3-32b',
       serviceName: 'qwen/qwen3-32b',
       state: getState(qwen3_32b),
-      port: 9000,
     },
     {
       name: 'text-embedding',
       serviceName: 'qwen/qwen3-embedding-0.6b',
       state: getState(textEmbedding),
-      port: 8000,
     },
   ];
 
@@ -144,7 +141,7 @@ export default function LMService() {
               </Popconfirm>
               <div style={{ width: '20px', display: 'inline-block' }}></div>
               <Button
-                disabled={isInstallWSL}
+                disabled={isInstallLMStudio}
                 type="primary"
                 shape="round"
                 loading={
@@ -159,6 +156,24 @@ export default function LMService() {
                   ? '已安装LMStudio'
                   : '开启本地大模型前请点我安装LMStudio'}
               </Button>
+              <div style={{ width: '20px', display: 'inline-block' }}></div>
+              <Button
+                disabled={!isInstallLMStudio}
+                type="primary"
+                danger={lmServerStatus.running}
+                shape="round"
+                loading={
+                  checkingWsl ||
+                  (cmdLoading &&
+                    cmdOperating.serviceName === 'lm-studio' &&
+                    cmdOperating.actionName === 'install')
+                }
+                onClick={() => clickCmd(lmServerStatus.running?'stop':'start', 'lm-studio')}
+              >
+                {lmServerStatus.running
+                  ? '停止LM Studio服务'
+                  : '启动LM Studio服务'}
+              </Button>
             </div>
           </div>
         }
@@ -167,7 +182,6 @@ export default function LMService() {
         renderItem={(item) => (
           <List.Item
             actions={[
-              `访问地址：http://127.0.0.1:${item.port}`,
               <NavLink key="config" to={`/${item.serviceName}-config`}>
                 <Button
                   shape="round"

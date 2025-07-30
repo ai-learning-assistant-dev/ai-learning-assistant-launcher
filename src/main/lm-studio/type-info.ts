@@ -27,6 +27,17 @@ const modelListSample = {
 
 export type LMModel = typeof modelListSample & {
   isLoaded: boolean;
+  port: number;
+};
+
+const serverStatusExample = {"running":true,"port":1234};
+
+export type ServerStatus = typeof serverStatusExample;
+
+export const modelFile: Record<ServiceName, string> = {
+  'qwen/qwen3-32b': '',
+  'qwen/qwen3-embedding-0.6b': 'Qwen/Qwen3-Embedding-0.6B-GGUF/Qwen3-Embedding-0.6B-Q8_0.gguf',
+  'google/gemma-3-27b': '',
 };
 
 export const modelKeyDict: Record<ServiceName, string> = {
