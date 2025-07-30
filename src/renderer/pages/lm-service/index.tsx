@@ -11,7 +11,7 @@ import './index.scss';
 import type { ContainerInfo } from 'dockerode';
 import { useEffect, useState } from 'react';
 import useDocker from '../../containers/use-docker';
-import { ActionName, LMModel, modelKeyDict, ServiceName } from '../../../main/lm-studio/type-info';
+import { ActionName, LMModel, modelKeyDict, ServerStatus, ServiceName } from '../../../main/lm-studio/type-info';
 import {
   ActionName as CmdActionName,
   ServiceName as CmdServiceName,
@@ -27,9 +27,9 @@ interface ModelItem {
   state: '还未安装' | '已经安装' | '已经加载';
 }
 
-function getState(lMModel?: LMModel): ModelItem['state'] {
+function getState(lMModel?: LMModel, lmServerStatus?: ServerStatus): ModelItem['state'] {
   if (lMModel) {
-    if (lMModel.isLoaded) {
+    if (lMModel.isLoaded && lmServerStatus && lmServerStatus.running) {
       return '已经加载';
     }
     return '已经安装';
@@ -75,12 +75,12 @@ export default function LMService() {
     {
       name: 'qwen3-32b',
       serviceName: 'qwen/qwen3-32b',
-      state: getState(qwen3_32b),
+      state: getState(qwen3_32b, lmServerStatus),
     },
     {
       name: 'text-embedding',
       serviceName: 'qwen/qwen3-embedding-0.6b',
-      state: getState(textEmbedding),
+      state: getState(textEmbedding, lmServerStatus),
     },
   ];
 
@@ -156,24 +156,6 @@ export default function LMService() {
                   ? '已安装LMStudio'
                   : '开启本地大模型前请点我安装LMStudio'}
               </Button>
-              <div style={{ width: '20px', display: 'inline-block' }}></div>
-              <Button
-                disabled={!isInstallLMStudio}
-                type="primary"
-                danger={lmServerStatus.running}
-                shape="round"
-                loading={
-                  checkingWsl ||
-                  (cmdLoading &&
-                    cmdOperating.serviceName === 'lm-studio' &&
-                    cmdOperating.actionName === 'install')
-                }
-                onClick={() => clickCmd(lmServerStatus.running?'stop':'start', 'lm-studio')}
-              >
-                {lmServerStatus.running
-                  ? '停止LM Studio服务'
-                  : '启动LM Studio服务'}
-              </Button>
             </div>
           </div>
         }
@@ -182,6 +164,7 @@ export default function LMService() {
         renderItem={(item) => (
           <List.Item
             actions={[
+              `http://127.0.0.1:${lmServerStatus.port}`,
               <NavLink key="config" to={`/${item.serviceName}-config`}>
                 <Button
                   shape="round"
@@ -212,7 +195,7 @@ export default function LMService() {
                 <Button
                   shape="round"
                   size="small"
-                  disabled={!isInstallWSL || checkingWsl || cmdLoading}
+                  disabled={!isInstallWSL || checkingWsl || cmdLoading || !isInstallLMStudio}
                   loading={
                     loading &&
                     operating.serviceName === item.serviceName &&
@@ -227,7 +210,7 @@ export default function LMService() {
                 <Button
                   shape="round"
                   size="small"
-                  disabled={!isInstallWSL || checkingWsl || cmdLoading}
+                  disabled={!isInstallWSL || checkingWsl || cmdLoading || !isInstallLMStudio}
                   loading={
                     loading &&
                     operating.serviceName === item.serviceName &&

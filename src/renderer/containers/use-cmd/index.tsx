@@ -60,7 +60,7 @@ export default function useCmd() {
             } else if (service === 'obsidianApp') {
               setIsInstallObsidian(payload);
             } else if (service === 'lm-studio') {
-              setIsInstallObsidian(payload);
+              setIsInstallLMStudio(payload);
             }
           } else if (actionName === 'install') {
             if (service === 'WSL') {

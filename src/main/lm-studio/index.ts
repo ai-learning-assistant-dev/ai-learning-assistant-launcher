@@ -11,7 +11,6 @@ import {
 } from './type-info';
 import { Exec } from '../exec';
 import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
-import { startLMStudioServer } from '../cmd';
 const commandLine = new Exec();
 
 export default async function init(ipcMain: IpcMain) {
@@ -53,7 +52,7 @@ export default async function init(ipcMain: IpcMain) {
           }catch(e){
             console.warn(e);
             if (e&& e.message&& e.message.indexOf('already')>=0){
-              event.reply(channel, MESSAGE_TYPE.ERROR, `模型${serviceName}已经加载`);
+              event.reply(channel, MESSAGE_TYPE.INFO, `加载模型${serviceName}成功`);
             }else{
               event.reply(channel, MESSAGE_TYPE.ERROR, `模型${serviceName}加载错误`);
               throw e;
@@ -168,5 +167,36 @@ async function stopModel(serviceName: ServiceName) {
   } catch (e) {
     console.error(e);
     throw e;
+  }
+}
+
+
+export async function startLMStudioServer(){
+  try{
+    const serverResult = await commandLine.exec(
+      'lms',
+      ['server', 'start', '--cors'],
+      {
+        shell: true,
+      },
+    );
+    console.debug('startServer', serverResult);
+  }catch(e){
+    console.warn(e);
+  }
+}
+
+export async function stopLMStudioServer(){
+  try{
+    const serverResult = await commandLine.exec(
+      'lms',
+      ['server', 'stop'],
+      {
+        shell: true,
+      },
+    );
+    console.debug('startServer', serverResult);
+  }catch(e){
+    console.warn(e);
   }
 }

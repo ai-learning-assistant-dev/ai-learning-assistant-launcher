@@ -47,21 +47,14 @@ export default async function init(ipcMain: IpcMain) {
                 '启动obsidian失败，请检查obsidian路径设置',
               );
             }
-          } else if(serviceName === 'lm-studio') {
-            await startLMStudioServer();
-            event.reply(channel, MESSAGE_TYPE.INFO, '成功启动LM Studio服务');
           } else {
             const result = await commandLine.exec('echo %cd%');
             console.debug('cmd', result);
             event.reply(channel, MESSAGE_TYPE.INFO, '成功启动');
           }
         } else if (action === 'stop') {
-           if (serviceName === 'lm-studio') {
-            await stopLMStudioServer();
-            event.reply(channel, MESSAGE_TYPE.INFO, '成功停止LM Studio服务');
-          } else {
-            const result = await commandLine.exec('echo %cd%');
-          }
+           
+          const result = await commandLine.exec('echo %cd%');
           
           event.reply(channel, MESSAGE_TYPE.INFO, '成功停止');
         } else if (action === 'remove') {
@@ -129,6 +122,12 @@ export default async function init(ipcMain: IpcMain) {
               channel,
               MESSAGE_TYPE.DATA,
               new MessageData(action, serviceName, await isObsidianInstall()),
+            );
+          } else if (serviceName === 'lm-studio') {
+            event.reply(
+              channel,
+              MESSAGE_TYPE.DATA,
+              new MessageData(action, serviceName, true),
             );
           } else {
             const result = await commandLine.exec('echo %cd%');
@@ -389,36 +388,5 @@ export async function isObsidianInstall() {
   } catch (e) {
     console.warn('检查obsidian失败', e);
     return false;
-  }
-}
-
-
-export async function startLMStudioServer(){
-  try{
-    const serverResult = await commandLine.exec(
-      'lms',
-      ['server', 'start', '--cors'],
-      {
-        shell: true,
-      },
-    );
-    console.debug('startServer', serverResult);
-  }catch(e){
-    console.warn(e);
-  }
-}
-
-export async function stopLMStudioServer(){
-  try{
-    const serverResult = await commandLine.exec(
-      'lms',
-      ['server', 'stop'],
-      {
-        shell: true,
-      },
-    );
-    console.debug('startServer', serverResult);
-  }catch(e){
-    console.warn(e);
   }
 }
