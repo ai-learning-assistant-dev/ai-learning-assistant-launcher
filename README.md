@@ -14,8 +14,10 @@ npm install
 npm run start
 #打包-不压缩包
 npm run package
-#打包-压缩包
+#打包-压缩包-包含依赖软件，最终包体积大小约为1.4GB
 npm run make
+#打包-压缩包-不包含依赖软件，最终包体积大约100MB
+npm run make-mini
 ```
 
 ## 目录结构
