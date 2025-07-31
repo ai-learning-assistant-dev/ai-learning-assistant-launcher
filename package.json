@@ -8,6 +8,7 @@
     "start": "chcp 65001 && electron-forge start",
     "package": "electron-forge package",
     "make": "electron-forge make --target @electron-forge/maker-zip",
+    "make-mini": "cross-env MAKE_MINI=true electron-forge make --target @electron-forge/maker-zip",
     "publish": "electron-forge publish",
     "lint": "eslint --ext .ts,.tsx .",
     "lint:fix": "eslint --fix --ext .ts,.tsx ."
