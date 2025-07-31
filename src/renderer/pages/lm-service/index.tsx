@@ -140,7 +140,7 @@ export default function LMService() {
         renderItem={(item) => (
           <List.Item
             actions={[
-              `http://127.0.0.1:${lmServerStatus.port}${initing}${loading}`,
+              `http://127.0.0.1:${lmServerStatus.port}`,
               item.state === '已经加载' && (
                 <Button
                   shape="round"
