@@ -5,6 +5,7 @@ import { useState } from 'react';
 import {
   ActionName,
   LMModel,
+  lmStudioServiceNameList,
   modelNameDict,
   ServerStatus,
   ServiceName,
@@ -63,15 +64,7 @@ export default function LMService() {
   //   (item) => item.Names.indexOf() >= 0,
   // )[0];
 
-  const modelInfos: ModelItem[] = (
-    [
-      'qwen/qwen3-embedding-0.6b',
-      'google/gemma-3-27b',
-      'qwen/qwen3-8b',
-      'qwen/qwen3-14b',
-      'qwen/qwen3-32b',
-    ] as ServiceName[]
-  ).map((serviceName) => {
+  const modelInfos: ModelItem[] = lmStudioServiceNameList.map((serviceName) => {
     const lmsInfo = lMModels.filter(
       (item) => item.displayName === modelNameDict[serviceName],
     )[0];
