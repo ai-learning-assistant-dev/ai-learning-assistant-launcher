@@ -1,24 +1,19 @@
-import {
-  Button,
-  List,
-  Modal,
-  notification,
-  Popconfirm,
-  Typography,
-} from 'antd';
-import { Link, NavLink } from 'react-router-dom';
+import { Button, List, notification, Popconfirm, Typography } from 'antd';
+import { Link } from 'react-router-dom';
 import './index.scss';
-import type { ContainerInfo } from 'dockerode';
-import { useEffect, useState } from 'react';
-import useDocker from '../../containers/use-docker';
-import { ActionName, LMModel, modelKeyDict, ServerStatus, ServiceName } from '../../../main/lm-studio/type-info';
+import { useState } from 'react';
+import {
+  ActionName,
+  LMModel,
+  modelKeyDict,
+  ServerStatus,
+  ServiceName,
+} from '../../../main/lm-studio/type-info';
 import {
   ActionName as CmdActionName,
   ServiceName as CmdServiceName,
-  channel as cmdChannel,
 } from '../../../main/cmd/type-info';
 import useCmd from '../../containers/use-cmd';
-import { MESSAGE_TYPE, MessageData } from '../../../main/ipc-data-type';
 import useLMStudio from '../../containers/use-lm-studio';
 
 interface ModelItem {
@@ -27,7 +22,10 @@ interface ModelItem {
   state: '还未安装' | '已经安装' | '已经加载';
 }
 
-function getState(lMModel?: LMModel, lmServerStatus?: ServerStatus): ModelItem['state'] {
+function getState(
+  lMModel?: LMModel,
+  lmServerStatus?: ServerStatus,
+): ModelItem['state'] {
   if (lMModel) {
     if (lMModel.isLoaded && lmServerStatus && lmServerStatus.running) {
       return '已经加载';
