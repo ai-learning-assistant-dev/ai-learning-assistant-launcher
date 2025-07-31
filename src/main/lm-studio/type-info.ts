@@ -47,7 +47,7 @@ export const modelNameDict: Record<ServiceName, string> = {
   'qwen/qwen3-32b': 'Qwen3 32B',
   'qwen/qwen3-embedding-0.6b': 'Qwen3 Embedding 0.6B',
   'google/gemma-3-27b': 'Gemma 3 27B Instruct',
-  'vonjack/bge-m3-gguf': 'vonjack-bge-m3-gguf',
+  'vonjack/bge-m3-gguf': 'Bge M3 Bert Cpp',
 };
 
 export const lmsGetNameDict: Record<ServiceName, string> = {
