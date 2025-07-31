@@ -4,8 +4,7 @@ import {
   channel,
   LMModel,
   lmsGetNameDict,
-  modelFile,
-  modelKeyDict,
+  modelNameDict,
   ServerStatus,
   ServiceName,
 } from './type-info';
@@ -191,14 +190,10 @@ async function installModel(serviceName: ServiceName) {
 async function startModel(serviceName: ServiceName) {
   await startLMStudioServer();
   try {
+    const modelInfo = await getModelInfoByServiceName(serviceName);
     const result = await commandLine.exec(
       'lms',
-      [
-        'load',
-        modelFile[serviceName],
-        '--identifier',
-        modelKeyDict[serviceName],
-      ],
+      ['load', modelInfo.path, '--identifier', modelInfo.modelKey],
       {
         shell: true,
       },
@@ -211,11 +206,22 @@ async function startModel(serviceName: ServiceName) {
   }
 }
 
+async function getModelInfoByServiceName(serviceName: ServiceName) {
+  const result = await commandLine.exec('lms', ['ls', '--json'], {
+    shell: true,
+  });
+  console.debug('getModelKeyByServiceName', result);
+  return (JSON.parse(result.stdout) as LMModel[]).filter(
+    (item) => item.displayName === modelNameDict[serviceName],
+  )[0];
+}
+
 async function stopModel(serviceName: ServiceName) {
   try {
+    const modelInfo = await getModelInfoByServiceName(serviceName);
     const result = await commandLine.exec(
       'lms',
-      ['unload', modelKeyDict[serviceName]],
+      ['unload', modelInfo.modelKey],
       {
         shell: true,
       },

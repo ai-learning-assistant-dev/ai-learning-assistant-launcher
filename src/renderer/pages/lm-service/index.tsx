@@ -5,7 +5,7 @@ import { useState } from 'react';
 import {
   ActionName,
   LMModel,
-  modelKeyDict,
+  modelNameDict,
   ServerStatus,
   ServiceName,
 } from '../../../main/lm-studio/type-info';
@@ -62,25 +62,25 @@ export default function LMService() {
   // const llmContainer = containers.filter(
   //   (item) => item.Names.indexOf() >= 0,
   // )[0];
-  const textEmbedding = lMModels.filter(
-    (item) => item.modelKey === modelKeyDict['qwen/qwen3-embedding-0.6b'],
-  )[0];
-  const qwen3_32b = lMModels.filter(
-    (item) => item.modelKey === modelKeyDict['qwen/qwen3-32b'],
-  )[0];
 
-  const modelInfos: ModelItem[] = [
-    {
-      name: 'qwen3-32b',
-      serviceName: 'qwen/qwen3-32b',
-      state: getState(qwen3_32b, lmServerStatus),
-    },
-    {
-      name: 'text-embedding',
-      serviceName: 'qwen/qwen3-embedding-0.6b',
-      state: getState(textEmbedding, lmServerStatus),
-    },
-  ];
+  const modelInfos: ModelItem[] = (
+    [
+      'qwen/qwen3-embedding-0.6b',
+      'google/gemma-3-27b',
+      'qwen/qwen3-8b',
+      'qwen/qwen3-14b',
+      'qwen/qwen3-32b',
+    ] as ServiceName[]
+  ).map((serviceName) => {
+    const lmsInfo = lMModels.filter(
+      (item) => item.displayName === modelNameDict[serviceName],
+    )[0];
+    return {
+      name: serviceName,
+      serviceName: serviceName,
+      state: getState(lmsInfo, lmServerStatus),
+    };
+  });
 
   function click(actionName: ActionName, serviceName: ServiceName) {
     if (loading || checkingWsl) {
