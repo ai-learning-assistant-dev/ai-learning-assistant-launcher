@@ -13,15 +13,19 @@ import {
   Tooltip,
   List,
   Modal,
-  Typography
+  Typography,
+  Dropdown,
+  Menu,
+  Checkbox,
+  Spin
 } from 'antd';
 import { useParams, NavLink } from 'react-router-dom';
-import { ArrowLeftOutlined, PlusOutlined, SaveOutlined, UpOutlined, DownOutlined, EditOutlined, FolderAddOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, PlusOutlined, SaveOutlined, UpOutlined, DownOutlined, EditOutlined, FolderAddOutlined, DownSquareOutlined, CloudDownloadOutlined, FolderOpenOutlined } from '@ant-design/icons';
 import './index.scss';
-import useWorkspace from '../../containers/use-workspace';
+import useWorkspace, { RemotePackageInfo } from '../../containers/use-workspace';
 import { DirectoryNode, WorkspaceConfig, Persona } from '../../../main/workspace/type-info';
 
-const { Title, Text } = Typography;
+const { Title, Text, Paragraph } = Typography;
 
 // 添加默认配置常量
 const DEFAULT_WORKSPACE_CONFIG: WorkspaceConfig = {
@@ -41,7 +45,7 @@ interface WorkspaceItem {
 }
 
 export default function WorkspaceManage() {
-  const { vaultId } = useParams();
+  const { vaultId } = useParams<{ vaultId: string }>();
   const [form] = Form.useForm();
   const [workspaces, setWorkspaces] = useState<WorkspaceItem[]>([]);
   const [expandedWorkspace, setExpandedWorkspace] = useState<string | null>(null);
@@ -53,47 +57,52 @@ export default function WorkspaceManage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [expandedPersonas, setExpandedPersonas] = useState<Record<string, boolean>>({});
 
+  // Import Modal State
+  const [isRemoteImportModalVisible, setIsRemoteImportModalVisible] = useState(false);
+  const [remoteRepoUrl, setRemoteRepoUrl] = useState('https://gitee.com/JeremcyLu/update_test.git');
+  const [isFetchingPackages, setIsFetchingPackages] = useState(false);
+  const [availablePackages, setAvailablePackages] = useState<RemotePackageInfo[]>([]);
+  const [selectedPackages, setSelectedPackages] = useState<string[]>([]);
+  const [isDownloading, setIsDownloading] = useState(false);
+
 
   const {
     loading,
     loadWorkspaceConfig,
     saveWorkspaceConfig,
-    getDirectoryStructure,
     getFileList,
     deleteWorkspaceConfig,
     getWorkspaceList,
-    createWorkspace
+    createWorkspace,
+    localImportWorkspace,
+    remoteImportGetList,
+    remoteImportClonePackage,
   } = useWorkspace();
+
+  const getAllWorkspaces = async (id: string) => {
+    try {
+      const workspaceNodes = await getWorkspaceList(id);
+      const workspaceItems: WorkspaceItem[] = workspaceNodes.map(node => ({
+        id: node.key,
+        name: node.title,
+        path: node.value
+      }));
+      setWorkspaces(workspaceItems);
+    } catch (error) {
+      console.error('工作区列表加载失败:', error);
+    }
+  };
 
   useEffect(() => {
     if (vaultId) {
-      // 获取所有工作区列表
       getAllWorkspaces(vaultId);
     } else {
       console.warn('vaultId为空，无法加载工作区');
     }
   }, [vaultId]);
 
-// 修改后的 getAllWorkspaces 函数，递归获取所有目录项
-const getAllWorkspaces = async (vaultId: string) => {
-  try {
-    // 获取工作区列表（只包含包含data.md的目录）
-    const workspaceNodes = await getWorkspaceList(vaultId);
-    
-    // 转换为 WorkspaceItem 格式
-    const workspaceItems: WorkspaceItem[] = workspaceNodes.map(node => ({
-      id: node.key,
-      name: node.title,
-      path: node.value
-    }));
-    
-    setWorkspaces(workspaceItems);
-  } catch (error) {
-    console.error('工作区列表加载失败:', error);
-  }
-};
-
   const toggleWorkspace = async (workspaceId: string, path: string) => {
+    // ... (原有代码不变)
     if (expandedWorkspace === workspaceId) {
       // 收起工作区配置
       setExpandedWorkspace(null);
@@ -146,7 +155,7 @@ const getAllWorkspaces = async (vaultId: string) => {
       }
     }
   };
-
+  // ... (其他原有函数 handleSave, addPersona 等保持不变)
   const togglePersona = (id: string) => {
     setExpandedPersonas(prev => ({
       ...prev,
@@ -204,7 +213,6 @@ const getAllWorkspaces = async (vaultId: string) => {
       setPersonas([]);
       setExcludedPaths([]);
       
-      // 重新加载工作区列表
       if (vaultId) {
         getAllWorkspaces(vaultId);
       }
@@ -214,17 +222,105 @@ const getAllWorkspaces = async (vaultId: string) => {
   };
 
   const handleCreateWorkspace = async () => {
-    try {
-        // 重新加载工作区列表
-        if (vaultId) {
-            // 创建工作区（包含文件夹选择）
-            await createWorkspace(vaultId);
-            getAllWorkspaces(vaultId);
-        }
-    } catch (error) {
+    if (vaultId) {
+      try {
+        await createWorkspace(vaultId);
+        getAllWorkspaces(vaultId);
+      } catch (error) {
         console.error('创建工作区失败:', error);
+      }
     }
   };
+
+  // --- Import Handlers ---
+  const handleLocalImport = async () => {
+    if (vaultId) {
+        try {
+            await localImportWorkspace(vaultId);
+            getAllWorkspaces(vaultId); // Refresh list after import
+        } catch(error) {
+            console.error('本地导入失败:', error);
+            // message is handled by the hook
+        }
+    }
+  };
+
+  const handleFetchPackages = async () => {
+    if (!remoteRepoUrl) {
+      message.warning('请输入远程仓库地址');
+      return;
+    }
+    setIsFetchingPackages(true);
+    setAvailablePackages([]);
+    setSelectedPackages([]);
+    try {
+      const packages = await remoteImportGetList(remoteRepoUrl);
+      if(packages && packages.length > 0) {
+        setAvailablePackages(packages);
+      } else {
+        message.info('未从仓库中找到可用的学习包');
+      }
+    } catch (error) {
+      console.error('获取学习包列表失败:', error);
+    } finally {
+      setIsFetchingPackages(false);
+    }
+  };
+
+  const handleDownloadSelected = async () => {
+    if (selectedPackages.length === 0) {
+      message.warning('请至少选择一个学习包进行下载');
+      return;
+    }
+    if (!vaultId) return;
+
+    setIsDownloading(true);
+    try {
+      for (const branch of selectedPackages) {
+        const pkg = availablePackages.find(p => p.branch === branch);
+        const repo = pkg?.repo || remoteRepoUrl;
+        await remoteImportClonePackage(vaultId, repo, branch);
+      }
+      message.success('选中的学习包已全部导入成功！');
+      setIsRemoteImportModalVisible(false);
+      getAllWorkspaces(vaultId);
+    } catch (error) {
+      console.error('下载学习包失败:', error);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const handleCheckboxChange = (branch: string, isChecked: boolean) => {
+    setSelectedPackages(prev => {
+      if (isChecked) {
+        // 使用 Set 来确保唯一性，然后转回数组
+        return [...new Set([...prev, branch])];
+      } else {
+        // 过滤掉未选中的项
+        return prev.filter(p => p !== branch);
+      }
+    });
+  };
+
+  const importMenu = (
+    <Menu onClick={({ key }) => {
+      if (key === 'local') {
+        handleLocalImport();
+      } else if (key === 'remote') {
+        setIsRemoteImportModalVisible(true);
+        setAvailablePackages([]);
+        setSelectedPackages([]);
+      }
+    }}>
+      <Menu.Item key="local" icon={<FolderOpenOutlined />}>
+        本地导入
+      </Menu.Item>
+      <Menu.Item key="remote" icon={<CloudDownloadOutlined />}>
+        远程导入
+      </Menu.Item>
+    </Menu>
+  );
 
   return (
     <div className="workspace-manage">
@@ -233,12 +329,17 @@ const getAllWorkspaces = async (vaultId: string) => {
                 <Button icon={<ArrowLeftOutlined />} type="text">返回</Button>
             </NavLink>
             <Space>
+                <Dropdown overlay={importMenu}>
+                    <Button type="default" icon={<DownSquareOutlined />}>
+                        导入工作区
+                    </Button>
+                </Dropdown>
                 <Button 
-                type="primary" 
-                icon={<FolderAddOutlined />}
-                onClick={handleCreateWorkspace}
+                    type="primary" 
+                    icon={<FolderAddOutlined />}
+                    onClick={handleCreateWorkspace}
                 >
-                创建工作区
+                    创建工作区
                 </Button>
             </Space>
         </div>
@@ -246,10 +347,12 @@ const getAllWorkspaces = async (vaultId: string) => {
         <Card>
         <Title level={4}>工作区列表</Title>
         <List
+            loading={loading && !isFetchingPackages && !isDownloading}
             dataSource={workspaces}
             renderItem={item => (
             <>
                 <List.Item
+                // ... (原有的 List.Item 代码)
                 actions={[
                     <Button 
                     icon={<EditOutlined />} 
@@ -264,10 +367,9 @@ const getAllWorkspaces = async (vaultId: string) => {
                     description={<Text code>{item.path}</Text>}
                 />
                 </List.Item>
-                
-                {/* 在当前项下方展开配置面板 */}
                 {expandedWorkspace === item.id && (
-                <div className="workspace-config-panel">
+                 <div className="workspace-config-panel">
+                 {/* ... (原有的配置面板JSX) */}
                     <div className="config-actions">
                     <Space>
                         <Tooltip title={!currentWorkspacePath ? "请先选择工作区路径" : ""}>
@@ -403,6 +505,67 @@ const getAllWorkspaces = async (vaultId: string) => {
         />
         </Card>
         
+        <Modal
+            title="远程导入学习包"
+            visible={isRemoteImportModalVisible}
+            onCancel={() => setIsRemoteImportModalVisible(false)}
+            footer={[
+                <Button key="back" onClick={() => setIsRemoteImportModalVisible(false)}>
+                    取消
+                </Button>,
+                <Button 
+                    key="submit" 
+                    type="primary" 
+                    loading={isDownloading} 
+                    onClick={handleDownloadSelected}
+                    disabled={selectedPackages.length === 0}
+                >
+                    下载选中项
+                </Button>,
+            ]}
+            width={800}
+        >
+            <Space direction="vertical" style={{ width: '100%' }}>
+                <Input.Search
+                    placeholder="输入远程仓库地址 (e.g., https://gitee.com/user/repo.git)"
+                    enterButton="获取学习包"
+                    value={remoteRepoUrl}
+                    onChange={(e) => setRemoteRepoUrl(e.target.value)}
+                    onSearch={handleFetchPackages}
+                    loading={isFetchingPackages}
+                />
+                <Spin spinning={isFetchingPackages}>
+                <List
+                    //style={{ width: '100%' }} // 确保 List 自身占满宽度
+                    header={<div>可选的学习包</div>}
+                    bordered
+                    dataSource={availablePackages}
+                    renderItem={(item: RemotePackageInfo) => (
+                        <List.Item>
+                            <List.Item.Meta
+                                avatar={
+                                  <Checkbox 
+                                    checked={selectedPackages.includes(item.branch)}
+                                    onChange={(e) => handleCheckboxChange(item.branch, e.target.checked)}
+                                  />
+                                }
+                                title={item.name}
+                                description={
+                                    <>
+                                        {/* 使用 Paragraph 来更好地控制间距和换行 */}
+                                        <Paragraph style={{ margin: 0 }}>{item.description}</Paragraph>
+                                        <Text type="secondary">分支: {item.branch}</Text> | <Text type="secondary">书籍: {Object.keys(item.books).join(', ')}</Text>
+                                    </>
+                                }
+                            />
+                        </List.Item>
+                    )}
+                    locale={{ emptyText: '请先获取学习包列表' }}
+                    style={{ maxHeight: '50vh', overflowY: 'auto', width: '100%' }}
+                />
+            </Spin>
+            </Space>
+        </Modal>
     </div>
-    );
+  );
 }
