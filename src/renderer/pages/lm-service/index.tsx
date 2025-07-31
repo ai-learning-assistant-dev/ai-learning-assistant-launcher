@@ -69,7 +69,7 @@ export default function LMService() {
       (item) => item.displayName === modelNameDict[serviceName],
     )[0];
     return {
-      name: serviceName,
+      name: lmsInfo ? lmsInfo.modelKey : serviceName,
       serviceName: serviceName,
       state: getState(lmsInfo, lmServerStatus),
     };
@@ -132,6 +132,7 @@ export default function LMService() {
         dataSource={modelInfos}
         renderItem={(item) => (
           <List.Item
+            key={item.serviceName}
             actions={[
               `http://127.0.0.1:${lmServerStatus.port}`,
               item.state === '已经加载' && (
