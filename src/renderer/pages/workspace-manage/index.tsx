@@ -64,7 +64,7 @@ export default function WorkspaceManage() {
   const [availablePackages, setAvailablePackages] = useState<RemotePackageInfo[]>([]);
   const [selectedPackages, setSelectedPackages] = useState<string[]>([]);
   const [isDownloading, setIsDownloading] = useState(false);
-
+  const [targetWorkspacePath, setTargetWorkspacePath] = useState<string | undefined>();
 
   const {
     loading,
@@ -272,6 +272,10 @@ export default function WorkspaceManage() {
       message.warning('请至少选择一个学习包进行下载');
       return;
     }
+     if (!targetWorkspacePath) {
+        message.warning('请选择要导入的目标工作区');
+        return;
+    }
     if (!vaultId) return;
 
     setIsDownloading(true);
@@ -279,7 +283,7 @@ export default function WorkspaceManage() {
       for (const branch of selectedPackages) {
         const pkg = availablePackages.find(p => p.branch === branch);
         const repo = pkg?.repo || remoteRepoUrl;
-        await remoteImportClonePackage(vaultId, repo, branch);
+        await remoteImportClonePackage(vaultId, repo, branch, targetWorkspacePath);
       }
       message.success('选中的学习包已全部导入成功！');
       setIsRemoteImportModalVisible(false);
@@ -518,7 +522,7 @@ export default function WorkspaceManage() {
                     type="primary" 
                     loading={isDownloading} 
                     onClick={handleDownloadSelected}
-                    disabled={selectedPackages.length === 0}
+                    disabled={selectedPackages.length === 0 || !targetWorkspacePath}
                 >
                     下载选中项
                 </Button>,
@@ -536,9 +540,29 @@ export default function WorkspaceManage() {
                 />
                 <Spin spinning={isFetchingPackages}>
                 <List
-                    //style={{ width: '100%' }} // 确保 List 自身占满宽度
-                    header={<div>可选的学习包</div>}
-                    bordered
+                    // ... (List props are unchanged)
+                    header={
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span>可选的学习包</span>
+                            <Space>
+                                <Typography.Text>导入到工作区:</Typography.Text>
+                                <Select
+                                    placeholder="请选择工作区"
+                                    style={{ width: 250 }}
+                                    value={targetWorkspacePath}
+                                    onChange={(value) => setTargetWorkspacePath(value)}
+                                    // Disable if no packages are loaded yet
+                                    disabled={availablePackages.length === 0}
+                                >
+                                    {workspaces.map(ws => (
+                                        <Select.Option key={ws.path} value={ws.path}>
+                                            {ws.name}
+                                        </Select.Option>
+                                    ))}
+                                </Select>
+                            </Space>
+                        </div>
+                    }
                     dataSource={availablePackages}
                     renderItem={(item: RemotePackageInfo) => (
                         <List.Item>
@@ -552,7 +576,6 @@ export default function WorkspaceManage() {
                                 title={item.name}
                                 description={
                                     <>
-                                        {/* 使用 Paragraph 来更好地控制间距和换行 */}
                                         <Paragraph style={{ margin: 0 }}>{item.description}</Paragraph>
                                         <Text type="secondary">分支: {item.branch}</Text> | <Text type="secondary">书籍: {Object.keys(item.books).join(', ')}</Text>
                                     </>

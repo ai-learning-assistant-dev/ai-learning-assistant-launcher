@@ -23,7 +23,7 @@ interface UseWorkspaceReturn {
   createWorkspace: (vaultId: string) => Promise<void>;
   localImportWorkspace: (vaultId: string) => Promise<void>;
   remoteImportGetList: (repoUrl: string) => Promise<RemotePackageInfo[]>;
-  remoteImportClonePackage: (vaultId: string, repoUrl: string, branch: string) => Promise<void>;
+  remoteImportClonePackage: (vaultId: string, repoUrl: string, branch: string, targetWorkspacePath: string) => Promise<void>;
 }
 
 export function useWorkspace(): UseWorkspaceReturn {
@@ -134,8 +134,8 @@ export function useWorkspace(): UseWorkspaceReturn {
     return sendIpcMessage<RemotePackageInfo[]>('remote-import-get-list', { repoUrl }).catch(() => []);
   }, [sendIpcMessage]);
 
-  const remoteImportClonePackage = useCallback(async (vaultId: string, repoUrl: string, branch: string) => {
-    return sendIpcMessage<void>('remote-import-clone-package', vaultId, { repoUrl, branch });
+  const remoteImportClonePackage = useCallback(async (vaultId: string, repoUrl: string, branch: string, targetWorkspacePath: string) => {
+    return sendIpcMessage<void>('remote-import-clone-package', vaultId, { repoUrl, branch, targetWorkspacePath });
   }, [sendIpcMessage]);
 
   return {

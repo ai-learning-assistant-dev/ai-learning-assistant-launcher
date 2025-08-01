@@ -7,6 +7,11 @@ import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 import { getObsidianVaultConfig } from '../configs';
 import { gitClone } from '../git'; // 引入gitClone
 import { copySync } from 'fs-extra'; // 使用fs-extra来简化目录复制
+import { execSync } from 'node:child_process';
+import git from 'isomorphic-git';
+import fs from 'fs';
+import http from 'isomorphic-git/http/node';
+import { appPath } from '../exec';
 
 // 定义需要排除的目录名列表
 const EXCLUDED_DIRS = new Set([
@@ -34,6 +39,114 @@ function copyDirectory(src: string, dest: string) {
       writeFileSync(destPath, readFileSync(srcPath));
     }
   }
+}
+
+/**
+ * Finds the drive with the most free space ONCE, caches the result, and returns the path.
+ * On subsequent runs, it reads the path from the cache file.
+ * @returns {string} The absolute path to the .git-storage directory.
+ */
+function getGitStoragePath(): string {
+  // Define the path for the configuration file.
+
+  const configDir = path.join(appPath, 'external-resources', 'user-workspace');
+  const configFilePath = path.join(configDir, 'git-storage.json');
+  const storageDirName = '.git-storage';
+
+  // 1. Try to read the path from the cached config file first.
+  if (existsSync(configFilePath)) {
+    try {
+      const config = JSON.parse(readFileSync(configFilePath, 'utf8'));
+      // Verify that the cached path actually exists on the filesystem.
+      if (config.storagePath && existsSync(config.storagePath)) {
+        console.log(`Using cached storage path: ${config.storagePath}`);
+        return config.storagePath;
+      } else {
+        console.warn('Configured storage path not found or invalid. Recalculating...');
+      }
+    } catch (error) {
+      console.error('Error reading git-storage.json. Recalculating...', error);
+      // Proceed to recalculate if the file is corrupt.
+    }
+  }
+
+  // 2. If cache doesn't exist or is invalid, calculate the best path.
+  console.log('No valid cached path found. Determining best drive for storage...');
+  let bestDrive = '';
+  let maxFreeSpace = -1;
+
+  try {
+    const platform = os.platform();
+    if (platform === 'win32') {
+      const stdout = execSync('wmic logicaldisk get caption,freespace /format:csv').toString();
+      const lines = stdout.trim().split('\n').slice(1); // Skip header
+      for (const line of lines) {
+        const parts = line.split(',');
+        if (parts.length >= 3) {
+          const caption = parts[1].trim();
+          const freeSpace = parseInt(parts[2].trim(), 10);
+          if (caption && !isNaN(freeSpace) && freeSpace > maxFreeSpace) {
+            maxFreeSpace = freeSpace;
+            bestDrive = caption;
+          }
+        }
+      }
+    } else { // macOS and Linux
+      const stdout = execSync('df -kP').toString();
+      const lines = stdout.trim().split('\n').slice(1);
+      for (const line of lines) {
+        const parts = line.split(/\s+/);
+        const freeSpace = parseInt(parts[3], 10) * 1024; // Convert KB to Bytes
+        const mountPoint = parts[5];
+        if (mountPoint === '/' && freeSpace > maxFreeSpace) {
+          maxFreeSpace = freeSpace;
+          bestDrive = mountPoint;
+        }
+      }
+      // For Linux/macOS, we'll place it in the user's home directory if root isn't ideal
+      bestDrive = os.homedir();
+    }
+  } catch (error) {
+    console.warn('Could not determine best drive for storage, defaulting to home directory.', error);
+    bestDrive = os.homedir();
+  }
+
+  // On Windows, bestDrive might be 'C:'. We need to add a trailing slash for path.join to work correctly.
+  if (os.platform() === 'win32' && bestDrive.endsWith(':')) {
+      bestDrive += '\\';
+  }
+  
+  const storagePath = path.join(bestDrive, storageDirName);
+  
+  // 3. Create the actual storage directory.
+  if (!existsSync(storagePath)) {
+    mkdirSync(storagePath, { recursive: true });
+  }
+
+  // 4. Save the newly calculated path to the config file for future use.
+  try {
+    // Ensure the directory for the config file itself exists.
+    if (!existsSync(configDir)) {
+      mkdirSync(configDir, { recursive: true });
+    }
+    const configData = { storagePath: storagePath };
+    writeFileSync(configFilePath, JSON.stringify(configData, null, 2), 'utf8');
+    console.log(`Saved new storage path to ${configFilePath}`);
+  } catch (error) {
+    console.error(`Failed to save storage path to config file:`, error);
+    // The function can still succeed by returning the path, but it won't be cached.
+  }
+
+  return storagePath;
+}
+
+/**
+ * Creates a safe directory name from a git URL.
+ * @param {string} repoUrl - The URL of the repository.
+ * @returns {string} A filesystem-safe name.
+ */
+function getRepoDirNameFromUrl(repoUrl: string): string {
+    return new URL(repoUrl).pathname.slice(1).replace('.git', '').replace(/\//g, '_');
 }
 
 export default async function init(ipcMain: IpcMain) {
@@ -241,7 +354,7 @@ export default async function init(ipcMain: IpcMain) {
           const { repoUrl } = data;
           const tempDir = path.join(os.tmpdir(), `aila-repo-${Date.now()}`);
           try {
-            await gitClone(repoUrl, tempDir, 'main'); // 假设gitClone第三个参数是分支
+            await gitClone(repoUrl, tempDir, 'main'); 
             const indexPath = path.join(tempDir, 'index.json');
             if (!existsSync(indexPath)) {
               throw new Error('仓库 main 分支下未找到 index.json 文件');
@@ -254,29 +367,57 @@ export default async function init(ipcMain: IpcMain) {
             }
           }
         } else if (action === 'remote-import-clone-package') {
-          //修改逻辑：1.增加本地缓存机制，存储区（非临时文件，不要删除），后续需要这部分进行文件更新。
-          //          1.1 存储区的选择逻辑用户不可见，存储的剩余空间最大的盘的根目录，名称：.git-storage
-          // 2.下载前先选择工作区,再把存储区的文件复制到工作区,而不是直接clone到vault
-            const { repoUrl, branch } = data;
-            const vaultPath = getVaultPath(vaultId);
-            
-            // 从 release/xxx 中提取 xxx
-            const workspaceName = branch.startsWith('release/') ? branch.substring('release/'.length) : path.basename(branch);
-
-            if (!workspaceName) {
-                event.reply(channel, MESSAGE_TYPE.ERROR, `无法从分支名 "${branch}" 解析工作区名称`);
-                return;
-            }
-
-            const destPath = path.join(vaultPath, workspaceName);
-            if (existsSync(destPath)) {
-                event.reply(channel, MESSAGE_TYPE.ERROR, `导入失败：当前仓库已存在名为 "${workspaceName}" 的工作区。`);
-                return;
-            }
-
-            await gitClone(repoUrl, destPath, branch);
-            event.reply(channel, MESSAGE_TYPE.INFO, `远程学习包 "${workspaceName}" 导入成功！`);
+        // 1. Get parameters from frontend, now including targetWorkspacePath
+        const { repoUrl, branch, targetWorkspacePath } = data;
+        
+        // 2. Determine storage and repository paths
+        const storagePath = getGitStoragePath();
+        const repoDirName = getRepoDirNameFromUrl(repoUrl);
+        const repoStoragePath = path.join(storagePath, repoDirName);
+        
+        // 3. Clone or Fetch the repository in the storage area
+        if (existsSync(repoStoragePath)) {
+            console.log(`Repository exists at ${repoStoragePath}. Fetching updates...`);
+            await git.fetch({ fs, http, dir: repoStoragePath, ref: branch, singleBranch: true, depth: 1 });
+            await git.checkout({ fs, dir: repoStoragePath, ref: `origin/${branch}`, force: true });
+        } else {
+            console.log(`Cloning repository to ${repoStoragePath}...`);
+            await gitClone(repoUrl, repoStoragePath, branch); // gitClone should handle single branch and depth
         }
+        
+        // 4. Read filelist.json from the storage area
+        const filelistPath = path.join(repoStoragePath, 'filelist.json');
+        if (!existsSync(filelistPath)) {
+            throw new Error(`学习包 "(${branch})" 的存储库中缺少 filelist.json 文件。`);
+        }
+        const filesToCopy: string[] = JSON.parse(readFileSync(filelistPath, 'utf8'));
+
+        // 5. Determine the final destination folder inside the selected workspace
+        const newFolderName = branch.startsWith('release/') ? branch.substring('release/'.length) : path.basename(branch);
+        const finalDestPath = path.join(targetWorkspacePath, newFolderName);
+        
+        if (existsSync(finalDestPath)) {
+            // TODO：错误处理，引导用户进行更新？
+            throw new Error(`导入失败：工作区 "${path.basename(targetWorkspacePath)}" 内已存在名为 "${newFolderName}" 的文件夹。`);
+        }
+        mkdirSync(finalDestPath, { recursive: true });
+
+        // 6. Copy files from storage to the target workspace according to filelist.json
+        for (const file of filesToCopy) {
+            const sourceFile = path.join(repoStoragePath, file);
+            const destFile = path.join(finalDestPath, file);
+            
+            if (existsSync(sourceFile)) {
+                // Ensure the destination directory for the file exists
+                mkdirSync(path.dirname(destFile), { recursive: true });
+                copySync(sourceFile, destFile);
+            } else {
+                console.warn(`Warning: File "${file}" listed in filelist.json not found in the repository.`);
+            }
+        }
+
+        event.reply(channel, MESSAGE_TYPE.INFO, `学习包 "${newFolderName}" 已成功导入到工作区 "${path.basename(targetWorkspacePath)}"！`);
+    }
       } catch (error) {
         console.error(`workspace error on action ${action}:`, error);
         event.reply(channel, MESSAGE_TYPE.ERROR, error.message);
