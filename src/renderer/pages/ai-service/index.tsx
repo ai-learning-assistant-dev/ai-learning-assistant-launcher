@@ -158,7 +158,7 @@ export default function AiService() {
             <div>
               <Popconfirm
                 title="搬迁安装位置"
-                description="搬迁安装位置时，会自动停止所有服务，搬迁完成后请手动启动服务"
+                description="搬迁安装位置时，会自动停止WSL，如果您的电脑上还有Docker软件请您先手动停止Docker软件以避免避免Docker文件被损坏。搬迁完成后请手动启动服务"
                 onConfirm={() => clickCmd('move', 'podman')}
                 okText="确认搬迁"
                 cancelText="不搬迁"
