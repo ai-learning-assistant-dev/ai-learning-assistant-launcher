@@ -150,7 +150,7 @@ export default async function init(ipcMain: IpcMain) {
           }
         } else if (action === 'move') {
           const result = await movePodman();
-          if (result) {
+          if (result.success) {
             event.reply(
               channel,
               MESSAGE_TYPE.DATA,
@@ -158,7 +158,7 @@ export default async function init(ipcMain: IpcMain) {
             );
             event.reply(channel, MESSAGE_TYPE.INFO, '成功迁移');
           } else {
-            event.reply(channel, MESSAGE_TYPE.ERROR, '迁移失败');
+            event.reply(channel, MESSAGE_TYPE.ERROR, result.errorMessage);
           }
         } else if (action === 'update') {
           const result = await commandLine.exec('echo %cd%');
@@ -451,13 +451,15 @@ export async function isLMStudioInstall() {
 
 export async function movePodman() {
   let success = false;
+  let errorMessage = '迁移失败';
   const dialogResult = await dialog.showOpenDialog({
     title: '请选择服务的安装位置',
     properties: ['openDirectory', 'showHiddenFiles'],
   });
   const path = dialogResult.filePaths[0];
   if (!path || path === '') {
-    return false;
+    errorMessage = '未选择正确的安装位置';
+    return { success: false, errorMessage };
   }
   try {
     const output1 = await commandLine.exec(
@@ -489,8 +491,15 @@ export async function movePodman() {
     success = true;
   } catch (e) {
     console.warn('movePodman', e);
+    if (
+      e &&
+      e.stdout &&
+      e.stdout.indexOf('Wsl/Service/MoveDistro/0' + 'x80070070') >= 0
+    ) {
+      errorMessage = '磁盘空间不足';
+    }
     success = false;
   }
 
-  return success;
+  return { success, errorMessage };
 }
