@@ -130,11 +130,6 @@ export default function LMService() {
                   type="primary"
                   shape="round"
                   danger
-                  loading={
-                    cmdLoading &&
-                    cmdOperating.serviceName === 'podman' &&
-                    cmdOperating.actionName === 'move'
-                  }
                 >
                   修改模型存储位置
                 </Button>
