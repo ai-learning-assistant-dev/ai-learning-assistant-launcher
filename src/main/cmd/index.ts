@@ -1,4 +1,4 @@
-import { IpcMain } from 'electron';
+import { dialog, IpcMain } from 'electron';
 import { ActionName, channel, ServiceName } from './type-info';
 import { appPath, Exec } from '../exec';
 import { isMac, isWindows } from '../exec/util';
@@ -6,8 +6,9 @@ import { getObsidianConfig, setVaultDefaultOpen } from '../configs';
 import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 import path from 'node:path';
 import { statSync } from 'node:fs';
-import { resetPodman } from '../podman-desktop/ensure-podman-works';
+import { getPodmanCli, resetPodman } from '../podman-desktop/ensure-podman-works';
 import { RunResult } from '@podman-desktop/api';
+import { podMachineName } from '../podman-desktop/type-info';
 
 const commandLine = new Exec();
 
@@ -146,6 +147,18 @@ export default async function init(ipcMain: IpcMain) {
           } else {
             const result = await commandLine.exec('echo %cd%');
             event.reply(channel, MESSAGE_TYPE.INFO, '成功查询');
+          }
+        } else if (action === 'move') {
+          const result = await movePodman();
+          if (result) {
+            event.reply(
+              channel,
+              MESSAGE_TYPE.DATA,
+              new MessageData(action, serviceName, true),
+            );
+            event.reply(channel, MESSAGE_TYPE.INFO, '成功迁移');
+          } else {
+            event.reply(channel, MESSAGE_TYPE.ERROR, '迁移失败');
           }
         } else if (action === 'update') {
           const result = await commandLine.exec('echo %cd%');
@@ -434,4 +447,50 @@ export async function isLMStudioInstall() {
     console.warn(e);
     return false;
   }
+}
+
+export async function movePodman() {
+  let success = false;
+  const dialogResult = await dialog.showOpenDialog({
+    title: '请选择服务的安装位置',
+    properties: ['openDirectory', 'showHiddenFiles'],
+  });
+  const path = dialogResult.filePaths[0];
+  if (!path || path === '') {
+    return false;
+  }
+  try {
+    const output1 = await commandLine.exec(
+      'wsl.exe',
+      ['--shutdown', podMachineName],
+      {
+        encoding: 'utf16le',
+        shell: true,
+      },
+    );
+    console.debug('movePodman', output1);
+    const output2 = await commandLine.exec(
+      'wsl.exe',
+      ['--manage', podMachineName, '--move', path],
+      {
+        encoding: 'utf16le',
+        shell: true,
+      },
+    );
+    console.debug('movePodman', output2);
+    const output3 = await commandLine.exec(
+      getPodmanCli(),
+      ['machine', 'start'],
+      {
+        shell: true,
+      },
+    );
+    console.debug('movePodman', output3);
+    success = true;
+  } catch (e) {
+    console.warn('movePodman', e);
+    success = false;
+  }
+
+  return success;
 }

@@ -157,6 +157,28 @@ export default function AiService() {
             </Link>
             <div>
               <Popconfirm
+                title="搬迁安装位置"
+                description="搬迁安装位置时，会自动停止所有服务，搬迁完成后请手动启动服务"
+                onConfirm={() => clickCmd('move', 'podman')}
+                okText="确认搬迁"
+                cancelText="不搬迁"
+              >
+                <Button
+                  disabled={!isInstallWSL || cmdLoading || loading}
+                  type="primary"
+                  shape="round"
+                  danger
+                  loading={
+                    cmdLoading &&
+                    cmdOperating.serviceName === 'podman' &&
+                    cmdOperating.actionName === 'move'
+                  }
+                >
+                  搬迁安装位置
+                </Button>
+              </Popconfirm>
+              <div style={{ width: '20px', display: 'inline-block' }}></div>
+              <Popconfirm
                 title="删除所有服务和缓存"
                 description="你确定要删除所有服务和缓存吗？删除后再次安装会需要很长时间！"
                 onConfirm={() => clickCmd('remove', 'podman')}

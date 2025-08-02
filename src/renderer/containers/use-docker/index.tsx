@@ -82,6 +82,9 @@ export default function useDocker() {
           if (d.action === 'remove' && d.service === 'podman') {
             setContainers([]);
           }
+          if (d.action === 'move' && d.service === 'podman') {
+            queryContainers();
+          }
         }
       },
     );
