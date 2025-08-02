@@ -1,3 +1,4 @@
+
 .lm-service{
   display: flex;
   width: 100%;
@@ -13,4 +14,10 @@
     display: flex;
     justify-content: space-between;
   }
+}
+
+.lm-studio-demo{
+  width: 575px;
+  height: 312px;
+  background-size: contain;
 }

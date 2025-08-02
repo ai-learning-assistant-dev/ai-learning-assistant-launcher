@@ -16,6 +16,7 @@ import {
 } from '../../../main/cmd/type-info';
 import useCmd from '../../containers/use-cmd';
 import useLMStudio from '../../containers/use-lm-studio';
+import demoPic from './demo.png';
 
 interface ModelItem {
   name: string;
@@ -109,6 +110,36 @@ export default function LMService() {
               <Button disabled={loading || cmdLoading}>返回</Button>
             </Link>
             <div>
+              <Popconfirm
+                title="修改模型存储位置的方法"
+                description={
+                  <div>
+                    <div>请打开LM Studio软件后按照下图所示操作</div>
+                    <div
+                      className="lm-studio-demo"
+                      style={{
+                        backgroundImage: `url(${demoPic})`,
+                      }}
+                    ></div>
+                  </div>
+                }
+                okText="我知道了"
+              >
+                <Button
+                  disabled={!isInstallWSL || cmdLoading || loading}
+                  type="primary"
+                  shape="round"
+                  danger
+                  loading={
+                    cmdLoading &&
+                    cmdOperating.serviceName === 'podman' &&
+                    cmdOperating.actionName === 'move'
+                  }
+                >
+                  修改模型存储位置
+                </Button>
+              </Popconfirm>
+              <div style={{ width: '20px', display: 'inline-block' }}></div>
               <Button
                 disabled={isInstallLMStudio}
                 type="primary"
