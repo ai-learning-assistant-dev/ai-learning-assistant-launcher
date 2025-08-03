@@ -149,7 +149,7 @@ export default async function init(ipcMain: IpcMain) {
             event.reply(
               channel,
               MESSAGE_TYPE.DATA,
-              new MessageData(action, serviceName, false),
+              new MessageData(action, serviceName, await isObsidianInstall()),
             );
           } else if (serviceName === 'lm-studio') {
             event.reply(
@@ -419,6 +419,7 @@ export async function isObsidianInstall() {
       '%localappdata%',
       process.env.LOCALAPPDATA,
     );
+    console.debug('getObsidianConfig' ,obsidianPath)
     const stat = statSync(obsidianPath);
     if (stat.isFile()) {
       return true;
@@ -454,7 +455,7 @@ export async function isLMStudioInstall() {
       // 如果用户安装lmstudio然后又卸载了lmstudio，那么这个命令会一直卡着，也不报错，所以要用一个4000ms的报错promise与它竞赛
       commandLine.exec('lms', ['ls']),
     ]);
-    console.debug(isLMStudioInstall, result);
+    console.debug('isLMStudioInstall', result);
     return true;
   } catch (e) {
     console.warn(e);
