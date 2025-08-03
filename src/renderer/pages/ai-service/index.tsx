@@ -163,7 +163,7 @@ export default function AiService() {
                     <div>
                       搬迁安装位置时，会自动停止WSL，搬迁完成后请手动启动服务。
                     </div>
-                    <div style={{color: "red"}}>
+                    <div style={{ color: 'red' }}>
                       提示Docker用户：如果您的电脑上还有Docker软件，请您先手动关闭Docker软件前台和后台程序以避免Docker文件被损坏。搬迁完成后如果出现无法正常运行Docker的情况，请您重启电脑后再打开Docker。
                     </div>
                   </div>
