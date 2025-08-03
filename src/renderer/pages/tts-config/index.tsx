@@ -262,7 +262,7 @@ export default function TTSConfig() {
               onClick={() => handleModelSwitch('cpu')}
               disabled={voiceConfigsLoading}
             >
-              CPU (Kokoro)
+              CPU (kokoro)
             </Button>
           </div>
         </div>

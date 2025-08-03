@@ -152,8 +152,8 @@ export async function installPodman() {
       'ai-assistant-backend',
       'install_podman.exe',
     ),
-    ['/s'],
-    { isAdmin: true },
+    [],
+    { shell: true },
   );
   return true;
 }
