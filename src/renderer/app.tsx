@@ -6,6 +6,7 @@ import AiService from './pages/ai-service';
 import ObsidianApp from './pages/obsidian-app';
 import { App as AntdApp } from 'antd';
 import ObsidianPlugin from './pages/obsidian-plugin';
+import WorkspaceManage from './pages/workspace-manage';
 import TTSConfig from './pages/tts-config';
 import ASRConfig from './pages/asr-config';
 import LMService from './pages/lm-service';
@@ -27,6 +28,7 @@ export default function App() {
             element={<ObsidianPlugin />}
           />
           <Route path="/example" element={<ExamplePage />} />
+          <Route path="/workspace-manage/:vaultId" element={<WorkspaceManage />} />
           <Route index element={<Hello />} />
         </Routes>
       </Router>
