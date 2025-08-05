@@ -39,6 +39,7 @@
     "@typescript-eslint/eslint-plugin": "^5.62.0",
     "@typescript-eslint/parser": "^5.62.0",
     "@vercel/webpack-asset-relocator-loader": "1.7.3",
+    "@xterm/xterm": "^5.5.0",
     "antd": "^5.26.1",
     "cpy": "^11.1.0",
     "cross-env": "^7.0.3",

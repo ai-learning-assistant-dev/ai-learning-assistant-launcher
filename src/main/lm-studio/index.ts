@@ -11,6 +11,7 @@ import {
 import { Exec } from '../exec';
 import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 import { RunResult } from '@podman-desktop/api';
+import { loggerFactory } from '../terminal-log';
 const commandLine = new Exec();
 
 export default async function init(ipcMain: IpcMain) {
@@ -48,7 +49,7 @@ export default async function init(ipcMain: IpcMain) {
             event.reply(
               channel,
               MESSAGE_TYPE.PROGRESS,
-              `开始下载模型${serviceName}，下载时间受网速和模型大小影响，您可以打开LMStudio软件查看下载进度`,
+              `开始下载模型${serviceName}，下方日志区可查看下载进度。`,
             );
             const result = await installModel(serviceName);
             event.reply(
@@ -177,6 +178,8 @@ async function installModel(serviceName: ServiceName) {
       ['get', lmsGetNameDict[serviceName], '--yes'],
       {
         shell: true,
+        encoding: 'utf8',
+        logger: loggerFactory(serviceName),
       },
     );
     console.debug('installModel', result);

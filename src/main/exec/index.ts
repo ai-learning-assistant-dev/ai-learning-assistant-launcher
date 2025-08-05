@@ -255,12 +255,12 @@ export class Exec {
 
       childProcess.stdout.on('data', (data) => {
         stdout += bufferToString(data, encoding);
-        options?.logger?.log(data);
+        options?.logger?.log(bufferToString(data, encoding));
       });
 
       childProcess.stderr.on('data', (data) => {
         stderr += bufferToString(data, encoding);
-        options?.logger?.warn(data);
+        options?.logger?.warn(bufferToString(data, encoding));
       });
 
       childProcess.on('error', (error) => {
