@@ -6,9 +6,7 @@ export type Channels =
   | 'wsl'
   | 'configs'
   | 'obsidian-plugin'
-  | 'pdf-convert'
-  | 'select-pdf-files'
-  | 'pdf-container-status';
+  | 'pdf-convert';
 
 export enum MESSAGE_TYPE {
   /** 阻断性错误，会把转圈中的按钮变成不转圈 */
@@ -41,22 +39,22 @@ import {
   ActionName as ActionNameObsidianPlugin,
   ServiceName as ServiceNameObsidianPlugin,
 } from './obsidian-plugin/type-info';
+import {
+  ActionName as ActionNamePdfConvert,
+  ServiceName as ServiceNamePdfConvert,
+} from './pdf-convert/type-info';
 export type AllAction =
   | ActionNamePodman
   | ActionNameCmd
   | ActionNameConfigs
   | ActionNameObsidianPlugin
-  | 'convert'
-  | 'select'
-  | 'check';
+  | ActionNamePdfConvert;
 export type AllService =
   | ServiceNamePodman
   | ServiceNameCmd
   | ServiceNameConfigs
   | ServiceNameObsidianPlugin
-  | 'PDF'
-  | 'select'
-  | 'status';
+  | ServiceNamePdfConvert;
 
 export class MessageData<
   A extends AllAction = AllAction,

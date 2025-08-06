@@ -7,17 +7,16 @@ import http from 'node:http';
 import FormData from 'form-data';
 import { dialog, IpcMain } from 'electron';
 import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
+import { ActionName, ServiceName } from './type-info';
 
 const exec = new Exec();
 const channel = 'pdf-convert';
-const selectFilesChannel = 'select-pdf-files';
-const containerStatusChannel = 'pdf-container-status';
 
 export default async function init(ipcMain: IpcMain) {
   // PDF转换服务
   ipcMain.on(
     channel,
-    async (event, action: string, serviceName: string, filePaths: string[]) => {
+    async (event, action: ActionName, serviceName: ServiceName, filePaths: string[]) => {
       console.debug(`pdf-convert action: ${action}, serviceName: ${serviceName}, files: ${filePaths}`);
       
       if (action === 'convert') {
@@ -114,9 +113,8 @@ export default async function init(ipcMain: IpcMain) {
               form.pipe(req);
             });
             
-            // 检查转换结果
-            const success = responseData && responseData.success !== false;
-            const translationCorrect = responseData?.translation_correct || false;
+            // 检查转换结果 - 返回值不为空即成功
+            const success = responseData && Object.keys(responseData).length > 0;
             
             // 保存转换后的文件
             const savedFiles: string[] = [];
@@ -231,7 +229,6 @@ export default async function init(ipcMain: IpcMain) {
                 message: success ? 
                   `PDF转换成功！已保存 ${savedFiles.length} 个文件` : 
                   'PDF处理完成但可能存在问题',
-                translationCorrect,
                 data: responseData,
                 savedFiles
               })
@@ -253,17 +250,7 @@ export default async function init(ipcMain: IpcMain) {
             `PDF转换失败: ${error instanceof Error ? error.message : '未知错误'}`
           );
         }
-      }
-    }
-  );
-
-  // 文件选择服务
-  ipcMain.on(
-    selectFilesChannel,
-    async (event, action: string) => {
-      console.debug(`select-pdf-files action: ${action}`);
-      
-      if (action === 'select') {
+      } else if (action === 'select') {
         try {
           const result = await dialog.showOpenDialog({
             title: '请选择PDF文件',
@@ -273,13 +260,13 @@ export default async function init(ipcMain: IpcMain) {
 
           if (!result.canceled && result.filePaths.length > 0) {
             event.reply(
-              selectFilesChannel,
+              channel,
               MESSAGE_TYPE.DATA,
-              new MessageData(action, 'select', result.filePaths)
+              new MessageData(action, 'PDF', result.filePaths)
             );
           } else {
             event.reply(
-              selectFilesChannel,
+              channel,
               MESSAGE_TYPE.WARNING,
               '未选择文件'
             );
@@ -287,87 +274,9 @@ export default async function init(ipcMain: IpcMain) {
         } catch (error) {
           console.error('文件选择失败:', error);
           event.reply(
-            selectFilesChannel,
+            channel,
             MESSAGE_TYPE.ERROR,
             `文件选择失败: ${error instanceof Error ? error.message : '未知错误'}`
-          );
-        }
-      }
-    }
-  );
-
-  // 容器状态检测服务
-  ipcMain.on(
-    containerStatusChannel,
-    async (event, action: string) => {
-      console.debug(`pdf-container-status action: ${action}`);
-      
-      if (action === 'check') {
-        try {
-          // 检查PDF服务容器状态
-          const responseData = await new Promise<any>((resolve, reject) => {
-            const req = http.request({
-              hostname: '127.0.0.1',
-              port: 5000,
-              path: '/health',
-              method: 'GET',
-              timeout: 5000
-            }, (res) => {
-              let data = '';
-              
-              res.on('data', (chunk) => {
-                data += chunk;
-              });
-              
-              res.on('end', () => {
-                try {
-                  const parsed = JSON.parse(data);
-                  resolve({
-                    status: 'running',
-                    health: parsed,
-                    timestamp: new Date().toISOString()
-                  });
-                } catch (jsonError) {
-                  resolve({
-                    status: 'running',
-                    health: { message: data },
-                    timestamp: new Date().toISOString()
-                  });
-                }
-              });
-            });
-
-            req.on('error', (error) => {
-              resolve({
-                status: 'error',
-                error: error.message,
-                timestamp: new Date().toISOString()
-              });
-            });
-
-            req.on('timeout', () => {
-              req.destroy();
-              resolve({
-                status: 'timeout',
-                error: '请求超时',
-                timestamp: new Date().toISOString()
-              });
-            });
-
-            req.end();
-          });
-
-          event.reply(
-            containerStatusChannel,
-            MESSAGE_TYPE.DATA,
-            new MessageData(action, 'status', responseData)
-          );
-        } catch (error) {
-          console.error('容器状态检查失败:', error);
-          event.reply(
-            containerStatusChannel,
-            MESSAGE_TYPE.ERROR,
-            `容器状态检查失败: ${error instanceof Error ? error.message : '未知错误'}`
           );
         }
       }

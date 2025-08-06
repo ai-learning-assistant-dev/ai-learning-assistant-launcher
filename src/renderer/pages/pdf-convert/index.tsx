@@ -10,7 +10,6 @@ const { Panel } = Collapse;
 interface ConversionResult {
   success: boolean;
   message: string;
-  translationCorrect?: boolean;
 }
 
 interface FileItem {
@@ -66,7 +65,7 @@ export default function PdfConvert() {
   const handleFileSelect = async () => {
     try {
       // 通过IPC调用主进程的文件选择对话框
-      window.electron.ipcRenderer.sendMessage('select-pdf-files', 'select');
+      window.electron.ipcRenderer.sendMessage('pdf-convert', 'select');
     } catch (error) {
       console.error('选择文件失败:', error);
       message.error('选择文件失败');
@@ -107,25 +106,18 @@ export default function PdfConvert() {
 
   // 监听IPC响应
   useEffect(() => {
-    const cancel1 = window.electron?.ipcRenderer.on(
+    const cancelByPdfConvert = window.electron?.ipcRenderer.on(
       'pdf-convert',
       (messageType: any, data: any) => {
         console.debug('PDF转换响应:', messageType, data);
         
-        if (messageType === 'error') {
-          setResult({
-            success: false,
-            message: data,
-          });
-          message.error(data);
-          setConverting(false);
-        } else if (messageType === 'data') {
-          const { success, message: resultMessage, translationCorrect } = data.data;
+        // 处理PDF转换响应
+        if (messageType === 'data' && data.action === 'convert') {
+          const { success, message: resultMessage } = data.data;
           
           setResult({
             success,
             message: resultMessage,
-            translationCorrect,
           });
 
           if (success) {
@@ -135,15 +127,8 @@ export default function PdfConvert() {
           }
           setConverting(false);
         }
-      }
-    );
-
-    const cancel2 = window.electron?.ipcRenderer.on(
-      'select-pdf-files',
-      (messageType: any, data: any) => {
-        console.debug('文件选择响应:', messageType, data);
-        
-        if (messageType === 'data') {
+        // 处理文件选择响应
+        else if (messageType === 'data' && data.action === 'select') {
           const filePaths = data.data;
           if (filePaths && filePaths.length > 0) {
             // 将文件路径转换为FileItem格式
@@ -158,16 +143,29 @@ export default function PdfConvert() {
             
             setFileList([...fileList, ...uniqueNewFiles]);
           }
-        } else if (messageType === 'error') {
-          message.error(data);
-        } else if (messageType === 'warning') {
+        }
+        // 处理错误响应
+        else if (messageType === 'error') {
+          if (converting) {
+            setResult({
+              success: false,
+              message: data,
+            });
+            message.error(data);
+            setConverting(false);
+          } else {
+            message.error(data);
+          }
+        }
+        // 处理警告响应
+        else if (messageType === 'warning') {
           message.warning(data);
         }
       }
     );
 
     // 监听PDF容器日志
-    const cancel3 = window.electron?.ipcRenderer.on(
+    const cancelByContainerLogs = window.electron?.ipcRenderer.on(
       'container-logs',
       (messageType: any, data: any) => {
         setChecking(false);
@@ -189,9 +187,8 @@ export default function PdfConvert() {
     );
 
     return () => {
-      if (cancel1) cancel1();
-      if (cancel2) cancel2();
-      if (cancel3) cancel3();
+      if (cancelByPdfConvert) cancelByPdfConvert();
+      if (cancelByContainerLogs) cancelByContainerLogs();
     };
   }, [fileList]);
 
@@ -279,11 +276,6 @@ export default function PdfConvert() {
                   <Text strong={result.success}>
                     {result.message}
                   </Text>
-                  {result.success && result.translationCorrect !== undefined && (
-                    <Text type={result.translationCorrect ? 'success' : 'warning'}>
-                      翻译正确性: {result.translationCorrect ? '正确' : '可能存在问题'}
-                    </Text>
-                  )}
                 </Space>
               </Card>
             </div>
