@@ -1,10 +1,11 @@
-import { Button, message, Card, Typography, Space, List } from 'antd';
-import { FileTextOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Button, message, Card, Typography, Space, List, Collapse } from 'antd';
+import { FileTextOutlined, PlusOutlined, DeleteOutlined, MonitorOutlined, ReloadOutlined } from '@ant-design/icons';
 import { NavLink } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import './index.scss';
 
 const { Title, Text } = Typography;
+const { Panel } = Collapse;
 
 interface ConversionResult {
   success: boolean;
@@ -17,10 +18,50 @@ interface FileItem {
   path: string;
 }
 
+interface ContainerStatus {
+  status: 'running' | 'error' | 'timeout';
+  health?: any;
+  error?: string;
+  timestamp: string;
+}
+
+interface TerminalLine {
+  content: string;
+  type: 'timestamp' | 'status' | 'error' | 'success' | 'normal';
+  timestamp: string;
+}
+
 export default function PdfConvert() {
   const [fileList, setFileList] = useState<FileItem[]>([]);
   const [converting, setConverting] = useState(false);
   const [result, setResult] = useState<ConversionResult | null>(null);
+  const [containerOutput, setContainerOutput] = useState<TerminalLine[]>([]);
+  const [checking, setChecking] = useState(false);
+
+  const addTerminalLine = (content: string, type: TerminalLine['type'] = 'normal') => {
+    const newLine: TerminalLine = {
+      content,
+      type,
+      timestamp: new Date().toLocaleTimeString()
+    };
+    setContainerOutput(prev => [...prev, newLine]);
+  };
+
+  // 获取PDF容器日志
+  const checkContainerStatus = async () => {
+    setChecking(true);
+    addTerminalLine('正在获取PDF容器日志...', 'timestamp');
+    try {
+      window.electron.ipcRenderer.sendMessage('container-logs', 'logs', 'PDF');
+    } catch (error) {
+      addTerminalLine(`日志获取失败: ${error}`, 'error');
+      setChecking(false);
+    }
+  };
+
+  const clearTerminalOutput = () => {
+    setContainerOutput([]);
+  };
 
   const handleFileSelect = async () => {
     try {
@@ -125,9 +166,32 @@ export default function PdfConvert() {
       }
     );
 
+    // 监听PDF容器日志
+    const cancel3 = window.electron?.ipcRenderer.on(
+      'container-logs',
+      (messageType: any, data: any) => {
+        setChecking(false);
+        if (messageType === 'data' && data.action === 'logs' && data.service === 'PDF') {
+          const logs: string = data.data.logs;
+          if (!logs) {
+            addTerminalLine('无日志输出', 'normal');
+            return;
+          }
+          logs.split('\n').forEach(line => {
+            if (line.trim()) {
+              addTerminalLine(line, 'normal');
+            }
+          });
+        } else if (messageType === 'error') {
+          addTerminalLine(`日志获取出错: ${data}`, 'error');
+        }
+      }
+    );
+
     return () => {
       if (cancel1) cancel1();
       if (cancel2) cancel2();
+      if (cancel3) cancel3();
     };
   }, [fileList]);
 
@@ -224,6 +288,53 @@ export default function PdfConvert() {
               </Card>
             </div>
           )}
+
+          <div className="container-output-section">
+            <Collapse ghost>
+              <Panel 
+                header={
+                  <div className="terminal-header">
+                    <MonitorOutlined />
+                    <Text strong>PDF容器输出</Text>
+                  </div>
+                } 
+                key="1"
+              >
+                <div className="terminal-container">
+                  {containerOutput.length === 0 ? (
+                    <div className="terminal-line">
+                      点击"探测容器任务执行状态"按钮查看容器状态...
+                    </div>
+                  ) : (
+                    containerOutput.map((line, index) => (
+                      <div key={index} className={`terminal-line ${line.type}`}>
+                        <span className="timestamp">[{line.timestamp}]</span> {line.content}
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="terminal-actions">
+                  <Button
+                    type="primary"
+                    size="small"
+                    icon={<MonitorOutlined />}
+                    onClick={checkContainerStatus}
+                    loading={checking}
+                  >
+                    探测容器任务执行状态
+                  </Button>
+                  <Button
+                    size="small"
+                    icon={<ReloadOutlined />}
+                    onClick={clearTerminalOutput}
+                    disabled={containerOutput.length === 0}
+                  >
+                    清空输出
+                  </Button>
+                </div>
+              </Panel>
+            </Collapse>
+          </div>
         </Space>
       </Card>
     </div>

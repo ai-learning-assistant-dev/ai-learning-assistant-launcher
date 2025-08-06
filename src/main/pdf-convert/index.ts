@@ -1,14 +1,17 @@
-import { IpcMain, dialog } from 'electron';
-import { Exec } from '../exec';
-import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 import path from 'node:path';
-import { appPath } from '../exec';
+import { appPath, Exec } from '../exec';
 import fs from 'node:fs';
 import { v4 as uuidv4 } from 'uuid';
+import { escape } from 'node:querystring';
+import http from 'node:http';
+import FormData from 'form-data';
+import { dialog, IpcMain } from 'electron';
+import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 
 const exec = new Exec();
 const channel = 'pdf-convert';
 const selectFilesChannel = 'select-pdf-files';
+const containerStatusChannel = 'pdf-container-status';
 
 export default async function init(ipcMain: IpcMain) {
   // PDF转换服务
@@ -41,85 +44,213 @@ export default async function init(ipcMain: IpcMain) {
             }
           }
 
-          // 构建curl命令
-          const curlArgs = [
-            '-X', 'POST',
-            'http://127.0.0.1:5000/file_parse',
-            '-H', 'accept: application/json',
-            '-F', 'return_md=true',
-            '-F', 'return_middle_json=true',
-            '-F', 'return_model_output=false',
-            '-F', 'return_content_list=false',
-            '-F', 'return_images=false',
-            '-F', 'parse_method=auto',
-            '-F', 'start_page_id=0',
-            '-F', 'end_page_id=99999',
-            '-F', 'lang_list=ch',
-            '-F', 'output_dir=./output',
-            '-F', 'server_url=',
-            '-F', 'backend=pipeline',
-            '-F', 'table_enable=true',
-            '-F', 'formula_enable=true'
-          ];
+          // 使用 Node.js HTTP 模块进行请求
+          console.debug('Preparing HTTP request with files:', filePaths);
 
-          // 添加文件参数
+          // 创建 FormData
+          const form = new FormData();
+          
+          // 添加表单字段
+          form.append('return_md', 'true');
+          form.append('return_middle_json', 'true');
+          form.append('return_model_output', 'false');
+          form.append('return_content_list', 'false');
+          form.append('return_images', 'true');
+          form.append('parse_method', 'auto');
+          form.append('start_page_id', '0');
+          form.append('end_page_id', '99999');
+          form.append('lang_list', 'ch');
+          form.append('output_dir', './output');
+          form.append('server_url', '');
+          form.append('backend', 'pipeline');
+          form.append('table_enable', 'true');
+          form.append('formula_enable', 'true');
+
+          // 添加文件
           filePaths.forEach((filePath) => {
-            curlArgs.push('-F', `files=@${filePath}`);
+            const fileStream = fs.createReadStream(filePath);
+            form.append('files', fileStream, {
+              filename: path.basename(filePath),
+              contentType: 'application/pdf'
+            });
           });
 
-          console.debug('Executing curl command:', curlArgs);
-
-          // 执行curl命令，但忽略其响应，作为临时补救措施
           try {
-            await exec.exec('curl', curlArgs);
-          } catch (e) {
-            console.warn('curl 命令执行失败，但作为临时措施，将继续尝试从容器拷贝文件。', e.message);
-          }
+            // 创建 HTTP 请求
+            const responseData = await new Promise<any>((resolve, reject) => {
+              const req = http.request({
+                hostname: '127.0.0.1',
+                port: 5000,
+                path: '/file_parse',
+                method: 'POST',
+                headers: {
+                  ...form.getHeaders(),
+                  'accept': 'application/json'
+                }
+              }, (res) => {
+                let data = '';
+                
+                res.on('data', (chunk) => {
+                  data += chunk;
+                });
+                
+                res.on('end', () => {
+                  try {
+                    const parsed = JSON.parse(data);
+                    resolve(parsed);
+                  } catch (jsonError) {
+                    console.error('JSON解析失败:', jsonError);
+                    reject(new Error('服务返回的数据格式错误，无法解析JSON'));
+                  }
+                });
+              });
 
-          // 补救措施：直接从容器中拷贝文件
-          // 1. 在容器的 /workspace/output 目录中找到最新的输出文件夹 (以UUID命名)
-          let newestDir = '';
-          try {
-            const listCmdResult = await exec.exec('podman', ['exec', 'PDF', 'ls', '-t', '/workspace/output']);
-            newestDir = listCmdResult.stdout.split('\n')[0].trim();
-          } catch (e) {
-            console.error('在容器中列出 /workspace/output 目录失败。', e);
-            throw new Error("无法在容器中找到输出目录。PDF服务可能没有成功处理文件。");
-          }
+              req.on('error', (error) => {
+                console.error('HTTP 请求失败:', error);
+                reject(error);
+              });
 
-          if (!newestDir) {
-            throw new Error('在容器中找不到任何输出目录。');
-          }
-
-          console.debug(`在容器中找到最新的输出目录: ${newestDir}`);
-
-          // 2. 遍历每个输入文件，将其对应的输出文件夹拷贝回宿主机
-          for (const filePath of filePaths) {
-            const pdfBasename = path.basename(filePath, path.extname(filePath));
-            const containerSourcePath = path.posix.join('/workspace/output', newestDir, pdfBasename);
-            const hostDestPath = path.dirname(filePath);
-
-            console.debug(`准备从容器拷贝: ${containerSourcePath} 到宿主机: ${hostDestPath}`);
+              // 将 FormData 管道到请求
+              form.pipe(req);
+            });
             
-            await exec.exec('podman', ['cp', `PDF:${containerSourcePath}`, hostDestPath]);
+            // 检查转换结果
+            const success = responseData && responseData.success !== false;
+            const translationCorrect = responseData?.translation_correct || false;
+            
+            // 保存转换后的文件
+            const savedFiles: string[] = [];
+            
+            // 处理results字段
+            if (responseData.results && typeof responseData.results === 'object') {
+              console.log('开始处理PDF转换结果...');
+              
+              for (const [pdfName, pdfResult] of Object.entries(responseData.results)) {
+                try {
+                  const result = pdfResult as any;
+                  
+                  // 获取原始PDF文件路径
+                  const originalPdfPath = filePaths.find(fp => 
+                    path.basename(fp, '.pdf') === path.basename(pdfName, '.pdf') || 
+                    path.basename(fp) === pdfName
+                  );
+                  
+                  if (!originalPdfPath) {
+                    console.warn(`未找到对应的原始PDF文件: ${pdfName}`);
+                    continue;
+                  }
+                  
+                  // 创建PDF同名文件夹（去掉.pdf后缀）
+                  const pdfDir = path.dirname(originalPdfPath);
+                  const baseName = path.basename(originalPdfPath, '.pdf');
+                  const outputDir = path.join(pdfDir, baseName);
+                  
+                  if (!fs.existsSync(outputDir)) {
+                    fs.mkdirSync(outputDir, { recursive: true });
+                  }
+                  
+                  console.log(`正在处理: ${pdfName} -> 输出目录: ${outputDir}`);
+                  
+                  // 1. 保存markdown内容
+                  if (result.md_content && typeof result.md_content === 'string') {
+                    const mdPath = path.join(outputDir, `${baseName}.md`);
+                    fs.writeFileSync(mdPath, result.md_content, 'utf8');
+                    savedFiles.push(mdPath);
+                    console.log(`已保存Markdown文件: ${mdPath}`);
+                  }
+                  
+                  // 2. 保存图片到 images 文件夹
+                  if (result.images && typeof result.images === 'object') {
+                    const imagesDir = path.join(outputDir, 'images');
+                    if (!fs.existsSync(imagesDir)) {
+                      fs.mkdirSync(imagesDir, { recursive: true });
+                    }
+                    
+                    for (const [imageName, dataUri] of Object.entries(result.images)) {
+                      try {
+                        const dataUriString = dataUri as string;
+                        
+                        // 先用 "base64," 截断数据
+                        const base64Index = dataUriString.indexOf('base64,');
+                        if (base64Index === -1) {
+                          console.error(`图片 ${imageName} 的数据格式不正确，未找到base64标识，跳过`);
+                          continue;
+                        }
+                        
+                        const headerPart = dataUriString.substring(0, base64Index + 7); // 包含 "base64,"
+                        const base64Data = dataUriString.substring(base64Index + 7); // 纯base64数据
+                        
+                        // 用正则匹配前面的字符串提取图片类型
+                        const typeMatch = headerPart.match(/^data:image\/([^;]+);base64,$/);
+                        if (!typeMatch) {
+                          console.error(`图片 ${imageName} 的头部格式不正确，跳过`);
+                          continue;
+                        }
+                        
+                        const imageType = typeMatch[1]; // 获取图片类型 (jpeg, png, etc.)
+                        
+                        // 根据图片类型确定文件扩展名
+                        const extension = imageType === 'jpeg' ? 'jpg' : imageType;
+                        
+                        // 生成带正确扩展名的文件名
+                        const baseImageName = path.parse(imageName).name || `image_${Date.now()}`;
+                        const finalImageName = `${baseImageName}.${extension}`;
+                        
+                        const imageBuffer = Buffer.from(base64Data, 'base64');
+                        const imagePath = path.join(imagesDir, finalImageName);
+                        fs.writeFileSync(imagePath, imageBuffer);
+                        savedFiles.push(imagePath);
+                        console.log(`已保存图片: ${imagePath} (类型: ${imageType})`);
+                      } catch (imageError) {
+                        console.error(`保存图片 ${imageName} 失败:`, imageError);
+                      }
+                    }
+                  }
+                  
+                  // 3. 保存middle_json
+                  if (result.middle_json && typeof result.middle_json === 'string') {
+                    const middlePath = path.join(outputDir, 'middle.json');
+                    fs.writeFileSync(middlePath, result.middle_json, 'utf8');
+                    savedFiles.push(middlePath);
+                    console.log(`已保存中间JSON文件: ${middlePath}`);
+                  }
+                  
+                } catch (fileError) {
+                  console.error(`处理PDF ${pdfName} 的结果时出错:`, fileError);
+                }
+              }
+            } else {
+              console.warn('响应中没有找到results字段或格式不正确');
+            }
+            
+            event.reply(
+              channel,
+              MESSAGE_TYPE.DATA,
+              new MessageData(action, serviceName as any, {
+                success,
+                message: success ? 
+                  `PDF转换成功！已保存 ${savedFiles.length} 个文件` : 
+                  'PDF处理完成但可能存在问题',
+                translationCorrect,
+                data: responseData,
+                savedFiles
+              })
+            );
+          } catch (execError) {
+            console.error('HTTP请求执行失败:', execError);
+            event.reply(
+              channel,
+              MESSAGE_TYPE.ERROR,
+              `PDF转换失败: ${execError instanceof Error ? execError.message : '未知错误'}`
+            );
           }
 
-          event.reply(
-            channel,
-            MESSAGE_TYPE.DATA,
-            new MessageData(action, serviceName as any, {
-              success: true,
-              message: 'PDF转换完成！输出文件已保存到原始PDF所在目录。',
-              translationCorrect: undefined, // 无法再得知此信息
-              data: {}
-            })
-          );
         } catch (error) {
-          console.error('PDF转换或文件拷贝失败:', error);
+          console.error('PDF转换失败:', error);
           event.reply(
             channel,
             MESSAGE_TYPE.ERROR,
-            `操作失败: ${error instanceof Error ? error.message : '未知错误'}`
+            `PDF转换失败: ${error instanceof Error ? error.message : '未知错误'}`
           );
         }
       }
@@ -159,6 +290,84 @@ export default async function init(ipcMain: IpcMain) {
             selectFilesChannel,
             MESSAGE_TYPE.ERROR,
             `文件选择失败: ${error instanceof Error ? error.message : '未知错误'}`
+          );
+        }
+      }
+    }
+  );
+
+  // 容器状态检测服务
+  ipcMain.on(
+    containerStatusChannel,
+    async (event, action: string) => {
+      console.debug(`pdf-container-status action: ${action}`);
+      
+      if (action === 'check') {
+        try {
+          // 检查PDF服务容器状态
+          const responseData = await new Promise<any>((resolve, reject) => {
+            const req = http.request({
+              hostname: '127.0.0.1',
+              port: 5000,
+              path: '/health',
+              method: 'GET',
+              timeout: 5000
+            }, (res) => {
+              let data = '';
+              
+              res.on('data', (chunk) => {
+                data += chunk;
+              });
+              
+              res.on('end', () => {
+                try {
+                  const parsed = JSON.parse(data);
+                  resolve({
+                    status: 'running',
+                    health: parsed,
+                    timestamp: new Date().toISOString()
+                  });
+                } catch (jsonError) {
+                  resolve({
+                    status: 'running',
+                    health: { message: data },
+                    timestamp: new Date().toISOString()
+                  });
+                }
+              });
+            });
+
+            req.on('error', (error) => {
+              resolve({
+                status: 'error',
+                error: error.message,
+                timestamp: new Date().toISOString()
+              });
+            });
+
+            req.on('timeout', () => {
+              req.destroy();
+              resolve({
+                status: 'timeout',
+                error: '请求超时',
+                timestamp: new Date().toISOString()
+              });
+            });
+
+            req.end();
+          });
+
+          event.reply(
+            containerStatusChannel,
+            MESSAGE_TYPE.DATA,
+            new MessageData(action, 'status', responseData)
+          );
+        } catch (error) {
+          console.error('容器状态检查失败:', error);
+          event.reply(
+            containerStatusChannel,
+            MESSAGE_TYPE.ERROR,
+            `容器状态检查失败: ${error instanceof Error ? error.message : '未知错误'}`
           );
         }
       }
