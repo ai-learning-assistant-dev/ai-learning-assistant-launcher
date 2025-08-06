@@ -4541,6 +4541,9 @@ declare module '@podman-desktop/api' {
     encoding?: BufferEncoding | string;
 
     shell?: boolean;
+
+    /** wrap command with ""  */
+    commandIsPath?: boolean;
   }
 
   /**

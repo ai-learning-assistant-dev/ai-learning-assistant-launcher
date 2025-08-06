@@ -18,7 +18,7 @@
 
 // eslint-disable-next-line max-classes-per-file
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
-import { spawn } from 'node:child_process';
+import { spawn } from 'cross-spawn';
 
 import type { RunError, RunOptions, RunResult } from '@podman-desktop/api';
 import * as sudo from 'sudo-prompt';
@@ -97,6 +97,12 @@ export class Exec {
     }
 
     let encoding = 'utf8';
+
+    if (options && options.commandIsPath) {
+      if (isWindows()) {
+        command = `"${command}"`;
+      }
+    }
 
     if (options && options.encoding) {
       encoding = options.encoding;
