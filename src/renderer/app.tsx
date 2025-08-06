@@ -4,7 +4,7 @@ import Hello from './pages/hello';
 import './app.css';
 import AiService from './pages/ai-service';
 import ObsidianApp from './pages/obsidian-app';
-import { App as AntdApp, Button, Modal } from 'antd';
+import { App as AntdApp } from 'antd';
 import ObsidianPlugin from './pages/obsidian-plugin';
 import WorkspaceManage from './pages/workspace-manage';
 import TTSConfig from './pages/tts-config';
