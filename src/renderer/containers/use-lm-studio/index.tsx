@@ -5,12 +5,17 @@ import {
   ActionName,
   channel,
   LMModel,
+  ServerStatus,
   ServiceName,
 } from '../../../main/lm-studio/type-info';
 import { MESSAGE_TYPE, MessageData } from '../../../main/ipc-data-type';
 
 export default function useLMStudio() {
   const [lMModels, setLMModels] = useState<LMModel[]>([]);
+  const [lmServerStatus, setLmServerStatus] = useState<ServerStatus>({
+    running: false,
+    port: 1234,
+  });
   const [loading, setLoading] = useState(false);
   const [initing, setIniting] = useState(true);
   function action(actionName: ActionName, serviceName: ServiceName) {
@@ -48,10 +53,11 @@ export default function useLMStudio() {
           const d = data as MessageData<
             ActionName,
             ServiceName,
-            LMModel[] | string
+            {models: LMModel[], serverStatus: ServerStatus}
           >;
           if (d.action === 'query') {
-            setLMModels(d.data as LMModel[]);
+            setLMModels(d.data.models);
+            setLmServerStatus(d.data.serverStatus);
             if (initing) {
               setIniting(false);
             }
@@ -83,5 +89,6 @@ export default function useLMStudio() {
     action,
     loading,
     initing,
+    lmServerStatus,
   };
 }

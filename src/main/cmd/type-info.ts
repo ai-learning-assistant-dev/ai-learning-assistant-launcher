@@ -7,6 +7,7 @@ export type ActionName =
   | 'start'
   | 'stop'
   | 'remove'
-  | 'update';
+  | 'update'
+  | 'move';
 
 export const channel: Channels = 'cmd';

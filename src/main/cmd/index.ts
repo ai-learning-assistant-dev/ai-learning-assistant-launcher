@@ -1,4 +1,4 @@
-import { IpcMain } from 'electron';
+import { dialog, IpcMain } from 'electron';
 import { ActionName, channel, ServiceName } from './type-info';
 import { appPath, Exec } from '../exec';
 import { isMac, isWindows } from '../exec/util';
@@ -6,7 +6,9 @@ import { getObsidianConfig, setVaultDefaultOpen, getObsidianVaultConfig } from '
 import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 import path from 'node:path';
 import { statSync } from 'node:fs';
-import { resetPodman } from '../podman-desktop/ensure-podman-works';
+import { getPodmanCli, resetPodman } from '../podman-desktop/ensure-podman-works';
+import { RunResult } from '@podman-desktop/api';
+import { podMachineName } from '../podman-desktop/type-info';
 
 const commandLine = new Exec();
 
@@ -117,6 +119,21 @@ export default async function init(ipcMain: IpcMain) {
                 new MessageData(action, serviceName, false),
               );
             }
+          } else if (serviceName === 'lm-studio') {
+            try {
+              const result = await installLMStudio();
+              event.reply(
+                channel,
+                MESSAGE_TYPE.DATA,
+                new MessageData(action, serviceName, result),
+              );
+            } catch (e) {
+              event.reply(
+                channel,
+                MESSAGE_TYPE.DATA,
+                new MessageData(action, serviceName, false),
+              );
+            }
           } else {
             const result = await commandLine.exec('echo %cd%');
             event.reply(channel, MESSAGE_TYPE.INFO, '安装成功');
@@ -134,9 +151,27 @@ export default async function init(ipcMain: IpcMain) {
               MESSAGE_TYPE.DATA,
               new MessageData(action, serviceName, await isObsidianInstall()),
             );
+          } else if (serviceName === 'lm-studio') {
+            event.reply(
+              channel,
+              MESSAGE_TYPE.DATA,
+              new MessageData(action, serviceName, await isLMStudioInstall()),
+            );
           } else {
             const result = await commandLine.exec('echo %cd%');
             event.reply(channel, MESSAGE_TYPE.INFO, '成功查询');
+          }
+        } else if (action === 'move') {
+          const result = await movePodman();
+          if (result.success) {
+            event.reply(
+              channel,
+              MESSAGE_TYPE.DATA,
+              new MessageData(action, serviceName, true),
+            );
+            event.reply(channel, MESSAGE_TYPE.INFO, '成功迁移');
+          } else {
+            event.reply(channel, MESSAGE_TYPE.ERROR, result.errorMessage);
           }
         } else if (action === 'update') {
           const result = await commandLine.exec('echo %cd%');
@@ -384,6 +419,7 @@ export async function isObsidianInstall() {
       '%localappdata%',
       process.env.LOCALAPPDATA,
     );
+    console.debug('getObsidianConfig' ,obsidianPath)
     const stat = statSync(obsidianPath);
     if (stat.isFile()) {
       return true;
@@ -394,4 +430,90 @@ export async function isObsidianInstall() {
     console.warn('检查obsidian失败', e);
     return false;
   }
+}
+
+export async function installLMStudio() {
+  const result = await commandLine.exec(
+    path.join(
+      appPath,
+      'external-resources',
+      'ai-assistant-backend',
+      'install_lm_studio.exe',
+    ),
+    ['/s'],
+  );
+  console.debug(result);
+  return true;
+}
+
+export async function isLMStudioInstall() {
+  try {
+    const result = await Promise.race([
+      new Promise<RunResult>((resolve, reject) =>
+        setTimeout(() => reject('命令超时'), 4000),
+      ),
+      // 如果用户安装lmstudio然后又卸载了lmstudio，那么这个命令会一直卡着，也不报错，所以要用一个4000ms的报错promise与它竞赛
+      commandLine.exec('lms', ['ls']),
+    ]);
+    console.debug('isLMStudioInstall', result);
+    return true;
+  } catch (e) {
+    console.warn(e);
+    return false;
+  }
+}
+
+export async function movePodman() {
+  let success = false;
+  let errorMessage = '迁移失败';
+  const dialogResult = await dialog.showOpenDialog({
+    title: '请选择服务的安装位置',
+    properties: ['openDirectory', 'showHiddenFiles'],
+  });
+  const path = dialogResult.filePaths[0];
+  if (!path || path === '') {
+    errorMessage = '未选择正确的安装位置';
+    return { success: false, errorMessage };
+  }
+  try {
+    const output1 = await commandLine.exec(
+      'wsl.exe',
+      ['--shutdown', podMachineName],
+      {
+        encoding: 'utf16le',
+        shell: true,
+      },
+    );
+    console.debug('movePodman', output1);
+    const output2 = await commandLine.exec(
+      'wsl.exe',
+      ['--manage', podMachineName, '--move', path],
+      {
+        encoding: 'utf16le',
+        shell: true,
+      },
+    );
+    console.debug('movePodman', output2);
+    const output3 = await commandLine.exec(
+      getPodmanCli(),
+      ['machine', 'start'],
+      {
+        shell: true,
+      },
+    );
+    console.debug('movePodman', output3);
+    success = true;
+  } catch (e) {
+    console.warn('movePodman', e);
+    if (
+      e &&
+      e.stdout &&
+      e.stdout.indexOf('Wsl/Service/MoveDistro/0' + 'x80070070') >= 0
+    ) {
+      errorMessage = '磁盘空间不足';
+    }
+    success = false;
+  }
+
+  return { success, errorMessage };
 }

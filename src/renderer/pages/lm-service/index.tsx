@@ -1,36 +1,35 @@
-import {
-  Button,
-  List,
-  Modal,
-  notification,
-  Popconfirm,
-  Typography,
-} from 'antd';
-import { Link, NavLink } from 'react-router-dom';
+import { Button, List, notification, Popconfirm, Typography } from 'antd';
+import { Link } from 'react-router-dom';
 import './index.scss';
-import type { ContainerInfo } from 'dockerode';
-import { useEffect, useState } from 'react';
-import useDocker from '../../containers/use-docker';
-import { ActionName, LMModel, modelKeyDict, ServiceName } from '../../../main/lm-studio/type-info';
+import { useState } from 'react';
+import {
+  ActionName,
+  LMModel,
+  lmStudioServiceNameList,
+  modelNameDict,
+  ServerStatus,
+  ServiceName,
+} from '../../../main/lm-studio/type-info';
 import {
   ActionName as CmdActionName,
   ServiceName as CmdServiceName,
-  channel as cmdChannel,
 } from '../../../main/cmd/type-info';
 import useCmd from '../../containers/use-cmd';
-import { MESSAGE_TYPE, MessageData } from '../../../main/ipc-data-type';
 import useLMStudio from '../../containers/use-lm-studio';
+import demoPic from './demo.png';
 
 interface ModelItem {
   name: string;
   serviceName: ServiceName;
   state: '还未安装' | '已经安装' | '已经加载';
-  port: number;
 }
 
-function getState(lMModel?: LMModel): ModelItem['state'] {
+function getState(
+  lMModel?: LMModel,
+  lmServerStatus?: ServerStatus,
+): ModelItem['state'] {
   if (lMModel) {
-    if (lMModel.isLoaded) {
+    if (lMModel.isLoaded && lmServerStatus && lmServerStatus.running) {
       return '已经加载';
     }
     return '已经安装';
@@ -39,7 +38,7 @@ function getState(lMModel?: LMModel): ModelItem['state'] {
 }
 
 export default function LMService() {
-  const { lMModels, action, loading, initing } = useLMStudio();
+  const { lmServerStatus, lMModels, action, loading, initing } = useLMStudio();
   const {
     isInstallWSL,
     checkingWsl,
@@ -65,27 +64,17 @@ export default function LMService() {
   // const llmContainer = containers.filter(
   //   (item) => item.Names.indexOf() >= 0,
   // )[0];
-  const textEmbedding = lMModels.filter(
-    (item) => item.modelKey === modelKeyDict['qwen/qwen3-embedding-0.6b'],
-  )[0];
-  const qwen3_32b = lMModels.filter(
-    (item) => item.modelKey === modelKeyDict['qwen/qwen3-32b'],
-  )[0];
 
-  const modelInfos: ModelItem[] = [
-    {
-      name: 'qwen3-32b',
-      serviceName: 'qwen/qwen3-32b',
-      state: getState(qwen3_32b),
-      port: 9000,
-    },
-    {
-      name: 'text-embedding',
-      serviceName: 'qwen/qwen3-embedding-0.6b',
-      state: getState(textEmbedding),
-      port: 8000,
-    },
-  ];
+  const modelInfos: ModelItem[] = lmStudioServiceNameList.map((serviceName) => {
+    const lmsInfo = lMModels.filter(
+      (item) => item.displayName === modelNameDict[serviceName],
+    )[0];
+    return {
+      name: lmsInfo ? lmsInfo.modelKey : serviceName,
+      serviceName: serviceName,
+      state: getState(lmsInfo, lmServerStatus),
+    };
+  });
 
   function click(actionName: ActionName, serviceName: ServiceName) {
     if (loading || checkingWsl) {
@@ -122,29 +111,32 @@ export default function LMService() {
             </Link>
             <div>
               <Popconfirm
-                title="删除所有模型和缓存"
-                description="你确定要删除所有模型和缓存吗？删除后再次安装会需要很长时间！"
-                onConfirm={() => clickCmd('remove', 'lm-studio')}
-                okText="确认删除"
-                cancelText="不删除"
+                title="修改模型存储位置的方法"
+                description={
+                  <div>
+                    <div>请打开LM Studio软件后按照下图所示操作</div>
+                    <div
+                      className="lm-studio-demo"
+                      style={{
+                        backgroundImage: `url(${demoPic})`,
+                      }}
+                    ></div>
+                  </div>
+                }
+                okText="我知道了"
               >
                 <Button
                   disabled={!isInstallWSL || cmdLoading || loading}
                   type="primary"
                   shape="round"
                   danger
-                  loading={
-                    cmdLoading &&
-                    cmdOperating.serviceName === 'lm-studio' &&
-                    cmdOperating.actionName === 'remove'
-                  }
                 >
-                  删除所有服务和缓存
+                  修改模型存储位置
                 </Button>
               </Popconfirm>
               <div style={{ width: '20px', display: 'inline-block' }}></div>
               <Button
-                disabled={isInstallWSL}
+                disabled={isInstallLMStudio}
                 type="primary"
                 shape="round"
                 loading={
@@ -166,39 +158,19 @@ export default function LMService() {
         dataSource={modelInfos}
         renderItem={(item) => (
           <List.Item
+            key={item.serviceName}
             actions={[
-              `访问地址：http://127.0.0.1:${item.port}`,
-              <NavLink key="config" to={`/${item.serviceName}-config`}>
-                <Button
-                  shape="round"
-                  size="small"
-                  disabled={
-                    !isInstallWSL || checkingWsl || loading || cmdLoading
-                  }
-                >
-                  设置
-                </Button>
-              </NavLink>,
-              item.state !== '还未安装' && (
-                <Button
-                  shape="round"
-                  size="small"
-                  disabled={!isInstallWSL || checkingWsl || cmdLoading}
-                  loading={
-                    loading &&
-                    operating.serviceName === item.serviceName &&
-                    operating.actionName === 'update'
-                  }
-                  onClick={() => click('update', item.serviceName)}
-                >
-                  更新
-                </Button>
-              ),
+              `http://127.0.0.1:${lmServerStatus.port}`,
               item.state === '已经加载' && (
                 <Button
                   shape="round"
                   size="small"
-                  disabled={!isInstallWSL || checkingWsl || cmdLoading}
+                  disabled={
+                    !isInstallWSL ||
+                    checkingWsl ||
+                    cmdLoading ||
+                    !isInstallLMStudio
+                  }
                   loading={
                     loading &&
                     operating.serviceName === item.serviceName &&
@@ -213,7 +185,12 @@ export default function LMService() {
                 <Button
                   shape="round"
                   size="small"
-                  disabled={!isInstallWSL || checkingWsl || cmdLoading}
+                  disabled={
+                    !isInstallWSL ||
+                    checkingWsl ||
+                    cmdLoading ||
+                    !isInstallLMStudio
+                  }
                   loading={
                     loading &&
                     operating.serviceName === item.serviceName &&
@@ -227,16 +204,19 @@ export default function LMService() {
               ),
               item.state === '已经安装' && (
                 <Popconfirm
-                  title="删除容器"
-                  description="你确定要删除模型？删除后再次安装会需要较长时间！"
-                  onConfirm={() => click('remove', item.serviceName)}
-                  okText="确认删除"
-                  cancelText="不删除"
+                  title="删除模型"
+                  description="请使用LM Studio软件进行删除模型的操作"
+                  okText="知道了"
                 >
                   <Button
                     shape="round"
                     size="small"
-                    disabled={!isInstallWSL || checkingWsl || cmdLoading}
+                    disabled={
+                      !isInstallWSL ||
+                      checkingWsl ||
+                      cmdLoading ||
+                      !isInstallLMStudio
+                    }
                     loading={
                       loading &&
                       operating.serviceName === item.serviceName &&
@@ -253,7 +233,12 @@ export default function LMService() {
                 <Button
                   shape="round"
                   size="small"
-                  disabled={!isInstallWSL || checkingWsl || cmdLoading}
+                  disabled={
+                    !isInstallWSL ||
+                    checkingWsl ||
+                    cmdLoading ||
+                    !isInstallLMStudio
+                  }
                   loading={
                     initing ||
                     (loading &&

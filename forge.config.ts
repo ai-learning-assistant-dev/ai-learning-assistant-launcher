@@ -62,21 +62,49 @@ const config: ForgeConfig = {
     ) {
       const { outputPaths } = packageResult;
       console.debug('buildPath', outputPaths);
+
       const buildPath = outputPaths[0];
-      try {
-        await cpy(
-          [
-            path.join(__dirname, 'external-resources', '**'),
-            '!' +
-              path.join(
-                __dirname,
-                'external-resources',
-                'ai-assistant-backend',
-                'ai-voice.tar',
-              ),
-          ],
-          path.join(buildPath, 'external-resources'),
+      const copyRules = [
+        path.join(__dirname, 'external-resources', '**'),
+        '!' +
+          path.join(
+            __dirname,
+            'external-resources',
+            'ai-assistant-backend',
+            'ai-voice.tar',
+          ),
+      ];
+      if (process.env.MAKE_MINI) {
+        copyRules.push(
+          '!' +
+            path.join(
+              __dirname,
+              'external-resources',
+              'ai-assistant-backend',
+              '*.exe',
+            ),
         );
+        copyRules.push(
+          '!' +
+            path.join(
+              __dirname,
+              'external-resources',
+              'ai-assistant-backend',
+              '*.msi',
+            ),
+        );
+        copyRules.push(
+          '!' +
+            path.join(
+              __dirname,
+              'external-resources',
+              'ai-assistant-backend',
+              '*.tar.zst',
+            ),
+        );
+      }
+      try {
+        await cpy(copyRules, path.join(buildPath, 'external-resources'));
       } catch (e) {
         console.error(e);
         throw e;
