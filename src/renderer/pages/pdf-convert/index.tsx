@@ -113,7 +113,7 @@ export default function PdfConvert() {
         
         // 处理PDF转换响应
         if (messageType === 'data' && data.action === 'convert') {
-          const { success, message: resultMessage } = data.data;
+          const { success, message: resultMessage, convertedFiles } = data.data;
           
           setResult({
             success,
@@ -122,6 +122,12 @@ export default function PdfConvert() {
 
           if (success) {
             message.success('PDF转换成功！');
+            // 从文件列表中移除已转换的文件
+            if (convertedFiles && convertedFiles.length > 0) {
+              setFileList(prevFiles => 
+                prevFiles.filter(file => !convertedFiles.includes(file.path))
+              );
+            }
           } else {
             message.error('PDF转换失败');
           }

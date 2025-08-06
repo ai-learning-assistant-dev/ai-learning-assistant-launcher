@@ -227,10 +227,11 @@ export default async function init(ipcMain: IpcMain) {
               new MessageData(action, serviceName as any, {
                 success,
                 message: success ? 
-                  `PDF转换成功！已保存 ${savedFiles.length} 个文件` : 
+                  `PDF转换成功！转换文件：${filePaths.map(fp => path.basename(fp)).join(', ')}` : 
                   'PDF处理完成但可能存在问题',
                 data: responseData,
-                savedFiles
+                savedFiles,
+                convertedFiles: success ? filePaths : []
               })
             );
           } catch (execError) {
