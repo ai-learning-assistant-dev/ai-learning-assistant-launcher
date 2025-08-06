@@ -36,6 +36,15 @@ export default function PdfConvert() {
   const [result, setResult] = useState<ConversionResult | null>(null);
   const [containerOutput, setContainerOutput] = useState<TerminalLine[]>([]);
   const [checking, setChecking] = useState(false);
+  const [backgroundTask, setBackgroundTask] = useState<string | null>(null);
+  const [hasRunningTasks, setHasRunningTasks] = useState(false);
+  const [isTaskSubmitted, setIsTaskSubmitted] = useState(false);
+
+  // 页面加载时恢复状态
+  useEffect(() => {
+    // 请求恢复持久化状态
+    window.electron.ipcRenderer.sendMessage('pdf-convert', 'check', 'PDF');
+  }, []);
 
   const addTerminalLine = (content: string, type: TerminalLine['type'] = 'normal') => {
     const newLine: TerminalLine = {
@@ -101,6 +110,9 @@ export default function PdfConvert() {
       });
       message.error('转换失败，请检查PDF服务是否正在运行');
       setConverting(false);
+      setIsTaskSubmitted(false);
+      setHasRunningTasks(false);
+      setBackgroundTask(null);
     }
   };
 
@@ -111,9 +123,48 @@ export default function PdfConvert() {
       (messageType: any, data: any) => {
         console.debug('PDF转换响应:', messageType, data);
         
+        // 处理状态恢复响应
+        if (messageType === 'data' && data.action === 'check') {
+          const { fileList: persistedFileList, lastResult, runningTasks } = data.data;
+          
+          if (persistedFileList && persistedFileList.length > 0) {
+            setFileList(persistedFileList);
+          }
+          
+          if (lastResult) {
+            setResult(lastResult);
+          }
+          
+          // 检查是否有正在运行的任务
+          if (runningTasks && runningTasks.length > 0) {
+            setHasRunningTasks(true);
+            setConverting(true);
+            setBackgroundTask(runningTasks[0].taskId);
+            console.log(`发现 ${runningTasks.length} 个正在运行的后台任务`);
+          } else {
+            setHasRunningTasks(false);
+            setConverting(false);
+            setBackgroundTask(null);
+          }
+          
+          return;
+        }
+        
         // 处理PDF转换响应
         if (messageType === 'data' && data.action === 'convert') {
-          const { success, message: resultMessage, convertedFiles } = data.data;
+          const { taskId, status, message: resultMessage } = data.data;
+          
+          if (status === 'started') {
+            setBackgroundTask(taskId);
+            setConverting(true);
+            setIsTaskSubmitted(true);
+            setHasRunningTasks(true);
+            message.info(resultMessage);
+            return;
+          }
+          
+          // 处理转换完成
+          const { success, convertedFiles } = data.data;
           
           setResult({
             success,
@@ -132,6 +183,7 @@ export default function PdfConvert() {
             message.error('PDF转换失败');
           }
           setConverting(false);
+          setBackgroundTask(null);
         }
         // 处理文件选择响应
         else if (messageType === 'data' && data.action === 'select') {
@@ -159,6 +211,9 @@ export default function PdfConvert() {
             });
             message.error(data);
             setConverting(false);
+            setIsTaskSubmitted(false);
+            setHasRunningTasks(false);
+            setBackgroundTask(null);
           } else {
             message.error(data);
           }
@@ -192,9 +247,40 @@ export default function PdfConvert() {
       }
     );
 
+    // 监听后台任务完成通知
+    const cancelByBackgroundTask = window.electron?.ipcRenderer.on(
+      'pdf-convert-detach',
+      (result: any) => {
+        console.debug('后台转换完成:', result);
+        
+        setResult({
+          success: result.success,
+          message: result.message,
+        });
+
+        if (result.success) {
+          message.success('后台PDF转换成功！');
+          // 从文件列表中移除已转换的文件
+          if (result.convertedFiles && result.convertedFiles.length > 0) {
+            setFileList(prevFiles => 
+              prevFiles.filter(file => !result.convertedFiles.includes(file.path))
+            );
+          }
+        } else {
+          message.error('后台PDF转换失败');
+        }
+        
+        setConverting(false);
+        setBackgroundTask(null);
+        setIsTaskSubmitted(false);
+        setHasRunningTasks(false);
+      }
+    );
+
     return () => {
       if (cancelByPdfConvert) cancelByPdfConvert();
       if (cancelByContainerLogs) cancelByContainerLogs();
+      if (cancelByBackgroundTask) cancelByBackgroundTask();
     };
   }, [fileList]);
 
@@ -216,7 +302,7 @@ export default function PdfConvert() {
                 type="primary" 
                 icon={<PlusOutlined />} 
                 onClick={handleFileSelect}
-                disabled={converting}
+                disabled={converting || hasRunningTasks}
               >
                 选择PDF文件
               </Button>
@@ -236,7 +322,7 @@ export default function PdfConvert() {
                         danger
                         icon={<DeleteOutlined />}
                         onClick={() => removeFile(index)}
-                        disabled={converting}
+                        disabled={converting || hasRunningTasks}
                       >
                         删除
                       </Button>
@@ -265,10 +351,24 @@ export default function PdfConvert() {
               icon={<FileTextOutlined />}
               onClick={convertPdfToMarkdown}
               loading={converting}
-              disabled={fileList.length === 0}
+              disabled={fileList.length === 0 || isTaskSubmitted || hasRunningTasks}
             >
-              {converting ? '转换中...' : '开始转换'}
+              {converting ? (backgroundTask ? '后台转换中...' : '转换中...') : '开始转换'}
             </Button>
+            {(backgroundTask || hasRunningTasks) && (
+              <div style={{ marginTop: '8px' }}>
+                {backgroundTask && (
+                  <Text type="secondary" style={{ display: 'block' }}>
+                    任务ID: {backgroundTask.slice(0, 8)}... (可离开页面，转换在后台继续)
+                  </Text>
+                )}
+                {hasRunningTasks && !isTaskSubmitted && (
+                  <Text type="warning" style={{ display: 'block' }}>
+                    检测到后台转换任务正在运行，请等待完成
+                  </Text>
+                )}
+              </div>
+            )}
           </div>
 
           {result && (
