@@ -262,8 +262,8 @@ export default function LMService() {
       <TerminalLogScreen
         id="terminal-log"
         cols={100}
-        rows={4}
-        style={{ height: '50px', width: '100%' }}
+        rows={6}
+        style={{ width: 'calc(100% - 20px)' }}
       />
     </div>
   );

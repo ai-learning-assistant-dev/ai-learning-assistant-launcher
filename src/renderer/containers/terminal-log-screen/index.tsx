@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { ITerminalInitOnlyOptions, Terminal } from '@xterm/xterm';
+import { Tomorrow } from 'xterm-theme';
 import '@xterm/xterm/css/xterm.css';
 import { channel } from '../../../main/terminal-log/type-info';
 import {
@@ -22,6 +23,9 @@ export function TerminalLogScreen(
       disableStdin: true,
       cols: props.cols,
       rows: props.rows,
+      theme: Tomorrow,
+      fontSize: 12,
+      convertEol: true,
     });
     termRef.current = term;
     term.open(document.getElementById(props.id));
