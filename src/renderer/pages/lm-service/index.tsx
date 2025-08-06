@@ -41,7 +41,6 @@ function getState(
 export default function LMService() {
   const { lmServerStatus, lMModels, action, loading, initing } = useLMStudio();
   const {
-    isInstallWSL,
     checkingWsl,
     isInstallLMStudio,
     action: cmdAction,
@@ -127,7 +126,7 @@ export default function LMService() {
                 okText="我知道了"
               >
                 <Button
-                  disabled={!isInstallWSL || cmdLoading || loading}
+                  disabled={cmdLoading || loading}
                   type="primary"
                   shape="round"
                   danger
@@ -166,12 +165,7 @@ export default function LMService() {
                 <Button
                   shape="round"
                   size="small"
-                  disabled={
-                    !isInstallWSL ||
-                    checkingWsl ||
-                    cmdLoading ||
-                    !isInstallLMStudio
-                  }
+                  disabled={checkingWsl || cmdLoading || !isInstallLMStudio}
                   loading={
                     loading &&
                     operating.serviceName === item.serviceName &&
@@ -186,12 +180,7 @@ export default function LMService() {
                 <Button
                   shape="round"
                   size="small"
-                  disabled={
-                    !isInstallWSL ||
-                    checkingWsl ||
-                    cmdLoading ||
-                    !isInstallLMStudio
-                  }
+                  disabled={checkingWsl || cmdLoading || !isInstallLMStudio}
                   loading={
                     loading &&
                     operating.serviceName === item.serviceName &&
@@ -212,12 +201,7 @@ export default function LMService() {
                   <Button
                     shape="round"
                     size="small"
-                    disabled={
-                      !isInstallWSL ||
-                      checkingWsl ||
-                      cmdLoading ||
-                      !isInstallLMStudio
-                    }
+                    disabled={checkingWsl || cmdLoading || !isInstallLMStudio}
                     loading={
                       loading &&
                       operating.serviceName === item.serviceName &&
@@ -234,12 +218,7 @@ export default function LMService() {
                 <Button
                   shape="round"
                   size="small"
-                  disabled={
-                    !isInstallWSL ||
-                    checkingWsl ||
-                    cmdLoading ||
-                    !isInstallLMStudio
-                  }
+                  disabled={checkingWsl || cmdLoading || !isInstallLMStudio}
                   loading={
                     initing ||
                     (loading &&
