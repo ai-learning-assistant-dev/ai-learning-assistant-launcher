@@ -218,7 +218,6 @@ export async function installWSL() {
         'install_wsl.msi',
       ),
       [],
-      { shell: true },
     );
 
     console.debug('installWSLmsi', outputWSLmsi);

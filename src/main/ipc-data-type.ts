@@ -7,8 +7,9 @@ export type Channels =
   | 'configs'
   | 'obsidian-plugin'
   | 'lm-studio'
-  | 'example'
-  | 'workspace'; // 测试通道
+  | 'example' // 测试通道
+  | 'workspace'
+  | 'terminal-log';
 
 export enum MESSAGE_TYPE {
   /** 阻断性错误，会把转圈中的按钮变成不转圈 */

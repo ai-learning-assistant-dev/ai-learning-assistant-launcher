@@ -153,7 +153,6 @@ export async function installPodman() {
       'install_podman.exe',
     ),
     [],
-    { shell: true },
   );
   return true;
 }

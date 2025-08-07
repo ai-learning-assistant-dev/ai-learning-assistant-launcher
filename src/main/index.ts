@@ -8,6 +8,7 @@ import initWorkspace from './workspace';
 import initContainerLogs from './podman-desktop/container-logs';
 import initLMStudio from './lm-studio';
 import initExampleMain from './example-main';
+import initTerminalLog from './terminal-log';
 import path from 'node:path';
 import { appPath, autoAdaptEncodingForWindows } from './exec';
 
@@ -33,11 +34,10 @@ initPodman(ipcMain);
 initCmd(ipcMain);
 initConfigs(ipcMain);
 initObsidianPlugin(ipcMain);
-// Initialize modules
-initWorkspace(ipcMain);  // 添加这行注册workspace模块
+initWorkspace(ipcMain);
 initContainerLogs(ipcMain);
 initLMStudio(ipcMain);
-initExampleMain(ipcMain)
+initExampleMain(ipcMain);
 updateTemplate();
 
 const createWindow = (): void => {
@@ -52,6 +52,7 @@ const createWindow = (): void => {
 
   // and load the index.html of the app.
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
+  initTerminalLog(mainWindow);
 
   // Open the DevTools.
   // mainWindow.webContents.openDevTools();

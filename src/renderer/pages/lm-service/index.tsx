@@ -17,6 +17,7 @@ import {
 import useCmd from '../../containers/use-cmd';
 import useLMStudio from '../../containers/use-lm-studio';
 import demoPic from './demo.png';
+import { TerminalLogScreen } from '../../containers/terminal-log-screen';
 
 interface ModelItem {
   name: string;
@@ -40,7 +41,6 @@ function getState(
 export default function LMService() {
   const { lmServerStatus, lMModels, action, loading, initing } = useLMStudio();
   const {
-    isInstallWSL,
     checkingWsl,
     isInstallLMStudio,
     action: cmdAction,
@@ -126,7 +126,7 @@ export default function LMService() {
                 okText="我知道了"
               >
                 <Button
-                  disabled={!isInstallWSL || cmdLoading || loading}
+                  disabled={cmdLoading || loading}
                   type="primary"
                   shape="round"
                   danger
@@ -156,7 +156,17 @@ export default function LMService() {
         }
         bordered
         dataSource={modelInfos}
-        renderItem={(item) => (
+        renderItem={(item) => [
+          item.serviceName === 'qwen/qwen3-4b' && (
+            <List.Item key={`block_title_${item.serviceName}`}>
+              <Typography.Text strong>语言模型：</Typography.Text>
+            </List.Item>
+          ),
+          item.serviceName === 'qwen/qwen3-embedding-0.6b' && (
+            <List.Item key={`block_title_${item.serviceName}`}>
+              <Typography.Text strong>词嵌入模型：</Typography.Text>
+            </List.Item>
+          ),
           <List.Item
             key={item.serviceName}
             actions={[
@@ -165,12 +175,7 @@ export default function LMService() {
                 <Button
                   shape="round"
                   size="small"
-                  disabled={
-                    !isInstallWSL ||
-                    checkingWsl ||
-                    cmdLoading ||
-                    !isInstallLMStudio
-                  }
+                  disabled={checkingWsl || cmdLoading || !isInstallLMStudio}
                   loading={
                     loading &&
                     operating.serviceName === item.serviceName &&
@@ -185,12 +190,7 @@ export default function LMService() {
                 <Button
                   shape="round"
                   size="small"
-                  disabled={
-                    !isInstallWSL ||
-                    checkingWsl ||
-                    cmdLoading ||
-                    !isInstallLMStudio
-                  }
+                  disabled={checkingWsl || cmdLoading || !isInstallLMStudio}
                   loading={
                     loading &&
                     operating.serviceName === item.serviceName &&
@@ -211,12 +211,7 @@ export default function LMService() {
                   <Button
                     shape="round"
                     size="small"
-                    disabled={
-                      !isInstallWSL ||
-                      checkingWsl ||
-                      cmdLoading ||
-                      !isInstallLMStudio
-                    }
+                    disabled={checkingWsl || cmdLoading || !isInstallLMStudio}
                     loading={
                       loading &&
                       operating.serviceName === item.serviceName &&
@@ -233,12 +228,7 @@ export default function LMService() {
                 <Button
                   shape="round"
                   size="small"
-                  disabled={
-                    !isInstallWSL ||
-                    checkingWsl ||
-                    cmdLoading ||
-                    !isInstallLMStudio
-                  }
+                  disabled={checkingWsl || cmdLoading || !isInstallLMStudio}
                   loading={
                     initing ||
                     (loading &&
@@ -255,8 +245,14 @@ export default function LMService() {
           >
             <Typography.Text type="success">[{item.state}]</Typography.Text>
             {item.name}
-          </List.Item>
-        )}
+          </List.Item>,
+        ]}
+      />
+      <TerminalLogScreen
+        id="terminal-log"
+        cols={100}
+        rows={3}
+        style={{ width: 'calc(100% - 20px)' }}
       />
     </div>
   );
