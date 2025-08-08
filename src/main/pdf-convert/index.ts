@@ -9,7 +9,7 @@ import { dialog, IpcMain, BrowserWindow } from 'electron';
 import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 import { ActionName, ServiceName } from './type-info';
 import { write } from '../terminal-log';
-import { loggerFactory } from '../terminal-log';
+import { getCurrentPdfConfig } from '../configs';
 
 const exec = new Exec();
 const channel = 'pdf-convert';
@@ -211,24 +211,28 @@ async function performBackgroundConversion(taskId: string, filePaths: string[], 
     // 开始监控日志
     const logInterval = startLogMonitoring();
     
+    // 获取当前配置
+    const config = getCurrentPdfConfig();
+    console.log('使用PDF配置:', config);
+    
     // 创建 FormData
     const form = new FormData();
     
-    // 添加表单字段
+    // 添加表单字段，使用配置中的值
     form.append('return_md', 'true');
     form.append('return_middle_json', 'true');
     form.append('return_model_output', 'false');
     form.append('return_content_list', 'false');
     form.append('return_images', 'true');
     form.append('parse_method', 'auto');
-    form.append('start_page_id', '0');
-    form.append('end_page_id', '99999');
+    form.append('start_page_id', config.start_page_id.toString());
+    form.append('end_page_id', config.end_page_id.toString());
     form.append('lang_list', 'ch');
     form.append('output_dir', './output');
     form.append('server_url', '');
     form.append('backend', 'pipeline');
-    form.append('table_enable', 'true');
-    form.append('formula_enable', 'true');
+    form.append('table_enable', config.table_enable.toString());
+    form.append('formula_enable', config.formula_enable.toString());
 
     // 添加文件
     filePaths.forEach((filePath) => {
