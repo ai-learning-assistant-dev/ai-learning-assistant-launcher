@@ -39,6 +39,7 @@ initWorkspace(ipcMain);
 initContainerLogs(ipcMain);
 initLMStudio(ipcMain);
 initExampleMain(ipcMain);
+initPdfConvert(ipcMain);
 updateTemplate();
 
 const createWindow = (): void => {
