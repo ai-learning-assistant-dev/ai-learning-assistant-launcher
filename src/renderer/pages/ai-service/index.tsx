@@ -262,7 +262,7 @@ export default function AiService() {
                   </Button>
                 </NavLink>
               ),
-              item.state !== '还未安装' && (
+              item.state === '正在运行' && (
                 <Button
                   shape="round"
                   size="small"

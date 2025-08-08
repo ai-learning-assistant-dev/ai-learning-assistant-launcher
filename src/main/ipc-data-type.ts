@@ -7,7 +7,7 @@ export type Channels =
   | 'configs'
   | 'obsidian-plugin'
   | 'pdf-convert'
-  | 'pdf-convert-detach';
+  | 'pdf-convert-completed';
 
 export enum MESSAGE_TYPE {
   /** 阻断性错误，会把转圈中的按钮变成不转圈 */

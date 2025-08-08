@@ -136,11 +136,11 @@ export default function PdfConvert() {
           }
           
           // 检查是否有正在运行的任务
-          if (runningTasks && runningTasks.length > 0) {
+          if (runningTasks && runningTasks.taskId) {
             setHasRunningTasks(true);
             setConverting(true);
-            setBackgroundTask(runningTasks[0].taskId);
-            console.log(`发现 ${runningTasks.length} 个正在运行的后台任务`);
+            setBackgroundTask(runningTasks.taskId);
+            console.log(`发现正在运行的后台任务: ${runningTasks.taskId}`);
           } else {
             setHasRunningTasks(false);
             setConverting(false);
@@ -249,7 +249,7 @@ export default function PdfConvert() {
 
     // 监听后台任务完成通知
     const cancelByBackgroundTask = window.electron?.ipcRenderer.on(
-      'pdf-convert-detach',
+      'pdf-convert-completed',
       (result: any) => {
         console.debug('后台转换完成:', result);
         

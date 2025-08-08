@@ -16,22 +16,23 @@ const channel = 'pdf-convert';
 interface PdfConvertState {
   fileList: Array<{ name: string; path: string }>;
   lastResult: any | null;
-  backgroundTasks: Map<string, any>;
+  backgroundTask: any | null;
 }
 
 let persistentState: PdfConvertState = {
   fileList: [],
   lastResult: null,
-  backgroundTasks: new Map()
+  backgroundTask: null
 };
 
-// 后台任务管理
-const backgroundTasks = new Map<string, {
+// 后台任务管理 - 单一任务
+let backgroundTask: {
+  taskId: string;
   filePaths: string[];
   startTime: number;
   status: 'running' | 'completed' | 'failed';
   result?: any;
-}>();
+} | null = null;
 
 export default async function init(ipcMain: IpcMain) {
   // PDF转换服务
@@ -43,9 +44,9 @@ export default async function init(ipcMain: IpcMain) {
       // 处理状态获取请求
       if (action === 'check') {
         // 检查是否有正在运行的任务
-        const runningTasks = Array.from(backgroundTasks.entries())
-          .filter(([_, task]) => task.status === 'running')
-          .map(([taskId, task]) => ({ taskId, ...task }));
+        const runningTasks = backgroundTask && backgroundTask.status === 'running' 
+          ? backgroundTask 
+          : null;
         
         event.reply(
           channel,
@@ -61,6 +62,16 @@ export default async function init(ipcMain: IpcMain) {
       
       if (action === 'convert') {
         try {
+          // 检查是否已有任务在运行
+          if (backgroundTask && backgroundTask.status === 'running') {
+            event.reply(
+              channel,
+              MESSAGE_TYPE.ERROR,
+              '已有转换任务在后台运行，请等待完成后再试'
+            );
+            return;
+          }
+
           // 验证文件路径
           if (!filePaths || filePaths.length === 0) {
             event.reply(
@@ -85,11 +96,12 @@ export default async function init(ipcMain: IpcMain) {
 
           // 创建后台任务ID
           const taskId = uuidv4();
-          backgroundTasks.set(taskId, {
+          backgroundTask = {
+            taskId,
             filePaths,
             startTime: Date.now(),
             status: 'running'
-          });
+          };
 
           // 立即返回任务开始响应
           event.reply(
@@ -225,6 +237,12 @@ async function performBackgroundConversion(taskId: string, filePaths: string[], 
         reject(error);
       });
 
+      req.setSocketKeepAlive()
+      req.setTimeout(1800000, () => {
+        console.error('解析时间超过30分钟，连接已挂断，请尝试减少文件总数或切割文件后上传');
+        req.end()
+      });
+
       // 将 FormData 管道到请求
       form.pipe(req);
     });
@@ -338,10 +356,9 @@ async function performBackgroundConversion(taskId: string, filePaths: string[], 
     }
     
     // 更新任务状态
-    const task = backgroundTasks.get(taskId);
-    if (task) {
-      task.status = 'completed';
-      task.result = {
+    if (backgroundTask && backgroundTask.taskId === taskId) {
+      backgroundTask.status = 'completed';
+      backgroundTask.result = {
         success,
         message: success ? 
           `PDF转换成功！转换文件：${filePaths.map(fp => path.basename(fp)).join(', ')}` : 
@@ -353,7 +370,7 @@ async function performBackgroundConversion(taskId: string, filePaths: string[], 
     }
     
     // 更新持久化状态
-    persistentState.lastResult = task?.result;
+    persistentState.lastResult = backgroundTask?.result;
     
     // 从持久化文件列表中移除已转换的文件
     if (success) {
@@ -377,8 +394,13 @@ async function performBackgroundConversion(taskId: string, filePaths: string[], 
     // 发送完成通知到所有窗口
     const allWindows = BrowserWindow.getAllWindows();
     allWindows.forEach(window => {
-      window.webContents.send('pdf-convert-detach', result);
+      window.webContents.send('pdf-convert-completed', result);
     });
+    
+    // 清理已完成的任务
+    if (backgroundTask && backgroundTask.taskId === taskId) {
+      backgroundTask = null;
+    }
     
     console.log(`Background conversion completed for task: ${taskId}`);
     
@@ -386,25 +408,38 @@ async function performBackgroundConversion(taskId: string, filePaths: string[], 
     console.error(`Background conversion failed for task ${taskId}:`, error);
     
     // 更新任务状态为失败
-    const task = backgroundTasks.get(taskId);
-    if (task) {
-      task.status = 'failed';
-      task.result = {
+    if (backgroundTask && backgroundTask.taskId === taskId) {
+      backgroundTask.status = 'failed';
+      backgroundTask.result = {
         success: false,
         message: `PDF转换失败: ${error instanceof Error ? error.message : '未知错误'}`
       };
     }
     
+    // 更新持久化状态
+    persistentState.lastResult = backgroundTask?.result;
+    
+    // 从持久化文件列表中移除失败的文件（避免用户重新选择）
+    persistentState.fileList = persistentState.fileList.filter(
+      file => !filePaths.includes(file.path)
+    );
+    
     // 广播转换失败消息
     const result = {
       taskId,
       success: false,
-      message: `PDF转换失败: ${error instanceof Error ? error.message : '未知错误'}`
+      message: `PDF转换失败: ${error instanceof Error ? error.message : '未知错误'}`,
+      convertedFiles: filePaths // 包含失败的文件列表，用于前端处理
     };
     
     const allWindows = BrowserWindow.getAllWindows();
     allWindows.forEach(window => {
-      window.webContents.send('pdf-convert-detach', result);
+      window.webContents.send('pdf-convert-completed', result);
     });
+    
+    // 清理失败的任务
+    if (backgroundTask && backgroundTask.taskId === taskId) {
+      backgroundTask = null;
+    }
   }
 } 
