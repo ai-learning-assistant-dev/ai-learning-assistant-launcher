@@ -141,9 +141,9 @@ async function queryServerStatus() {
 
 async function queryModelStatus() {
   try {
-    const result = await await Promise.race([
+    const result = await Promise.race([
       new Promise<RunResult>((resolve, reject) =>
-        setTimeout(() => reject('queryModelStatus命令超时'), 4000),
+        setTimeout(() => reject('queryModelStatus命令超时'), 15000),
       ),
       commandLine.exec('lms', ['ls', '--json'], {
         shell: true,

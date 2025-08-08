@@ -449,9 +449,9 @@ export async function isLMStudioInstall() {
   try {
     const result = await Promise.race([
       new Promise<RunResult>((resolve, reject) =>
-        setTimeout(() => reject('命令超时'), 4000),
+        setTimeout(() => reject('isLMStudioInstall命令超时'), 15000),
       ),
-      // 如果用户安装lmstudio然后又卸载了lmstudio，那么这个命令会一直卡着，也不报错，所以要用一个4000ms的报错promise与它竞赛
+      // 如果用户安装lmstudio然后又卸载了lmstudio，那么这个命令会一直卡着，也不报错，所以要用一个10000ms的报错promise与它竞赛
       commandLine.exec('lms', ['ls']),
     ]);
     console.debug('isLMStudioInstall', result);
