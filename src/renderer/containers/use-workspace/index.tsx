@@ -24,6 +24,7 @@ interface UseWorkspaceReturn {
   localImportWorkspace: (vaultId: string) => Promise<void>;
   remoteImportGetList: (repoUrl: string) => Promise<RemotePackageInfo[]>;
   remoteImportClonePackage: (vaultId: string, repoUrl: string, branch: string, targetWorkspacePath: string) => Promise<void>;
+  updateWorkspace: (targetWorkspacePath: string) => Promise<void>;
 }
 
 export function useWorkspace(): UseWorkspaceReturn {
@@ -138,6 +139,11 @@ export function useWorkspace(): UseWorkspaceReturn {
     return sendIpcMessage<void>('remote-import-clone-package', vaultId, { repoUrl, branch, targetWorkspacePath });
   }, [sendIpcMessage]);
 
+  const updateWorkspace = useCallback(async (targetWorkspacePath: string) => {
+    // 此 action 不依赖 vaultId，由主进程直接使用目标路径
+    return sendIpcMessage<void>('update-workspace', null, { targetWorkspacePath });
+  }, [sendIpcMessage]);
+
   return {
     loading,
     loadWorkspaceConfig,
@@ -150,6 +156,7 @@ export function useWorkspace(): UseWorkspaceReturn {
     localImportWorkspace,
     remoteImportGetList,
     remoteImportClonePackage,
+    updateWorkspace,
   };
 }
 

@@ -20,7 +20,7 @@ import {
   Spin
 } from 'antd';
 import { useParams, NavLink } from 'react-router-dom';
-import { ArrowLeftOutlined, PlusOutlined, SaveOutlined, UpOutlined, DownOutlined, EditOutlined, FolderAddOutlined, DownSquareOutlined, CloudDownloadOutlined, FolderOpenOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, PlusOutlined, SaveOutlined, UpOutlined, DownOutlined, EditOutlined, FolderAddOutlined, DownSquareOutlined, CloudDownloadOutlined, FolderOpenOutlined, SyncOutlined } from '@ant-design/icons';
 import './index.scss';
 import useWorkspace, { RemotePackageInfo } from '../../containers/use-workspace';
 import { DirectoryNode, WorkspaceConfig, Persona } from '../../../main/workspace/type-info';
@@ -59,7 +59,7 @@ export default function WorkspaceManage() {
 
   // Import Modal State
   const [isRemoteImportModalVisible, setIsRemoteImportModalVisible] = useState(false);
-  const [remoteRepoUrl, setRemoteRepoUrl] = useState('https://gitee.com/JeremcyLu/update_test.git');
+  const [remoteRepoUrl, setRemoteRepoUrl] = useState('https://gitee.com/ai-learning-assistant-dev/storage-test.git');
   const [isFetchingPackages, setIsFetchingPackages] = useState(false);
   const [availablePackages, setAvailablePackages] = useState<RemotePackageInfo[]>([]);
   const [selectedPackages, setSelectedPackages] = useState<string[]>([]);
@@ -77,6 +77,7 @@ export default function WorkspaceManage() {
     localImportWorkspace,
     remoteImportGetList,
     remoteImportClonePackage,
+    updateWorkspace,
   } = useWorkspace();
 
   const getAllWorkspaces = async (id: string) => {
@@ -195,13 +196,13 @@ export default function WorkspaceManage() {
   };
 
   const removePersona = (id: string) => {
-    setPersonas(personas.filter(p => p.id !== id));
+    setPersonas(personas.filter((p) => p.id !== id));
   };
 
   const updatePersona = (id: string, field: string, value: string) => {
-    setPersonas(personas.map(p => 
-      p.id === id ? { ...p, [field]: value } : p
-    ));
+    setPersonas(
+      personas.map((p) => (p.id === id ? { ...p, [field]: value } : p))
+    );
   };
 
   const handleDelete = async () => {
@@ -338,6 +339,28 @@ export default function WorkspaceManage() {
                         导入工作区
                     </Button>
                 </Dropdown>
+                <Button 
+                    type="default"
+                    icon={<SyncOutlined />}
+                    disabled={!expandedWorkspace}
+                    loading={loading}
+                    onClick={async () => {
+                        if (!currentWorkspacePath) {
+                          message.warning('请先展开一个工作区');
+                          return;
+                        }
+                        try {
+                          await updateWorkspace(currentWorkspacePath);
+                          if (vaultId) {
+                            getAllWorkspaces(vaultId);
+                          }
+                        } catch (e) {
+                          // 错误提示在 hook 内处理
+                        }
+                    }}
+                >
+                    更新工作区
+                </Button>
                 <Button 
                     type="primary" 
                     icon={<FolderAddOutlined />}

@@ -149,6 +149,37 @@ function getRepoDirNameFromUrl(repoUrl: string): string {
     return new URL(repoUrl).pathname.slice(1).replace('.git', '').replace(/\//g, '_');
 }
 
+/**
+ * 查找给定学习包名称在本地存储区中的仓库路径（storagePath/<vendor>/<packageName>）
+ */
+function findStorageRepoPathByPackage(packageName: string): string | null {
+  const storagePath = getGitStoragePath();
+  if (!existsSync(storagePath)) {
+    return null;
+  }
+  const vendorDirs = readdirSync(storagePath, { withFileTypes: true });
+  for (const vendor of vendorDirs) {
+    if (!vendor.isDirectory()) continue;
+    const candidate = path.join(storagePath, vendor.name, packageName);
+    if (existsSync(candidate) && existsSync(path.join(candidate, '.git'))) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+/**
+ * 清空一个目录（但保留 .git 目录）
+ */
+function clearWorkingDirectoryExceptGit(dir: string) {
+  const entries = readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.name === '.git') continue;
+    const target = path.join(dir, entry.name);
+    rmSync(target, { recursive: true, force: true });
+  }
+}
+
 export default async function init(ipcMain: IpcMain) {
   ipcMain.on(
     channel,
@@ -354,10 +385,10 @@ export default async function init(ipcMain: IpcMain) {
           const { repoUrl } = data;
           const tempDir = path.join(os.tmpdir(), `aila-repo-${Date.now()}`);
           try {
-            await gitClone(repoUrl, tempDir, 'main'); 
+            await gitClone(repoUrl, tempDir, 'master'); 
             const indexPath = path.join(tempDir, 'index.json');
             if (!existsSync(indexPath)) {
-              throw new Error('仓库 main 分支下未找到 index.json 文件');
+              throw new Error('仓库 master 分支下未找到 index.json 文件');
             }
             const packageList = JSON.parse(readFileSync(indexPath, 'utf8'));
             event.reply(channel, MESSAGE_TYPE.DATA, new MessageData(action, serviceName, packageList));
@@ -369,11 +400,16 @@ export default async function init(ipcMain: IpcMain) {
         } else if (action === 'remote-import-clone-package') {
         // 1. Get parameters from frontend, now including targetWorkspacePath
         const { repoUrl, branch, targetWorkspacePath } = data;
-        
+
+        const newFolderName = branch.startsWith('release/') ? branch.substring('release/'.length) : path.basename(branch);
         // 2. Determine storage and repository paths
+        // TODO: storagePath应该被更详细的决定，仓库名应该是：远程仓库名 + realease/xxx ,
+        // 否则会造成严重的冲突，比如filelist
         const storagePath = getGitStoragePath();
         const repoDirName = getRepoDirNameFromUrl(repoUrl);
-        const repoStoragePath = path.join(storagePath, repoDirName);
+        const base_repoStoragePath = path.join(storagePath, repoDirName);
+
+        const repoStoragePath = path.join(base_repoStoragePath,newFolderName)
         
         // 3. Clone or Fetch the repository in the storage area
         if (existsSync(repoStoragePath)) {
@@ -393,7 +429,6 @@ export default async function init(ipcMain: IpcMain) {
         const filesToCopy: string[] = JSON.parse(readFileSync(filelistPath, 'utf8'));
 
         // 5. Determine the final destination folder inside the selected workspace
-        const newFolderName = branch.startsWith('release/') ? branch.substring('release/'.length) : path.basename(branch);
         const finalDestPath = path.join(targetWorkspacePath, newFolderName);
         
         if (existsSync(finalDestPath)) {
@@ -418,6 +453,173 @@ export default async function init(ipcMain: IpcMain) {
 
         event.reply(channel, MESSAGE_TYPE.INFO, `学习包 "${newFolderName}" 已成功导入到工作区 "${path.basename(targetWorkspacePath)}"！`);
     }
+        else if (action === 'update-workspace') {
+                    // 'forceUpdate' is a new parameter to handle the conflict resolution option
+                    const { targetWorkspacePath, forceUpdate = false } = data as { targetWorkspacePath: string, forceUpdate?: boolean };
+
+                    if (!targetWorkspacePath || !existsSync(targetWorkspacePath)) {
+                      event.reply(channel, MESSAGE_TYPE.ERROR, '无效或不存在的目标工作区路径');
+                      return;
+                    }
+          
+                    // 1. 检索选中的工作区中有哪些学习资料包（第一层文件夹名）
+                    const entries = readdirSync(targetWorkspacePath, { withFileTypes: true });
+                    const packageDirs = entries
+                      .filter(e => e.isDirectory() && !EXCLUDED_DIRS.has(e.name))
+                      .map(e => e.name);
+          
+                    if (packageDirs.length === 0) {
+                      event.reply(channel, MESSAGE_TYPE.INFO, '该工作区内未发现可更新的学习资料包。');
+                      return;
+                    }
+          
+                    const updateResults: { pkgName: string, message: string, conflict: boolean }[] = [];
+          
+                    for (const pkgName of packageDirs) {
+                      const currentPackageWorkspacePath = path.join(targetWorkspacePath, pkgName);
+                      const repoStoragePath = findStorageRepoPathByPackage(pkgName);
+          
+                      if (!repoStoragePath) {
+                        updateResults.push({ pkgName, message: '未在本地存储区找到对应缓存，已跳过。', conflict: false });
+                        continue;
+                      }
+          
+                      const releaseBranch = `release/${pkgName}`;
+                      const userBranch = `user/${pkgName}`;
+                      const remoteReleaseBranch = `origin/${releaseBranch}`;
+          
+                      try {
+                        // a. 定位仓库并获取最新信息
+                        execSync('git fetch origin', { cwd: repoStoragePath, stdio: 'pipe' });
+          
+                        // 检查远端分支是否存在，不存在则跳过
+                        try {
+                          execSync(`git show-ref --verify --quiet refs/remotes/${remoteReleaseBranch}`, { cwd: repoStoragePath, stdio: 'pipe' });
+                        } catch (e) {
+                          updateResults.push({ pkgName, message: `远端仓库缺少 ${releaseBranch} 分支，已跳过。`, conflict: false });
+                          continue;
+                        }
+          
+                        // 如果是强制更新，则走“放弃修改，强制更新”逻辑
+                        if (forceUpdate) {
+                          // 确保 user/xxx 分支存在并检出
+                          execSync(`git checkout -B ${userBranch} ${releaseBranch}`, { cwd: repoStoragePath, stdio: 'pipe' });
+                          // 强制重置为远端最新版
+                          execSync(`git reset --hard ${remoteReleaseBranch}`, { cwd: repoStoragePath, stdio: 'pipe' });
+                          
+                          // 清空工作区并从存储区复制回最新内容
+                          clearWorkingDirectoryExceptGit(currentPackageWorkspacePath);
+                          copySync(repoStoragePath, currentPackageWorkspacePath, { filter: (src) => !path.basename(src).startsWith('.git')});
+          
+                          updateResults.push({ pkgName, message: '已强制更新到最新版本，您的本地修改已被覆盖。', conflict: false });
+                          continue; // 处理下一个包
+                        }
+          
+                      // b. 准备 user 分支
+                      let userBranchExists = false;
+                      try {
+                        execSync(`git show-ref --verify --quiet refs/heads/${userBranch}`, { cwd: repoStoragePath, stdio: 'pipe' });
+                        userBranchExists = true;
+                      } catch (e) { /* Branch does not exist */ }
+
+                      if (userBranchExists) {
+                        execSync(`git checkout ${userBranch}`, { cwd: repoStoragePath, stdio: 'pipe' });
+                      } else {
+                        execSync(`git checkout -B ${userBranch} ${releaseBranch}`, { cwd: repoStoragePath, stdio: 'pipe' });
+                      }
+
+                      // c. 【核心修改】同步用户工作区的修改
+                      // 我们将工作区内容“叠加”到存储库工作目录，而不是先清空。
+                      // 这可以保留存储库中的 filelist.json 等文件，避免 "modify/delete" 冲突。
+                      copySync(currentPackageWorkspacePath, repoStoragePath, {
+                        overwrite: true,
+                        filter: (src) => !src.includes('.git') // 确保不触碰.git目录
+                      });
+                      
+                      execSync('git add .', { cwd: repoStoragePath, stdio: 'pipe' });
+                      try {
+                        execSync('git commit -m "Sync user workspace changes before update"', { cwd: repoStoragePath, stdio: 'pipe' });
+                      } catch (commitError) {
+                        if (!commitError.stdout?.toString().includes('nothing to commit')) {
+                          throw commitError;
+                        }
+                        // 如果没有变化，直接检查远端是否有更新
+                        const localSha = execSync(`git rev-parse HEAD`, { cwd: repoStoragePath }).toString().trim();
+                        const remoteSha = execSync(`git rev-parse ${remoteReleaseBranch}`, { cwd: repoStoragePath }).toString().trim();
+                        const mergeBase = execSync(`git merge-base HEAD ${remoteReleaseBranch}`, { cwd: repoStoragePath }).toString().trim();
+                        
+                        // 如果本地已经是远端的后代或相同，则无需更新
+                        // if (localSha === remoteSha || localSha === mergeBase) {
+                          if (localSha === remoteSha ) {
+                            updateResults.push({ pkgName, message: '已是最新版本。', conflict: false });
+                            continue; // 跳到下一个包
+                        }
+
+                      }
+          
+                        // d. 执行三路合并
+                        try {
+                          // 在 user/xxx 分支上，尝试合并远程最新的 release/xxx 分支
+                          execSync(`git merge ${remoteReleaseBranch} -m "Merge remote-tracking branch '${remoteReleaseBranch}'"`, { cwd: repoStoragePath, stdio: 'pipe' });
+                          
+                          console.log(`远程与本地合并成功`);
+                          // 如果可以成功合并 (无冲突)
+
+                          const filelistPath = path.join(repoStoragePath, 'filelist.json');
+                          if (!existsSync(filelistPath)) {
+                              throw new Error(`错误：合并后的学习包 "(${pkgName})" 缺少 filelist.json 文件。`);
+                          }
+
+                          const filesToSync: string[] = JSON.parse(readFileSync(filelistPath, 'utf8'));
+
+                          for (const fileRelativePath of filesToSync) {
+                            const sourceFile = path.join(repoStoragePath, fileRelativePath);
+                            const destFile = path.join(currentPackageWorkspacePath, fileRelativePath);
+                            
+                            if (existsSync(sourceFile)) {
+                                // 确保目标文件的父目录存在
+                                mkdirSync(path.dirname(destFile), { recursive: true });
+                                copySync(sourceFile, destFile, { overwrite: true });
+                            } else {
+                                // 这种情况理论上不应发生，但作为警告是好的
+                                console.warn(`警告: 文件 "${fileRelativePath}" 在 filelist.json 中列出，但在存储库中未找到。`);
+                            }
+                        }
+                          updateResults.push({ pkgName, message: '更新成功！您的修改已与最新版自动合并。', conflict: false });
+          
+                        } catch (mergeError) {
+                          // 如果不能合并 (发生冲突)
+                          // 必须立即中止合并
+                          execSync('git merge --abort', { cwd: repoStoragePath, stdio: 'pipe' });
+
+                          const stderr = mergeError.stderr?.toString() || 'No stderr output';
+                          const stdout = mergeError.stdout?.toString() || 'No stdout output';
+                          const rawError = `GIT MERGE FAILED:\nSTDERR:\n${stderr}\nSTDOUT:\n${stdout}`;
+                          console.error(`--- Raw Merge Error for ${pkgName} ---\n`, rawError);
+                          
+                          // 向用户清晰地展示冲突信息
+                          const message = `更新失败，存在合并冲突！\n建议：将最新版下载为新的学习包以便手动迁移。\n或选项：放弃您的修改，强制更新。`;
+                          updateResults.push({ pkgName, message, conflict: true });
+                        }
+                      } catch (error) {
+                        updateResults.push({ pkgName, message: `处理时发生未知错误: ${error.message}`, conflict: false });
+                        console.error(`Error processing package ${pkgName}:`, error);
+                      } finally {
+                        // e. 收尾：将存储区仓库的活动分支切回 release/xxx
+                        try {
+                          if (existsSync(repoStoragePath)) {
+                            execSync(`git checkout ${releaseBranch}`, { cwd: repoStoragePath, stdio: 'pipe' });
+                          }
+                        } catch (e) {
+                          console.error(`[${pkgName}]: 收尾操作失败，无法切回 ${releaseBranch} 分支。`);
+                        }
+                      }
+                    }
+          
+                    // 汇总所有结果后，统一发送给前端
+                    // 前端可以根据 'conflict: true' 字段来决定是否显示特殊UI（如强制更新按钮）
+                    event.reply(channel, MESSAGE_TYPE.DATA, new MessageData(action, serviceName, updateResults));
+        }
       } catch (error) {
         console.error(`workspace error on action ${action}:`, error);
         event.reply(channel, MESSAGE_TYPE.ERROR, error.message);
