@@ -186,7 +186,11 @@ export async function updateTemplate() {
 
   const pluginPath = path.join(obsidianPluginsTemplate, '.obsidian', 'plugins');
 
-  rmSync(pluginPath, { recursive: true });
+  try {
+    rmSync(pluginPath, { recursive: true });
+  } catch (e) {
+    console.warn(e);
+  }
 
   await cpy(
     path.join(pluginGitDir, 'ai-learning-assistant-dev', '**'),

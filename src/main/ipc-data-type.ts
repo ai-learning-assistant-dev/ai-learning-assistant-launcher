@@ -6,6 +6,10 @@ export type Channels =
   | 'wsl'
   | 'configs'
   | 'obsidian-plugin'
+  | 'lm-studio'
+  | 'example' // 测试通道
+  | 'workspace'
+  | 'terminal-log'
   | 'pdf-convert'
   | 'pdf-convert-completed';
 
@@ -41,6 +45,18 @@ import {
   ServiceName as ServiceNameObsidianPlugin,
 } from './obsidian-plugin/type-info';
 import {
+  ActionName as ActionNameLMStudio,
+  ServiceName as ServiceNameLMStudio,
+} from './lm-studio/type-info';
+import {
+  ActionName as ActionNameExampleMain,
+  ServiceName as ServiceNameExampleMain,
+} from './example-main/type-info';
+import {
+  ActionName as ActionNameWorkspace,
+  ServiceName as ServiceNameWorkspace,
+} from './workspace/type-info';
+import {
   ActionName as ActionNamePdfConvert,
   ServiceName as ServiceNamePdfConvert,
 } from './pdf-convert/type-info';
@@ -49,13 +65,20 @@ export type AllAction =
   | ActionNameCmd
   | ActionNameConfigs
   | ActionNameObsidianPlugin
-  | ActionNamePdfConvert;
+  | ActionNamePdfConvert
+  | ActionNameLMStudio
+  | ActionNameExampleMain
+  | ActionNameWorkspace; // 添加 workspace 类型
+
 export type AllService =
   | ServiceNamePodman
   | ServiceNameCmd
   | ServiceNameConfigs
   | ServiceNameObsidianPlugin
-  | ServiceNamePdfConvert;
+  | ServiceNamePdfConvert
+  | ServiceNameLMStudio
+  | ServiceNameExampleMain
+  | ServiceNameWorkspace; // 添加 workspace 类型
 
 export class MessageData<
   A extends AllAction = AllAction,

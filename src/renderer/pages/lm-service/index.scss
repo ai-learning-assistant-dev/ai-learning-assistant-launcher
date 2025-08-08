@@ -1,0 +1,24 @@
+
+.lm-service{
+  display: flex;
+  width: 100%;
+  justify-content: center;
+  flex-direction: column;
+  .lm-service-list{
+    width: calc(100% - 20px);
+    flex: 0 0 auto;
+  }
+  height: 100%;
+  align-items: center;
+
+  .header-container{
+    display: flex;
+    justify-content: space-between;
+  }
+}
+
+.lm-studio-demo{
+  width: 575px;
+  height: 312px;
+  background-size: contain;
+}

@@ -3,6 +3,9 @@
 
 因为AI模型本地部署比较复杂，所以我们把这些安装配置过程写成了自动化程序放在了这个AI学习助手启动器里，让所有人能没有门槛的完全在离线环境中使用AI学习助手。
 
+## ！！！特别注意！！！
+开发时修改main代码后手动停止程序然再重启程序才能看到效果，修改renderer代码后不需要重启程序即可立即看到效果
+
 ## 开发本项目基本命令
 ```shell
 #安装依赖
@@ -11,8 +14,10 @@ npm install
 npm run start
 #打包-不压缩包
 npm run package
-#打包-压缩包
+#打包-压缩包-包含依赖软件，最终包体积大小约为1.4GB
 npm run make
+#打包-压缩包-不包含依赖软件，最终包体积大约100MB
+npm run make-mini
 ```
 
 ## 目录结构
@@ -27,10 +32,24 @@ src 启动器源码
    |--cmd 需要用命令行实现的业务代码
    |--configs 用于读取external-resources目录中的配置文件的代码
    |--exec 在用户机器上执行命令行的核心代码，最好不要动它
+   |--git 提供git操作的工具代码
+   |--lm-studio 操作LM Studio的代码
+   |--logger 日志
+   |--obsidian-plugin obsidian插件管理代码
    |--podman-desktop podman虚拟机的接口代码，从podman-desktop复制过来的的
+   |--workspace 工作区操作代码
+   
 |--renderer 前端代码
    |--containers 业务逻辑组件
    |--pages 页面代码
+      |--ai-service 学习助手工具箱
+      |--asr-config ASR设置页面
+      |--example-page 示例代码
+      |--lm-service LM Studio管理页
+      |--obsidian-app Obsidian设置页面
+      |--obsidian-plugin Obsidian插件设置页面
+      |--tts-config TTS设置页面
+      |--workspace-manage 工作区管理页面
 forge.config.ts 打包器配置文件
 ```
 

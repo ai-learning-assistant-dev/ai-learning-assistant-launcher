@@ -4,17 +4,18 @@ import type Dockerode from 'dockerode';
 import {
   ActionName,
   channel,
+  LMModel,
+  ServerStatus,
   ServiceName,
-} from '../../../main/podman-desktop/type-info';
-import {
-  ActionName as CmdActionName,
-  channel as cmdChannel,
-  ServiceName as CmdServiceName,
-} from '../../../main/cmd/type-info';
+} from '../../../main/lm-studio/type-info';
 import { MESSAGE_TYPE, MessageData } from '../../../main/ipc-data-type';
 
-export default function useDocker() {
-  const [containers, setContainers] = useState<Dockerode.ContainerInfo[]>([]);
+export default function useLMStudio() {
+  const [lMModels, setLMModels] = useState<LMModel[]>([]);
+  const [lmServerStatus, setLmServerStatus] = useState<ServerStatus>({
+    running: false,
+    port: 1234,
+  });
   const [loading, setLoading] = useState(false);
   const [initing, setIniting] = useState(true);
   function action(actionName: ActionName, serviceName: ServiceName) {
@@ -36,7 +37,7 @@ export default function useDocker() {
     window.electron.ipcRenderer.sendMessage(channel, actionName, serviceName);
   }
 
-  function queryContainers() {
+  function queryServicese() {
     window.electron.ipcRenderer.sendMessage(channel, 'query');
   }
   useEffect(() => {
@@ -52,17 +53,18 @@ export default function useDocker() {
           const d = data as MessageData<
             ActionName,
             ServiceName,
-            Dockerode.ContainerInfo[] | string
+            {models: LMModel[], serverStatus: ServerStatus}
           >;
           if (d.action === 'query') {
-            setContainers(d.data as Dockerode.ContainerInfo[]);
+            setLMModels(d.data.models);
+            setLmServerStatus(d.data.serverStatus);
             if (initing) {
               setIniting(false);
             }
           }
         } else if (messageType === MESSAGE_TYPE.INFO) {
           notification.success({ message: data, placement: 'topRight' });
-          queryContainers();
+          queryServicese();
           setLoading(false);
         } else if (messageType === MESSAGE_TYPE.PROGRESS) {
           notification.success({ message: data, placement: 'topRight' });
@@ -73,36 +75,20 @@ export default function useDocker() {
         }
       },
     );
-
-    const cancel2 = window.electron?.ipcRenderer.on(
-      cmdChannel,
-      (messageType: MESSAGE_TYPE, data: any) => {
-        if (messageType === MESSAGE_TYPE.DATA) {
-          const d = data as MessageData<CmdActionName, CmdServiceName, boolean>;
-          if (d.action === 'remove' && d.service === 'podman') {
-            setContainers([]);
-          }
-          if (d.action === 'move' && d.service === 'podman') {
-            queryContainers();
-          }
-        }
-      },
-    );
-
     return () => {
       cancel();
-      cancel2();
     };
-  }, [initing, setContainers, setIniting, setLoading]);
+  }, [initing, setLMModels, setIniting, setLoading]);
 
   useEffect(() => {
-    queryContainers();
+    queryServicese();
   }, []);
 
   return {
-    containers,
+    lMModels,
     action,
     loading,
     initing,
+    lmServerStatus,
   };
 }

@@ -1,0 +1,193 @@
+.workspace-manage {
+  padding: 16px 24px;
+
+  .header-container {
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    .ant-space {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      
+      .delete-confirm-area {
+        padding: 8px;
+        background-color: #fff2f0;
+        border-radius: 4px;
+        border: 1px solid #ffccc7;
+        animation: fadeIn 0.3s;
+        margin-left: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+
+        .ant-btn-sm {
+           padding: 0 7px;
+          font-size: 12px;
+          height: 24px;
+          flex-shrink: 0;
+        }
+      }
+    }
+  }
+
+  .section-title {
+    font-size: 16px;
+    font-weight: 500;
+    color: rgba(0, 0, 0, 0.85);
+    margin: 16px 0 12px 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #f0f0f0; // 添加分割线增强区分度
+  }
+
+  .ant-card {
+    margin-bottom: 24px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.09);
+    
+    .ant-card-body {
+      padding: 20px 24px;
+    }
+  }
+
+  .persona-card {
+    margin-bottom: 16px;
+    border-radius: 8px;
+    overflow: hidden;
+    transition: all 0.2s;
+    
+    &:hover {
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+
+    .persona-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      background-color: #f8f8f8;
+      border-bottom: 1px solid #f0f0f0;
+      cursor: pointer;
+      transition: all 0.2s;
+      
+      &:hover {
+        background-color: #f0f0f0;
+      }
+      
+      .persona-title {
+        flex: 1;
+        font-weight: 500;
+        font-size: 15px;
+        color: rgba(0, 0, 0, 0.85);
+        padding-right: 12px;
+      }
+      
+      .ant-btn {
+        color: rgba(0, 0, 0, 0.45);
+        transition: all 0.2s;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        
+        &:hover {
+          color: rgba(0, 0, 0, 0.85);
+          background-color: rgba(0, 0, 0, 0.04);
+        }
+      }
+    }
+    
+    .ant-card-body {
+      padding: 16px;
+      background-color: #fff;
+      
+      .persona-form-item {
+        margin-bottom: 16px;
+        
+        &:last-child {
+          margin-bottom: 8px;
+        }
+      }
+    }
+  }
+
+  .ant-form-item-label {
+    padding-bottom: 6px;
+    font-weight: 500;
+  }
+
+  .ant-tree-select {
+    margin-bottom: 16px;
+    
+    .ant-select-selection-overflow {
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+  }
+
+  /* 新增按钮样式优化 */
+  .action-button {
+    margin-right: 8px;
+    &[disabled] {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  }
+
+  /* 人设卡片内部布局优化 */
+  .persona-form-item {
+    margin-bottom: 12px;
+    .ant-input-textarea {
+      transition: height 0.2s ease;
+    }
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+}
+
+
+.workspace-config-panel {
+  background-color: #fafafa;
+  padding: 16px;
+  border: 1px solid #e8e8e8;
+  border-radius: 4px;
+  margin: 0 16px 16px 16px;
+  
+  .config-actions {
+    margin-bottom: 16px;
+  }
+  
+  .section-title {
+    font-size: 16px;
+    font-weight: 500;
+    margin: 16px 0 8px 0;
+    color: rgba(0, 0, 0, 0.85);
+  }
+  
+  .persona-card {
+    margin-bottom: 16px;
+    
+    .persona-header {
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      
+      .persona-title {
+        font-weight: 500;
+      }
+    }
+    
+    .persona-form-item {
+      margin-bottom: 12px;
+    }
+  }
+}

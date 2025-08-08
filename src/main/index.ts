@@ -4,7 +4,11 @@ import initPodman from './podman-desktop/simple-container-manage';
 import initCmd from './cmd';
 import initConfigs from './configs';
 import initObsidianPlugin, { updateTemplate } from './obsidian-plugin';
+import initWorkspace from './workspace';
 import initContainerLogs from './podman-desktop/container-logs';
+import initLMStudio from './lm-studio';
+import initExampleMain from './example-main';
+import initTerminalLog from './terminal-log';
 import initPdfConvert from './pdf-convert';
 import path from 'node:path';
 import { appPath, autoAdaptEncodingForWindows } from './exec';
@@ -27,6 +31,16 @@ autoAdaptEncodingForWindows();
 app.commandLine.appendSwitch('--enable-logging', 'file');
 app.commandLine.appendSwitch('--log-file', path.join(appPath, 'chrome.log'));
 
+initPodman(ipcMain);
+initCmd(ipcMain);
+initConfigs(ipcMain);
+initObsidianPlugin(ipcMain);
+initWorkspace(ipcMain);
+initContainerLogs(ipcMain);
+initLMStudio(ipcMain);
+initExampleMain(ipcMain);
+updateTemplate();
+
 const createWindow = (): void => {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
@@ -39,6 +53,7 @@ const createWindow = (): void => {
 
   // and load the index.html of the app.
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
+  initTerminalLog(mainWindow);
 
   // Open the DevTools.
   // mainWindow.webContents.openDevTools();
