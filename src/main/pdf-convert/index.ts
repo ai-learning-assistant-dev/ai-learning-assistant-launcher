@@ -253,6 +253,74 @@ export default async function init(ipcMain: IpcMain) {
             `文件选择失败: ${error instanceof Error ? error.message : '未知错误'}`
           );
         }
+      } else if (action === 'remove') {
+        try {
+          // 验证是否提供了文件路径
+          if (!filePaths || filePaths.length === 0) {
+            event.reply(
+              channel,
+              MESSAGE_TYPE.ERROR,
+              '没有提供要删除的文件路径'
+            );
+            return;
+          }
+
+          const filePathToRemove = filePaths[0]; // 一次只删除一个文件
+          
+          // 检查文件是否正在转换
+          const fileToRemove = persistentState.fileList.find(f => f.path === filePathToRemove);
+          if (fileToRemove && fileToRemove.status === 'converting') {
+            event.reply(
+              channel,
+              MESSAGE_TYPE.ERROR,
+              '正在转换中的文件无法删除'
+            );
+            return;
+          }
+
+          // 从持久化列表中删除文件
+          const originalLength = persistentState.fileList.length;
+          persistentState.fileList = persistentState.fileList.filter(f => f.path !== filePathToRemove);
+          
+          if (persistentState.fileList.length < originalLength) {
+            console.log(`成功从持久化列表中删除文件: ${path.basename(filePathToRemove)}`);
+            
+            // 广播文件列表更新到所有窗口
+            const allWindows = BrowserWindow.getAllWindows();
+            allWindows.forEach(window => {
+              window.webContents.send('pdf-convert-completed', {
+                fileList: persistentState.fileList,
+                updatedFile: {
+                  path: filePathToRemove,
+                  name: path.basename(filePathToRemove),
+                  status: 'removed'
+                }
+              });
+            });
+            
+            event.reply(
+              channel,
+              MESSAGE_TYPE.DATA,
+              new MessageData(action, serviceName as any, {
+                removedFilePath: filePathToRemove,
+                message: '文件已从选择列表中删除'
+              })
+            );
+          } else {
+            event.reply(
+              channel,
+              MESSAGE_TYPE.WARNING,
+              '未找到要删除的文件'
+            );
+          }
+        } catch (error) {
+          console.error('删除文件失败:', error);
+          event.reply(
+            channel,
+            MESSAGE_TYPE.ERROR,
+            `删除文件失败: ${error instanceof Error ? error.message : '未知错误'}`
+          );
+        }
       }
     }
   );

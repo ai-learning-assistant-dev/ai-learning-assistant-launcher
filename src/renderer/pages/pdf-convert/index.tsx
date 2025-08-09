@@ -78,8 +78,14 @@ export default function PdfConvert() {
       message.warning('正在转换中的文件无法删除');
       return;
     }
-    const newFileList = fileList.filter((_, i) => i !== index);
-    setFileList(newFileList);
+    
+    // 通过IPC调用后端删除
+    try {
+      window.electron.ipcRenderer.sendMessage('pdf-convert', 'remove', 'PDF', [file.path]);
+    } catch (error) {
+      console.error('删除文件失败:', error);
+      message.error('删除文件失败');
+    }
   };
 
   // 页面加载时恢复状态
@@ -212,6 +218,15 @@ export default function PdfConvert() {
             const uniqueNewFiles = newFiles.filter(f => !existingPaths.includes(f.path));
             
             setFileList([...fileList, ...uniqueNewFiles]);
+          }
+        }
+        // 处理文件删除响应
+        else if (messageType === 'data' && data.action === 'remove') {
+          const { removedFilePath, message: resultMessage } = data.data;
+          if (removedFilePath) {
+            // 从前端列表中删除文件
+            setFileList(prevFiles => prevFiles.filter(f => f.path !== removedFilePath));
+            message.success(resultMessage || '文件已删除');
           }
         }
         // 处理错误响应
@@ -373,12 +388,12 @@ export default function PdfConvert() {
               <div style={{ marginTop: '8px' }}>
                 {backgroundTask && (
                   <Text type="secondary" style={{ display: 'block' }}>
-                    任务ID: {backgroundTask.slice(0, 8)}... (可离开页面，转换在后台继续)
+                    任务ID: {backgroundTask.slice(0, 8)}... (可离开页面，转换在后台继续，如需停止，请返回上一页面停止容器运行)
                   </Text>
                 )}
                 {hasRunningTasks && !isTaskSubmitted && (
                   <Text type="warning" style={{ display: 'block' }}>
-                    检测到后台转换任务正在运行，请等待完成，如需停止，请返回上一页面停止容器运行。
+                    检测到后台转换任务正在运行，请等待完成。
                   </Text>
                 )}
                 {progressData && (
