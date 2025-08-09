@@ -398,8 +398,8 @@ async function convertSinglePdfFile(filePath: string): Promise<{
         reject(error);
       });
 
-      req.setTimeout(1800000, () => {
-        console.error('解析时间超过30分钟，连接已挂断');
+      req.setTimeout(36000000, () => {
+        console.error('解析时间超过600分钟，连接已挂断');
         req.destroy();
         reject(new Error('解析超时'));
       });
