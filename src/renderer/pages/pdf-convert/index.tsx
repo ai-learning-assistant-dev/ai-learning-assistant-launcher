@@ -325,6 +325,7 @@ export default function PdfConvert() {
           )}
         </Space>
       </Card>
+      
       <TerminalLogScreen
         id="terminal-log"
         cols={100}

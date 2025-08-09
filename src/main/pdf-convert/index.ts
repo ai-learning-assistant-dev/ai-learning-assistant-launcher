@@ -8,7 +8,7 @@ import FormData from 'form-data';
 import { dialog, IpcMain, BrowserWindow } from 'electron';
 import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 import { ActionName, ServiceName } from './type-info';
-import { write } from '../terminal-log';
+import { loggerFactory } from '../terminal-log';
 import { getCurrentPdfConfig } from '../configs';
 
 const exec = new Exec();
@@ -35,6 +35,22 @@ let backgroundTask: {
   status: 'running' | 'completed' | 'failed';
   result?: any;
 } | null = null;
+
+const pdfLogger = loggerFactory('PDF');
+
+async function startPdfContainerLogging() {
+  try {
+    exec.exec('podman', ['logs', '-f', 'PDF'], {
+      shell: true,
+      encoding: 'utf8',
+      logger: pdfLogger,
+    }).catch(error => {
+      console.debug('PDF容器日志监控结束:', error?.message || 'Unknown error');
+    });
+  } catch (error) {
+    console.debug('启动PDF容器日志监控失败:', error);
+  }
+}
 
 export default async function init(ipcMain: IpcMain) {
   // PDF转换服务
@@ -104,6 +120,9 @@ export default async function init(ipcMain: IpcMain) {
             startTime: Date.now(),
             status: 'running'
           };
+
+          // 启动PDF容器日志监控
+          startPdfContainerLogging();
 
           // 立即返回任务开始响应
           event.reply(
@@ -176,40 +195,6 @@ export default async function init(ipcMain: IpcMain) {
 async function performBackgroundConversion(taskId: string, filePaths: string[], ipcMain: IpcMain) {
   try {
     console.debug('Starting background conversion for task:', taskId);
-    
-    // 定期获取容器日志
-    const startLogMonitoring = () => {
-      const interval = setInterval(async () => {
-        try {
-          // 创建一个模拟的event对象来接收日志
-          const mockEvent = {
-            reply: (channel: string, messageType: any, data: any) => {
-              if (messageType === MESSAGE_TYPE.DATA && data.data && data.data.logs) {
-                const logs = data.data.logs as string;
-                const lines = logs.split('\n');
-                // 只显示最新的几行日志，避免重复
-                const recentLines = lines.slice(-5);
-                recentLines.forEach(line => {
-                  if (line.trim()) {
-                    write('PDF', line.trim());
-                  }
-                });
-              }
-            }
-          };
-          
-          // 触发容器日志获取
-          ipcMain.emit('container-logs', mockEvent as any, 'logs', 'PDF');
-        } catch (error) {
-          // 忽略日志获取错误，不影响主流程
-        }
-      }, 5000); // 每5秒获取一次日志
-      
-      return interval;
-    };
-    
-    // 开始监控日志
-    const logInterval = startLogMonitoring();
     
     // 获取当前配置
     const config = getCurrentPdfConfig();
@@ -288,11 +273,6 @@ async function performBackgroundConversion(taskId: string, filePaths: string[], 
     
     // 检查转换结果 - 返回值不为空即成功
     const success = responseData && Object.keys(responseData).length > 0;
-    
-    // 停止日志监控
-    if (logInterval) {
-      clearInterval(logInterval);
-    }
     
     // 保存转换后的文件
     const savedFiles: string[] = [];
