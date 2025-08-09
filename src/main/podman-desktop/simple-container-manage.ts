@@ -290,7 +290,7 @@ export default async function init(ipcMain: IpcMain) {
                   event.reply(
                     channel,
                     MESSAGE_TYPE.ERROR,
-                    '启动器安装目录缺少服务配置文件，请重新下载安装启动器',
+                    '启动器安装目录缺少语音转文字配置文件，请重新下载安装启动器',
                   );
                 } else {
                   throw e;
@@ -474,7 +474,7 @@ async function reCreateContainerAndStart(
       event.reply(
         channel,
         MESSAGE_TYPE.INFO,
-        '启动器安装目录缺少服务配置文件，请重新下载安装启动器',
+        '启动器安装目录缺少语音转文字配置文件，请重新下载安装启动器',
       );
     } else {
       // 这里用INFO是为了触发前端页面刷新
@@ -520,7 +520,7 @@ async function reCreateContainerAndStart(
         event.reply(
           channel,
           MESSAGE_TYPE.ERROR,
-          '启动器安装目录缺少服务配置文件，请重新下载安装启动器',
+          '启动器安装目录缺少语音转文字配置文件，请重新下载安装启动器',
         );
       }
     }
