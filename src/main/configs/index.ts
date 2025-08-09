@@ -10,6 +10,7 @@ import {
   ObsidianVaultConfig,
   ServiceName,
   VoiceConfigFile,
+  PdfConfig,
 } from './type-info';
 import { isWindows } from '../exec/util';
 import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
@@ -26,7 +27,19 @@ interface FileOperation {
 let tempFileOperations: FileOperation[] = [];
 let tempFileList: Map<string, string> = new Map(); // filename -> realPath
 
+// PDF配置默认值
+const defaultPdfConfig: PdfConfig = {
+  start_page_id: 0,
+  end_page_id: 99999,
+  table_enable: true,
+  formula_enable: true,
+};
+
+// 内存中的PDF配置存储
+let currentPdfConfig: PdfConfig = { ...defaultPdfConfig };
+
 export default async function init(ipcMain: IpcMain) {
+  
   ipcMain.on(
     channel,
     async (
@@ -68,6 +81,12 @@ export default async function init(ipcMain: IpcMain) {
                 serviceName,
                 getVoiceConfig(extraData?.modelType || 'gpu'),
               ),
+            );
+          } else if (serviceName === 'PDF') {
+            event.reply(
+              channel,
+              MESSAGE_TYPE.DATA,
+              new MessageData(action, serviceName, currentPdfConfig),
             );
           }
         } else if (action === 'update') {
@@ -170,6 +189,42 @@ export default async function init(ipcMain: IpcMain) {
               event.reply(channel, MESSAGE_TYPE.INFO, `已记录删除文件 "${filename}" 的操作`);
             } else {
               event.reply(channel, MESSAGE_TYPE.ERROR, `文件 "${filename}" 不存在`);
+            }
+          }
+        } else if (action === 'get') {
+          if (serviceName === 'PDF') {
+            // 获取PDF配置
+            event.reply(
+              channel,
+              MESSAGE_TYPE.DATA,
+              new MessageData(action, serviceName, currentPdfConfig),
+            );
+          }
+        } else if (action === 'set') {
+          if (serviceName === 'PDF') {
+            // 设置PDF配置
+            try {
+              if (extraData) {
+                const validatedConfig = validatePdfConfig(extraData);
+                currentPdfConfig = { ...validatedConfig };
+                
+                event.reply(
+                  channel,
+                  MESSAGE_TYPE.DATA,
+                  new MessageData(action, serviceName, currentPdfConfig),
+                );
+                
+                console.log('PDF配置已更新:', currentPdfConfig);
+              } else {
+                event.reply(channel, MESSAGE_TYPE.ERROR, '无效的配置数据');
+              }
+            } catch (error) {
+              console.error('PDF配置处理失败:', error);
+              event.reply(
+                channel,
+                MESSAGE_TYPE.ERROR,
+                `配置处理失败: ${error instanceof Error ? error.message : '未知错误'}`,
+              );
             }
           }
         }
@@ -299,6 +354,7 @@ let containerConfigBuff: ContainerConfig = {
     ],
   },
   LLM: { port: [], command: { start: [], stop: [] } },
+  PDF: { port: [], command: { start: [], stop: [] } },
 };
 export function getContainerConfig() {
   const containerConfigString = readFileSync(containerConfigPath, {
@@ -449,4 +505,26 @@ export function setVoiceConfig(config: VoiceConfigFile, modelType: 'gpu' | 'cpu'
   writeFileSync(configPath, JSON.stringify(config, null, 2), {
     encoding: 'utf8',
   });
+}
+
+// 验证PDF配置数据
+function validatePdfConfig(config: Partial<PdfConfig>): PdfConfig {
+  const validated: PdfConfig = {
+    start_page_id: Math.max(0, Math.min(99999, config.start_page_id ?? defaultPdfConfig.start_page_id)),
+    end_page_id: Math.max(0, Math.min(99999, config.end_page_id ?? defaultPdfConfig.end_page_id)),
+    table_enable: config.table_enable ?? defaultPdfConfig.table_enable,
+    formula_enable: config.formula_enable ?? defaultPdfConfig.formula_enable,
+  };
+
+  // 确保结束页码不小于起始页码
+  if (validated.end_page_id < validated.start_page_id) {
+    validated.end_page_id = validated.start_page_id;
+  }
+
+  return validated;
+}
+
+// 导出获取当前PDF配置的函数，供其他模块使用
+export function getCurrentPdfConfig(): PdfConfig {
+  return { ...currentPdfConfig };
 }

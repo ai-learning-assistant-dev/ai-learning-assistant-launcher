@@ -9,6 +9,7 @@ import initContainerLogs from './podman-desktop/container-logs';
 import initLMStudio from './lm-studio';
 import initExampleMain from './example-main';
 import initTerminalLog from './terminal-log';
+import initPdfConvert from './pdf-convert';
 import path from 'node:path';
 import { appPath, autoAdaptEncodingForWindows } from './exec';
 
@@ -38,6 +39,7 @@ initWorkspace(ipcMain);
 initContainerLogs(ipcMain);
 initLMStudio(ipcMain);
 initExampleMain(ipcMain);
+initPdfConvert(ipcMain);
 updateTemplate();
 
 const createWindow = (): void => {
