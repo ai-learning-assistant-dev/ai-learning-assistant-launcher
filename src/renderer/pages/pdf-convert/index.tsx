@@ -1,5 +1,5 @@
-import { Button, message, Card, Typography, Space, List } from 'antd';
-import { FileTextOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Button, message, Card, Typography, Space, List, Tag, Tooltip } from 'antd';
+import { FileTextOutlined, PlusOutlined, DeleteOutlined, LoadingOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import { NavLink } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { TerminalLogScreen } from '../../containers/terminal-log-screen';
@@ -15,6 +15,18 @@ interface ConversionResult {
 interface FileItem {
   name: string;
   path: string;
+  status?: 'pending' | 'converting' | 'success' | 'failed';
+  error?: string;
+}
+
+interface ProgressData {
+  taskId: string;
+  total: number;
+  completed: number;
+  successful: number;
+  failed: number;
+  currentFile: string;
+  message: string;
 }
 
 export default function PdfConvert() {
@@ -24,6 +36,51 @@ export default function PdfConvert() {
   const [backgroundTask, setBackgroundTask] = useState<string | null>(null);
   const [hasRunningTasks, setHasRunningTasks] = useState(false);
   const [isTaskSubmitted, setIsTaskSubmitted] = useState(false);
+  const [progressData, setProgressData] = useState<ProgressData | null>(null);
+
+  // 渲染文件状态图标和标签
+  const renderFileStatus = (file: FileItem) => {
+    switch (file.status) {
+      case 'converting':
+        return (
+          <Tag icon={<LoadingOutlined spin />} color="processing">
+            转换中
+          </Tag>
+        );
+      case 'failed':
+        return (
+          <Tooltip title={file.error || '转换失败'}>
+            <Tag icon={<CloseCircleOutlined />} color="error">
+              失败
+            </Tag>
+          </Tooltip>
+        );
+      case 'success':
+        return (
+          <Tag icon={<CheckCircleOutlined />} color="success">
+            完成
+          </Tag>
+        );
+      case 'pending':
+      default:
+        return (
+          <Tag color="default">
+            待处理
+          </Tag>
+        );
+    }
+  };
+
+  // 移除文件函数，只能移除非转换中的文件
+  const removeFile = (index: number) => {
+    const file = fileList[index];
+    if (file.status === 'converting') {
+      message.warning('正在转换中的文件无法删除');
+      return;
+    }
+    const newFileList = fileList.filter((_, i) => i !== index);
+    setFileList(newFileList);
+  };
 
   // 页面加载时恢复状态
   useEffect(() => {
@@ -39,11 +96,6 @@ export default function PdfConvert() {
       console.error('选择文件失败:', error);
       message.error('选择文件失败');
     }
-  };
-
-  const removeFile = (index: number) => {
-    const newFileList = fileList.filter((_, i) => i !== index);
-    setFileList(newFileList);
   };
 
   const convertPdfToMarkdown = async () => {
@@ -185,39 +237,56 @@ export default function PdfConvert() {
       }
     );
 
-    // 监听后台任务完成通知
+    // 监听后台任务完成通知和文件状态更新
     const cancelByBackgroundTask = window.electron?.ipcRenderer.on(
       'pdf-convert-completed',
-      (result: any) => {
-        console.debug('后台转换完成:', result);
+      (data: any) => {
+        console.debug('PDF转换事件:', data);
         
-        setResult({
-          success: result.success,
-          message: result.message,
-        });
-
-        if (result.success) {
-          message.success('后台PDF转换成功！');
-          // 从文件列表中移除已转换的文件
-          if (result.convertedFiles && result.convertedFiles.length > 0) {
-            setFileList(prevFiles => 
-              prevFiles.filter(file => !result.convertedFiles.includes(file.path))
-            );
-          }
-        } else {
-          message.error('后台PDF转换失败');
+        // 处理文件状态更新
+        if (data.fileList !== undefined && data.updatedFile) {
+          console.debug('文件状态更新:', data.updatedFile);
+          setFileList(data.fileList);
+          return;
         }
         
-        setConverting(false);
-        setBackgroundTask(null);
-        setIsTaskSubmitted(false);
-        setHasRunningTasks(false);
+        // 处理转换完成
+        if (data.taskId) {
+          console.debug('后台转换完成:', data);
+          
+          setResult({
+            success: data.success,
+            message: data.message,
+          });
+
+          if (data.success) {
+            message.success('后台PDF转换成功！');
+          } else {
+            message.error('后台PDF转换失败');
+          }
+          
+          setConverting(false);
+          setBackgroundTask(null);
+          setIsTaskSubmitted(false);
+          setHasRunningTasks(false);
+          setProgressData(null);
+        }
+      }
+    );
+
+    // 监听转换进度更新
+    const cancelByProgress = window.electron?.ipcRenderer.on(
+      'pdf-convert-progress' as any,
+      (messageType: any, data: any) => {
+        console.debug('转换进度更新:', data);
+        setProgressData(data as ProgressData);
       }
     );
 
     return () => {
       if (cancelByPdfConvert) cancelByPdfConvert();
       if (cancelByBackgroundTask) cancelByBackgroundTask();
+      if (cancelByProgress) cancelByProgress();
     };
   }, [fileList]);
 
@@ -259,17 +328,25 @@ export default function PdfConvert() {
                         danger
                         icon={<DeleteOutlined />}
                         onClick={() => removeFile(index)}
-                        disabled={converting || hasRunningTasks}
+                        disabled={converting || hasRunningTasks || file.status === 'converting'}
                       >
                         删除
                       </Button>
                     ]}
                   >
                     <div className="file-item">
-                      <Text>{file.name}</Text>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Text>{file.name}</Text>
+                        {renderFileStatus(file)}
+                      </div>
                       <Text type="secondary" style={{ fontSize: '12px' }}>
                         {file.path}
                       </Text>
+                      {file.status === 'failed' && file.error && (
+                        <Text type="danger" style={{ fontSize: '12px' }}>
+                          错误: {file.error}
+                        </Text>
+                      )}
                     </div>
                   </List.Item>
                 )}
@@ -303,6 +380,25 @@ export default function PdfConvert() {
                   <Text type="warning" style={{ display: 'block' }}>
                     检测到后台转换任务正在运行，请等待完成
                   </Text>
+                )}
+                {progressData && (
+                  <div style={{ marginTop: '8px' }}>
+                    <Text strong style={{ display: 'block' }}>
+                      转换进度: {progressData.completed}/{progressData.total}
+                    </Text>
+                    <Text style={{ display: 'block', color: '#52c41a' }}>
+                      成功: {progressData.successful} 个
+                    </Text>
+                    <Text style={{ display: 'block', color: '#ff4d4f' }}>
+                      失败: {progressData.failed} 个
+                    </Text>
+                    <Text type="secondary" style={{ display: 'block' }}>
+                      当前处理: {progressData.currentFile}
+                    </Text>
+                    <Text type="secondary" style={{ display: 'block' }}>
+                      {progressData.message}
+                    </Text>
+                  </div>
                 )}
               </div>
             )}

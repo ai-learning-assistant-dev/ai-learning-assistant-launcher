@@ -15,8 +15,15 @@ const exec = new Exec();
 const channel = 'pdf-convert';
 
 // 持久化状态管理
+interface PdfFileItem {
+  name: string;
+  path: string;
+  status?: 'pending' | 'converting' | 'success' | 'failed';
+  error?: string;
+}
+
 interface PdfConvertState {
-  fileList: Array<{ name: string; path: string }>;
+  fileList: Array<PdfFileItem>;
   lastResult: any | null;
   backgroundTask: any | null;
 }
@@ -38,17 +45,73 @@ let backgroundTask: {
 
 const pdfLogger = loggerFactory('PDF');
 
+// PDF容器日志监控状态标记
+let isPdfLoggingRunning = false;
+
 async function startPdfContainerLogging() {
+  // 检查是否已有日志监控在运行
+  if (isPdfLoggingRunning) {
+    console.debug('PDF容器日志监控已在运行中，跳过重复启动');
+    return;
+  }
+
   try {
+    isPdfLoggingRunning = true;
+    console.debug('开始启动PDF容器日志监控...');
+    
     exec.exec('podman', ['logs', '-f', 'PDF'], {
       shell: true,
       encoding: 'utf8',
       logger: pdfLogger,
     }).catch(error => {
       console.debug('PDF容器日志监控结束:', error?.message || 'Unknown error');
+    }).finally(() => {
+      // 无论成功还是失败，都重置标记位
+      isPdfLoggingRunning = false;
+      console.debug('PDF容器日志监控已停止，重置标记位');
     });
   } catch (error) {
     console.debug('启动PDF容器日志监控失败:', error);
+    // 发生异常时也要重置标记位
+    isPdfLoggingRunning = false;
+  }
+}
+
+// 更新文件状态的函数
+function updateFileStatus(filePath: string, status: 'pending' | 'converting' | 'success' | 'failed', error?: string) {
+  const fileIndex = persistentState.fileList.findIndex(file => file.path === filePath);
+  
+  if (fileIndex !== -1) {
+    if (status === 'success') {
+      // 成功时从列表中删除
+      persistentState.fileList.splice(fileIndex, 1);
+      console.log(`文件 ${path.basename(filePath)} 转换成功，已从待处理列表中移除`);
+    } else if (status === 'failed') {
+      // 失败时标记状态和错误信息
+      persistentState.fileList[fileIndex].status = 'failed';
+      persistentState.fileList[fileIndex].error = error;
+      console.log(`文件 ${path.basename(filePath)} 转换失败，已标记为失败状态: ${error}`);
+    } else {
+      // 其他状态（converting等）只更新状态
+      persistentState.fileList[fileIndex].status = status;
+      console.log(`文件 ${path.basename(filePath)} 状态更新为: ${status}`);
+    }
+    
+    // 广播文件列表更新到所有窗口
+    const allWindows = BrowserWindow.getAllWindows();
+    allWindows.forEach(window => {
+      window.webContents.send('pdf-convert-completed', {
+        fileList: persistentState.fileList,
+        updatedFile: {
+          path: filePath,
+          name: path.basename(filePath),
+          status,
+          error
+        }
+      });
+    });
+  } else {
+    console.warn(`未找到待更新的文件: ${filePath}`);
   }
 }
 
@@ -65,6 +128,9 @@ export default async function init(ipcMain: IpcMain) {
         const runningTasks = backgroundTask && backgroundTask.status === 'running' 
           ? backgroundTask 
           : null;
+        
+        // 启动PDF容器日志监控（页面进入时就开始监控）
+        startPdfContainerLogging();
         
         event.reply(
           channel,
@@ -158,7 +224,8 @@ export default async function init(ipcMain: IpcMain) {
             // 更新持久化文件列表
             const newFiles = result.filePaths.map(filePath => ({
               name: path.basename(filePath),
-              path: filePath
+              path: filePath,
+              status: 'pending' as const
             }));
             
             // 合并到现有列表，避免重复
@@ -191,14 +258,17 @@ export default async function init(ipcMain: IpcMain) {
   );
 }
 
-// 后台转换函数
-async function performBackgroundConversion(taskId: string, filePaths: string[], ipcMain: IpcMain) {
+// 单个文件转换和解析函数
+async function convertSinglePdfFile(filePath: string): Promise<{
+  success: boolean;
+  savedFiles: string[];
+  error?: string;
+}> {
   try {
-    console.debug('Starting background conversion for task:', taskId);
+    console.log(`开始转换单个PDF文件: ${path.basename(filePath)}`);
     
     // 获取当前配置
     const config = getCurrentPdfConfig();
-    console.log('使用PDF配置:', config);
     
     // 创建 FormData
     const form = new FormData();
@@ -219,13 +289,11 @@ async function performBackgroundConversion(taskId: string, filePaths: string[], 
     form.append('table_enable', config.table_enable.toString());
     form.append('formula_enable', config.formula_enable.toString());
 
-    // 添加文件
-    filePaths.forEach((filePath) => {
-      const fileStream = fs.createReadStream(filePath);
-      form.append('files', fileStream, {
-        filename: path.basename(filePath),
-        contentType: 'application/pdf'
-      });
+    // 添加单个文件
+    const fileStream = fs.createReadStream(filePath);
+    form.append('files', fileStream, {
+      filename: path.basename(filePath),
+      contentType: 'application/pdf'
     });
 
     // 创建 HTTP 请求
@@ -263,42 +331,30 @@ async function performBackgroundConversion(taskId: string, filePaths: string[], 
       });
 
       req.setTimeout(1800000, () => {
-        console.error('解析时间超过30分钟，连接已挂断，请尝试减少文件总数或切割文件后上传');
-        req.end()
+        console.error('解析时间超过30分钟，连接已挂断');
+        req.destroy();
+        reject(new Error('解析超时'));
       });
 
       // 将 FormData 管道到请求
       form.pipe(req);
     });
     
-    // 检查转换结果 - 返回值不为空即成功
+    // 检查转换结果
     const success = responseData && Object.keys(responseData).length > 0;
-    
-    // 保存转换后的文件
     const savedFiles: string[] = [];
     
     // 处理results字段
     if (responseData.results && typeof responseData.results === 'object') {
-      console.log('开始处理PDF转换结果...');
+      console.log(`开始处理PDF转换结果: ${path.basename(filePath)}`);
       
       for (const [pdfName, pdfResult] of Object.entries(responseData.results)) {
         try {
           const result = pdfResult as any;
           
-          // 获取原始PDF文件路径
-          const originalPdfPath = filePaths.find(fp => 
-            path.basename(fp, '.pdf') === path.basename(pdfName, '.pdf') || 
-            path.basename(fp) === pdfName
-          );
-          
-          if (!originalPdfPath) {
-            console.warn(`未找到对应的原始PDF文件: ${pdfName}`);
-            continue;
-          }
-          
           // 创建PDF同名文件夹（去掉.pdf后缀）
-          const pdfDir = path.dirname(originalPdfPath);
-          const baseName = path.basename(originalPdfPath, '.pdf');
+          const pdfDir = path.dirname(filePath);
+          const baseName = path.basename(filePath, '.pdf');
           const outputDir = path.join(pdfDir, baseName);
           
           if (!fs.existsSync(outputDir)) {
@@ -321,8 +377,6 @@ async function performBackgroundConversion(taskId: string, filePaths: string[], 
             if (!fs.existsSync(imagesDir)) {
               fs.mkdirSync(imagesDir, { recursive: true });
             }
-            
-            const imageCount = Object.keys(result.images).length;
             
             for (const [imageName, dataUri] of Object.entries(result.images)) {
               try {
@@ -375,46 +429,159 @@ async function performBackgroundConversion(taskId: string, filePaths: string[], 
           
         } catch (fileError) {
           console.error(`处理PDF ${pdfName} 的结果时出错:`, fileError);
+          return {
+            success: false,
+            savedFiles: [],
+            error: `处理PDF结果时出错: ${fileError instanceof Error ? fileError.message : '未知错误'}`
+          };
         }
       }
     } else {
-      console.warn('响应中没有找到results字段或格式不正确');
+      console.warn(`文件 ${path.basename(filePath)} 响应中没有找到results字段或格式不正确`);
+      return {
+        success: false,
+        savedFiles: [],
+        error: '服务响应格式不正确'
+      };
     }
+    
+    return {
+      success,
+      savedFiles
+    };
+    
+  } catch (error) {
+    console.error(`转换PDF文件 ${path.basename(filePath)} 失败:`, error);
+    return {
+      success: false,
+      savedFiles: [],
+      error: error instanceof Error ? error.message : '未知错误'
+    };
+  }
+}
+
+// 后台转换函数 - 改造为逐个处理文件
+async function performBackgroundConversion(taskId: string, filePaths: string[], ipcMain: IpcMain) {
+  try {
+    console.debug('Starting background conversion for task:', taskId);
+    console.log(`开始批量转换 ${filePaths.length} 个PDF文件`);
+    
+    const allSavedFiles: string[] = [];
+    const convertedFiles: string[] = [];
+    const failedFiles: string[] = [];
+    let totalFiles = filePaths.length;
+    let completedFiles = 0;
+    
+    // 逐个处理文件
+    for (const filePath of filePaths) {
+      try {
+        console.log(`开始处理文件 ${completedFiles + 1}/${totalFiles}: ${path.basename(filePath)}`);
+        
+        // 更新文件状态为转换中
+        updateFileStatus(filePath, 'converting');
+        
+        // 转换单个文件
+        const result = await convertSinglePdfFile(filePath);
+        
+        if (result.success) {
+          allSavedFiles.push(...result.savedFiles);
+          convertedFiles.push(filePath);
+          console.log(`文件 ${path.basename(filePath)} 转换成功，保存了 ${result.savedFiles.length} 个文件`);
+          
+          // 更新文件状态为成功（会从列表中删除）
+          updateFileStatus(filePath, 'success');
+        } else {
+          failedFiles.push(filePath);
+          console.error(`文件 ${path.basename(filePath)} 转换失败: ${result.error}`);
+          
+          // 更新文件状态为失败（会标记失败状态）
+          updateFileStatus(filePath, 'failed', result.error);
+        }
+        
+        completedFiles++;
+        
+        // 发送进度更新
+        const progressMessage = `已完成 ${completedFiles}/${totalFiles} 个文件，成功: ${convertedFiles.length}，失败: ${failedFiles.length}`;
+        console.log(progressMessage);
+        
+        // 广播进度更新到所有窗口
+        const allWindows = BrowserWindow.getAllWindows();
+        allWindows.forEach(window => {
+          window.webContents.send('pdf-convert-progress', {
+            taskId,
+            total: totalFiles,
+            completed: completedFiles,
+            successful: convertedFiles.length,
+            failed: failedFiles.length,
+            currentFile: path.basename(filePath),
+            message: progressMessage
+          });
+        });
+        
+      } catch (fileError) {
+        failedFiles.push(filePath);
+        completedFiles++;
+        const errorMessage = fileError instanceof Error ? fileError.message : '未知错误';
+        console.error(`处理文件 ${path.basename(filePath)} 时发生错误:`, fileError);
+        
+        // 更新文件状态为失败
+        updateFileStatus(filePath, 'failed', `处理时发生错误: ${errorMessage}`);
+      }
+    }
+    
+    // 计算最终结果
+    const overallSuccess = convertedFiles.length > 0;
+    const hasFailures = failedFiles.length > 0;
+    
+    // 生成最终消息
+    let finalMessage: string;
+    if (convertedFiles.length === totalFiles) {
+      finalMessage = `PDF转换完全成功！成功转换 ${convertedFiles.length} 个文件：${convertedFiles.map(fp => path.basename(fp)).join(', ')}`;
+    } else if (convertedFiles.length > 0) {
+      finalMessage = `PDF转换部分成功！成功转换 ${convertedFiles.length}/${totalFiles} 个文件。失败文件：${failedFiles.map(fp => path.basename(fp)).join(', ')}`;
+    } else {
+      finalMessage = `PDF转换失败！所有 ${totalFiles} 个文件都转换失败。`;
+    }
+    
+    console.log(finalMessage);
     
     // 更新任务状态
     if (backgroundTask && backgroundTask.taskId === taskId) {
       backgroundTask.status = 'completed';
       backgroundTask.result = {
-        success,
-        message: success ? 
-          `PDF转换成功！转换文件：${filePaths.map(fp => path.basename(fp)).join(', ')}` : 
-          'PDF处理完成但可能存在问题',
-        data: responseData,
-        savedFiles,
-        convertedFiles: success ? filePaths : []
+        success: overallSuccess,
+        message: finalMessage,
+        data: {
+          totalFiles,
+          successfulFiles: convertedFiles.length,
+          failedFiles: failedFiles.length,
+          convertedFileNames: convertedFiles.map(fp => path.basename(fp)),
+          failedFileNames: failedFiles.map(fp => path.basename(fp))
+        },
+        savedFiles: allSavedFiles,
+        convertedFiles
       };
     }
     
     // 更新持久化状态
     persistentState.lastResult = backgroundTask?.result;
     
-    // 从持久化文件列表中移除已转换的文件
-    if (success) {
-      persistentState.fileList = persistentState.fileList.filter(
-        file => !filePaths.includes(file.path)
-      );
-    }
+    // 注意：文件列表的更新已经在 updateFileStatus 函数中实时处理了
     
     // 广播转换完成消息到所有窗口
     const result = {
       taskId,
-      success,
-      message: success ? 
-        `PDF转换成功！转换文件：${filePaths.map(fp => path.basename(fp)).join(', ')}` : 
-        'PDF处理完成但可能存在问题',
-      data: responseData,
-      savedFiles,
-      convertedFiles: success ? filePaths : []
+      success: overallSuccess,
+      message: finalMessage,
+      data: {
+        totalFiles,
+        successfulFiles: convertedFiles.length,
+        failedFiles: failedFiles.length,
+        convertedFileNames: convertedFiles.map(fp => path.basename(fp)),
+        failedFileNames: failedFiles.map(fp => path.basename(fp))
+      },
+      savedFiles: allSavedFiles,
+      convertedFiles
     };
     
     // 发送完成通知到所有窗口
@@ -428,7 +595,7 @@ async function performBackgroundConversion(taskId: string, filePaths: string[], 
       backgroundTask = null;
     }
     
-    console.log(`Background conversion completed for task: ${taskId}`);
+    console.log(`Background conversion completed for task: ${taskId} - ${convertedFiles.length}/${totalFiles} files successful`);
     
   } catch (error) {
     console.error(`Background conversion failed for task ${taskId}:`, error);
@@ -438,23 +605,18 @@ async function performBackgroundConversion(taskId: string, filePaths: string[], 
       backgroundTask.status = 'failed';
       backgroundTask.result = {
         success: false,
-        message: `PDF转换失败: ${error instanceof Error ? error.message : '未知错误'}`
+        message: `PDF转换任务失败: ${error instanceof Error ? error.message : '未知错误'}`
       };
     }
     
     // 更新持久化状态
     persistentState.lastResult = backgroundTask?.result;
     
-    // 从持久化文件列表中移除失败的文件（避免用户重新选择）
-    persistentState.fileList = persistentState.fileList.filter(
-      file => !filePaths.includes(file.path)
-    );
-    
     // 广播转换失败消息
     const result = {
       taskId,
       success: false,
-      message: `PDF转换失败: ${error instanceof Error ? error.message : '未知错误'}`,
+      message: `PDF转换任务失败: ${error instanceof Error ? error.message : '未知错误'}`,
       convertedFiles: filePaths // 包含失败的文件列表，用于前端处理
     };
     
