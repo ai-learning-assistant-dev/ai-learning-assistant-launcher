@@ -378,7 +378,7 @@ export default function PdfConvert() {
                 )}
                 {hasRunningTasks && !isTaskSubmitted && (
                   <Text type="warning" style={{ display: 'block' }}>
-                    检测到后台转换任务正在运行，请等待完成
+                    检测到后台转换任务正在运行，请等待完成，如需停止，请返回上一页面停止容器运行。
                   </Text>
                 )}
                 {progressData && (
