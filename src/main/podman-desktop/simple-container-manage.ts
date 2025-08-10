@@ -338,7 +338,9 @@ export async function createContainer(serviceName: ServiceName) {
   const containerName = containerNameDict[serviceName];
   const config = getContainerConfig()[serviceName];
   const haveNvidiaFlag = await haveNvidia();
-  return connectionGlobal.createPodmanContainer({
+  
+  // 基础配置
+  const containerOptions: any = {
     image: imageName,
     name: containerName,
     devices: haveNvidiaFlag ? [{ path: 'nvidia.com/gpu=all' }] : [],
@@ -357,7 +359,27 @@ export async function createContainer(serviceName: ServiceName) {
           return mount;
         })
       : [],
-  });
+  };
+
+  // 添加PDF容器的特殊配置
+  if (serviceName === 'PDF') {
+    // 从配置文件读取配置
+    const pdfConfig = config as any; // 类型断言以访问PDF特有的配置
+    if (pdfConfig.privileged !== undefined) {
+      containerOptions.privileged = pdfConfig.privileged;
+    }
+    if (pdfConfig.restart_policy) {
+      containerOptions.restart_policy = pdfConfig.restart_policy;
+    }
+    if (pdfConfig.ipc) {
+      containerOptions.ipc = pdfConfig.ipc;
+    }
+    if (pdfConfig.ulimits) {
+      containerOptions.ulimits = pdfConfig.ulimits;
+    }
+  }
+
+  return connectionGlobal.createPodmanContainer(containerOptions);
 }
 
 export async function startContainer(containerId: string) {
@@ -411,6 +433,24 @@ export async function selectImageFile(serviceName: ServiceName) {
       }
     } else {
       console.warn('没有选择正确的镜像');
+      return false;
+    }
+  } else if (serviceName === 'PDF') {
+    const result = await dialog.showOpenDialog({
+      title: '请选择PDF服务的镜像文件',
+      properties: ['openFile', 'showHiddenFiles'],
+      filters: [{ name: 'PDF服务镜像', extensions: ['tar', 'gz'] }],
+    });
+    const path = result.filePaths[0];
+    if (path && path.length > 0) {
+      try {
+        return path;
+      } catch (e) {
+        console.error(e);
+        return false;
+      }
+    } else {
+      console.warn('没有选择正确的PDF镜像');
       return false;
     }
   }

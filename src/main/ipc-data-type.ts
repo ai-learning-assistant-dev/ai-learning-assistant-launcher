@@ -9,7 +9,10 @@ export type Channels =
   | 'lm-studio'
   | 'example' // 测试通道
   | 'workspace'
-  | 'terminal-log';
+  | 'terminal-log'
+  | 'pdf-convert'
+  | 'pdf-convert-completed'
+  | 'pdf-config';
 
 export enum MESSAGE_TYPE {
   /** 阻断性错误，会把转圈中的按钮变成不转圈 */
@@ -54,11 +57,16 @@ import {
   ActionName as ActionNameWorkspace,
   ServiceName as ServiceNameWorkspace,
 } from './workspace/type-info';
+import {
+  ActionName as ActionNamePdfConvert,
+  ServiceName as ServiceNamePdfConvert,
+} from './pdf-convert/type-info';
 export type AllAction =
   | ActionNamePodman
   | ActionNameCmd
   | ActionNameConfigs
   | ActionNameObsidianPlugin
+  | ActionNamePdfConvert
   | ActionNameLMStudio
   | ActionNameExampleMain
   | ActionNameWorkspace; // 添加 workspace 类型
@@ -68,6 +76,7 @@ export type AllService =
   | ServiceNameCmd
   | ServiceNameConfigs
   | ServiceNameObsidianPlugin
+  | ServiceNamePdfConvert
   | ServiceNameLMStudio
   | ServiceNameExampleMain
   | ServiceNameWorkspace; // 添加 workspace 类型

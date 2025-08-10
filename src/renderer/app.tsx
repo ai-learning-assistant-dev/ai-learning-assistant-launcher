@@ -11,6 +11,8 @@ import TTSConfig from './pages/tts-config';
 import ASRConfig from './pages/asr-config';
 import LMService from './pages/lm-service';
 import ExamplePage from './pages/example-page';
+import PdfConvert from './pages/pdf-convert';
+import PdfConfig from './pages/pdf-config';
 
 export default function App() {
   return (
@@ -23,6 +25,8 @@ export default function App() {
           <Route path="/obsidian-app" element={<ObsidianApp />} />
           <Route path="/TTS-config" element={<TTSConfig />} />
           <Route path="/ASR-config" element={<ASRConfig />} />
+          <Route path="/PDF-config" element={<PdfConfig />} />
+          <Route path="/pdf-convert" element={<PdfConvert />} />
           <Route
             path="/obsidian-plugin/:vaultId"
             element={<ObsidianPlugin />}

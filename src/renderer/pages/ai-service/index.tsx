@@ -73,6 +73,9 @@ export default function AiService() {
   const asrContainer = containers.filter(
     (item) => item.Names.indexOf(containerNameDict.ASR) >= 0,
   )[0];
+  const pdfContainer = containers.filter(
+    (item) => item.Names.indexOf(containerNameDict.PDF) >= 0,
+  )[0];
 
   const containerInfos: ContainerItem[] = [
     // {
@@ -92,6 +95,12 @@ export default function AiService() {
       serviceName: 'TTS',
       state: getState(ttsContainer),
       port: 8000,
+    },
+    {
+      name: 'PDF处理服务',
+      serviceName: 'PDF',
+      state: getState(pdfContainer),
+      port: 5000,
     },
   ];
 
@@ -241,26 +250,48 @@ export default function AiService() {
                   shape="round"
                   size="small"
                   disabled={
-                    !isInstallWSL || checkingWsl || loading || cmdLoading
+                    !isInstallWSL || checkingWsl || loading || cmdLoading || (item.serviceName === 'PDF' && item.state === '正在运行')
                   }
                 >
                   设置
                 </Button>
               </NavLink>,
-              item.state !== '还未安装' && (
-                <Button
-                  shape="round"
-                  size="small"
-                  disabled={!isInstallWSL || checkingWsl || cmdLoading}
-                  loading={
-                    loading &&
-                    operating.serviceName === item.serviceName &&
-                    operating.actionName === 'update'
-                  }
-                  onClick={() => click('update', item.serviceName)}
-                >
-                  更新
-                </Button>
+              item.serviceName === 'PDF' && item.state === '正在运行'
+                ? (
+                  <Button
+                    shape="round"
+                    size="small"
+                    disabled={true}
+                  >
+                    更新
+                  </Button>
+                )
+                : (item.state !== '还未安装' && (
+                  <Button
+                    shape="round"
+                    size="small"
+                    disabled={!isInstallWSL || checkingWsl || cmdLoading}
+                    loading={
+                      loading &&
+                      operating.serviceName === item.serviceName &&
+                      operating.actionName === 'update'
+                    }
+                    onClick={() => click('update', item.serviceName)}
+                  >
+                    更新
+                  </Button>
+                )),
+              item.serviceName === 'PDF' && item.state === '正在运行' && (
+                <NavLink key="convert" to="/pdf-convert">
+                  <Button
+                    shape="round"
+                    size="small"
+                    type="primary"
+                    disabled={!isInstallWSL || checkingWsl || loading || cmdLoading}
+                  >
+                    转换PDF
+                  </Button>
+                </NavLink>
               ),
               item.state === '正在运行' && (
                 <Button
