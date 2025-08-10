@@ -439,7 +439,7 @@ export async function selectImageFile(serviceName: ServiceName) {
     const result = await dialog.showOpenDialog({
       title: '请选择PDF服务的镜像文件',
       properties: ['openFile', 'showHiddenFiles'],
-      filters: [{ name: 'PDF服务镜像', extensions: ['tar', 'tar.gz'] }],
+      filters: [{ name: 'PDF服务镜像', extensions: ['tar', 'gz'] }],
     });
     const path = result.filePaths[0];
     if (path && path.length > 0) {
