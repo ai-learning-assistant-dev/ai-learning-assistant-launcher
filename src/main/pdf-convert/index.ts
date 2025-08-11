@@ -10,6 +10,7 @@ import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 import { ActionName, ServiceName } from './type-info';
 import { loggerFactory } from '../terminal-log';
 import { getCurrentPdfConfig } from '../configs';
+import { PDFDocument } from 'pdf-lib';
 
 const exec = new Exec();
 const channel = 'pdf-convert';
@@ -20,6 +21,8 @@ interface PdfFileItem {
   path: string;
   status?: 'pending' | 'converting' | 'success' | 'failed';
   error?: string;
+  splitParts?: number; // 拆分份数
+  currentSplitProgress?: number; // 当前拆分进度 (0-splitParts)
 }
 
 interface PdfConvertState {
@@ -119,8 +122,8 @@ export default async function init(ipcMain: IpcMain) {
   // PDF转换服务
   ipcMain.on(
     channel,
-    async (event, action: ActionName, serviceName: ServiceName, filePaths: string[]) => {
-      console.debug(`pdf-convert action: ${action}, serviceName: ${serviceName}, files: ${filePaths}`);
+    async (event, action: ActionName, serviceName: ServiceName, filePaths: string[], splitCount?: number) => {
+      console.debug(`pdf-convert action: ${action}, serviceName: ${serviceName}, files: ${filePaths}, splitCount: ${splitCount}`);
       
       // 处理状态获取请求
       if (action === 'check') {
@@ -144,7 +147,84 @@ export default async function init(ipcMain: IpcMain) {
         return;
       }
       
-      if (action === 'convert') {
+      if (action === 'split') {
+        try {
+          // 检查是否已有任务在运行
+          if (backgroundTask && backgroundTask.status === 'running') {
+            event.reply(
+              channel,
+              MESSAGE_TYPE.ERROR,
+              '已有转换任务在后台运行，请等待完成后再试'
+            );
+            return;
+          }
+
+          // 验证文件路径和拆分参数
+          if (!filePaths || filePaths.length !== 1) {
+            event.reply(
+              channel,
+              MESSAGE_TYPE.ERROR,
+              '拆分功能只支持单个文件'
+            );
+            return;
+          }
+
+          if (!splitCount || splitCount < 2 || splitCount > 20) {
+            event.reply(
+              channel,
+              MESSAGE_TYPE.ERROR,
+              '拆分份数必须在2-20之间'
+            );
+            return;
+          }
+
+          const filePath = filePaths[0];
+          
+          // 验证文件是否存在
+          if (!fs.existsSync(filePath)) {
+            event.reply(
+              channel,
+              MESSAGE_TYPE.ERROR,
+              `文件不存在: ${filePath}`
+            );
+            return;
+          }
+
+          // 创建后台任务ID
+          const taskId = uuidv4();
+          backgroundTask = {
+            taskId,
+            filePaths,
+            startTime: Date.now(),
+            status: 'running'
+          };
+
+          // 启动PDF容器日志监控
+          startPdfContainerLogging();
+
+          // 立即返回任务开始响应
+          event.reply(
+            channel,
+            MESSAGE_TYPE.DATA,
+            new MessageData(action, serviceName as any, {
+              taskId,
+              status: 'started',
+              message: `拆分转换任务已开始，将PDF拆分为${splitCount}份并逐一转换...`
+            })
+          );
+
+          // 在后台执行拆分转换
+          performSplitConversion(taskId, filePath, splitCount, ipcMain);
+
+        } catch (error) {
+          console.error('PDF拆分转换任务创建失败:', error);
+          event.reply(
+            channel,
+            MESSAGE_TYPE.ERROR,
+            `任务创建失败: ${error instanceof Error ? error.message : '未知错误'}`
+          );
+        }
+      } else if (action === 'convert') {
         try {
           // 检查是否已有任务在运行
           if (backgroundTask && backgroundTask.status === 'running') {
@@ -324,6 +404,178 @@ export default async function init(ipcMain: IpcMain) {
       }
     }
   );
+}
+
+// 拆分PDF文件函数
+async function splitPdfFile(filePath: string, splitCount: number): Promise<{
+  success: boolean;
+  splitFiles: string[];
+  error?: string;
+}> {
+  try {
+    console.log(`开始拆分PDF文件: ${path.basename(filePath)} 为 ${splitCount} 份`);
+    
+    // 读取PDF文件
+    const existingPdfBytes = fs.readFileSync(filePath);
+    const pdfDoc = await PDFDocument.load(existingPdfBytes);
+    
+    const totalPages = pdfDoc.getPageCount();
+    console.log(`PDF总页数: ${totalPages}`);
+    
+    if (totalPages < splitCount) {
+      return {
+        success: false,
+        splitFiles: [],
+        error: `PDF页数(${totalPages})小于拆分份数(${splitCount})`
+      };
+    }
+    
+    const pagesPerSplit = Math.ceil(totalPages / splitCount);
+    const splitFiles: string[] = [];
+    
+    // 创建拆分文件的目录
+    const pdfDir = path.dirname(filePath);
+    const baseName = path.basename(filePath, '.pdf');
+    const splitDir = path.join(pdfDir, `${baseName}_split_${splitCount}`);
+    
+    if (!fs.existsSync(splitDir)) {
+      fs.mkdirSync(splitDir, { recursive: true });
+    }
+    
+    // 拆分PDF
+    for (let i = 0; i < splitCount; i++) {
+      const newPdf = await PDFDocument.create();
+      
+      const startPage = i * pagesPerSplit;
+      const endPage = Math.min(startPage + pagesPerSplit - 1, totalPages - 1);
+      
+      console.log(`创建第 ${i + 1} 份: 页面 ${startPage + 1} 到 ${endPage + 1}`);
+      
+      // 复制页面到新PDF
+      const copiedPages = await newPdf.copyPages(pdfDoc, Array.from(
+        { length: endPage - startPage + 1 }, 
+        (_, idx) => startPage + idx
+      ));
+      
+      copiedPages.forEach((page) => {
+        newPdf.addPage(page);
+      });
+      
+      // 保存拆分后的PDF文件
+      const splitFileName = `${baseName}_part${i + 1}.pdf`;
+      const splitFilePath = path.join(splitDir, splitFileName);
+      
+      const pdfBytes = await newPdf.save();
+      fs.writeFileSync(splitFilePath, pdfBytes);
+      
+      splitFiles.push(splitFilePath);
+      console.log(`已保存拆分文件: ${splitFilePath}`);
+    }
+    
+    console.log(`PDF拆分完成，生成 ${splitFiles.length} 个文件`);
+    
+    return {
+      success: true,
+      splitFiles
+    };
+    
+  } catch (error) {
+    console.error(`拆分PDF文件失败: ${path.basename(filePath)}`, error);
+    return {
+      success: false,
+      splitFiles: [],
+      error: error instanceof Error ? error.message : '未知错误'
+    };
+  }
+}
+
+// 合并转换结果函数
+async function mergeConversionResults(splitResults: Array<{
+  success: boolean;
+  savedFiles: string[];
+  error?: string;
+}>, originalFilePath: string): Promise<{
+  success: boolean;
+  savedFiles: string[];
+  error?: string;
+}> {
+  try {
+    const pdfDir = path.dirname(originalFilePath);
+    const baseName = path.basename(originalFilePath, '.pdf');
+    const mergedOutputDir = path.join(pdfDir, baseName);
+    
+    if (!fs.existsSync(mergedOutputDir)) {
+      fs.mkdirSync(mergedOutputDir, { recursive: true });
+    }
+    
+    const allSavedFiles: string[] = [];
+    let mergedMdContent = '';
+    const mergedImagesDir = path.join(mergedOutputDir, 'images');
+    
+    if (!fs.existsSync(mergedImagesDir)) {
+      fs.mkdirSync(mergedImagesDir, { recursive: true });
+    }
+    
+    // 处理每个拆分结果
+    for (let i = 0; i < splitResults.length; i++) {
+      const result = splitResults[i];
+      
+      if (!result.success) {
+        continue;
+      }
+      
+      for (const savedFile of result.savedFiles) {
+        const fileName = path.basename(savedFile);
+        const fileExt = path.extname(savedFile);
+        
+        if (fileExt === '.md') {
+          // 合并MD文件
+          const mdContent = fs.readFileSync(savedFile, 'utf8');
+          if (mergedMdContent) {
+            mergedMdContent += '\n\n---\n\n'; // 分隔符
+          }
+          mergedMdContent += `## 第 ${i + 1} 部分\n\n${mdContent}`;
+        } else if (savedFile.includes('images')) {
+          // 复制图片文件到合并目录
+          const imageName = path.basename(savedFile);
+          const mergedImagePath = path.join(mergedImagesDir, `part${i + 1}_${imageName}`);
+          fs.copyFileSync(savedFile, mergedImagePath);
+          allSavedFiles.push(mergedImagePath);
+        } else if (fileName === 'middle.json') {
+          // middle.json需要重命名保存，区分不同部分
+          const mergedMiddlePath = path.join(mergedOutputDir, `middle_part${i + 1}.json`);
+          fs.copyFileSync(savedFile, mergedMiddlePath);
+          allSavedFiles.push(mergedMiddlePath);
+          console.log(`已保存第 ${i + 1} 部分的middle.json: ${mergedMiddlePath}`);
+        }
+      }
+    }
+    
+    // 保存合并后的MD文件
+    if (mergedMdContent) {
+      const mergedMdPath = path.join(mergedOutputDir, `${baseName}.md`);
+      fs.writeFileSync(mergedMdPath, mergedMdContent, 'utf8');
+      allSavedFiles.push(mergedMdPath);
+    }
+    
+    console.log(`结果合并完成，共保存 ${allSavedFiles.length} 个文件`);
+    console.log(`- 合并后的MD文件: ${mergedMdContent ? '1个' : '0个'}`);
+    console.log(`- 重命名后的图片文件: ${allSavedFiles.filter(f => f.includes('images')).length}个`);
+    console.log(`- 重命名后的middle.json文件: ${allSavedFiles.filter(f => f.includes('middle_part')).length}个`);
+    
+    return {
+      success: true,
+      savedFiles: allSavedFiles
+    };
+    
+  } catch (error) {
+    console.error('合并转换结果失败:', error);
+    return {
+      success: false,
+      savedFiles: [],
+      error: error instanceof Error ? error.message : '未知错误'
+    };
+  }
 }
 
 // 单个文件转换和解析函数
@@ -525,6 +777,267 @@ async function convertSinglePdfFile(filePath: string): Promise<{
       savedFiles: [],
       error: error instanceof Error ? error.message : '未知错误'
     };
+  }
+}
+
+// 拆分转换函数 - 将PDF拆分后逐个转换并合并结果
+async function performSplitConversion(taskId: string, filePath: string, splitCount: number, ipcMain: IpcMain) {
+  try {
+    console.debug('Starting split conversion for task:', taskId);
+    console.log(`开始拆分转换PDF文件: ${path.basename(filePath)}, 拆分为 ${splitCount} 份`);
+    
+    // 更新文件状态为转换中，并设置拆分信息
+    const fileIndex = persistentState.fileList.findIndex(file => file.path === filePath);
+    if (fileIndex !== -1) {
+      persistentState.fileList[fileIndex].status = 'converting';
+      persistentState.fileList[fileIndex].splitParts = splitCount;
+      persistentState.fileList[fileIndex].currentSplitProgress = 0;
+    }
+    
+    // 广播初始状态更新
+    const allWindows = BrowserWindow.getAllWindows();
+    allWindows.forEach(window => {
+      window.webContents.send('pdf-convert-progress', {
+        taskId,
+        type: 'split',
+        total: splitCount,
+        completed: 0,
+        successful: 0,
+        failed: 0,
+        currentFile: path.basename(filePath),
+        message: '正在拆分PDF文件...'
+      });
+    });
+    
+    // 第一步：拆分PDF文件
+    const splitResult = await splitPdfFile(filePath, splitCount);
+    
+    if (!splitResult.success) {
+      throw new Error(`PDF拆分失败: ${splitResult.error}`);
+    }
+    
+    console.log(`PDF拆分成功，生成 ${splitResult.splitFiles.length} 个文件`);
+    
+    // 第二步：逐个转换拆分后的文件
+    const splitResults: Array<{
+      success: boolean;
+      savedFiles: string[];
+      error?: string;
+    }> = [];
+    
+    let completedSplits = 0;
+    let successfulSplits = 0;
+    let failedSplits = 0;
+    
+    for (let i = 0; i < splitResult.splitFiles.length; i++) {
+      const splitFilePath = splitResult.splitFiles[i];
+      const splitFileName = path.basename(splitFilePath);
+      
+      try {
+        console.log(`开始转换第 ${i + 1}/${splitCount} 个拆分文件: ${splitFileName}`);
+        
+        // 更新进度
+        allWindows.forEach(window => {
+          window.webContents.send('pdf-convert-progress', {
+            taskId,
+            type: 'split',
+            total: splitCount,
+            completed: completedSplits,
+            successful: successfulSplits,
+            failed: failedSplits,
+            currentFile: `${path.basename(filePath)} (第${i + 1}部分)`,
+            currentSplit: i + 1,
+            message: `正在转换第 ${i + 1}/${splitCount} 个拆分文件: ${splitFileName}`
+          });
+        });
+        
+        // 转换单个拆分文件
+        const convertResult = await convertSinglePdfFile(splitFilePath);
+        splitResults.push(convertResult);
+        
+        completedSplits++;
+        
+        if (convertResult.success) {
+          successfulSplits++;
+          console.log(`第 ${i + 1} 个拆分文件转换成功`);
+        } else {
+          failedSplits++;
+          console.error(`第 ${i + 1} 个拆分文件转换失败: ${convertResult.error}`);
+        }
+        
+        // 更新文件的拆分进度
+        if (fileIndex !== -1) {
+          persistentState.fileList[fileIndex].currentSplitProgress = completedSplits;
+        }
+        
+        // 发送进度更新
+        allWindows.forEach(window => {
+          window.webContents.send('pdf-convert-progress', {
+            taskId,
+            type: 'split',
+            total: splitCount,
+            completed: completedSplits,
+            successful: successfulSplits,
+            failed: failedSplits,
+            currentFile: `${path.basename(filePath)} (第${i + 1}部分)`,
+            currentSplit: i + 1,
+            message: `已完成 ${completedSplits}/${splitCount} 个拆分文件，成功: ${successfulSplits}，失败: ${failedSplits}`
+          });
+        });
+        
+      } catch (splitError) {
+        failedSplits++;
+        completedSplits++;
+        const errorMessage = splitError instanceof Error ? splitError.message : '未知错误';
+        console.error(`处理第 ${i + 1} 个拆分文件时发生错误:`, splitError);
+        
+        splitResults.push({
+          success: false,
+          savedFiles: [],
+          error: errorMessage
+        });
+      }
+    }
+    
+    // 第三步：合并转换结果
+    console.log('开始合并转换结果...');
+    allWindows.forEach(window => {
+      window.webContents.send('pdf-convert-progress', {
+        taskId,
+        type: 'split',
+        total: splitCount,
+        completed: completedSplits,
+        successful: successfulSplits,
+        failed: failedSplits,
+        currentFile: path.basename(filePath),
+        message: '正在合并转换结果...'
+      });
+    });
+    
+    const mergeResult = await mergeConversionResults(splitResults, filePath);
+    
+    // 清理拆分文件（可选）
+    try {
+      for (const splitFile of splitResult.splitFiles) {
+        if (fs.existsSync(splitFile)) {
+          fs.unlinkSync(splitFile);
+        }
+      }
+      // 删除拆分目录（如果为空）
+      const splitDir = path.dirname(splitResult.splitFiles[0]);
+      if (fs.existsSync(splitDir) && fs.readdirSync(splitDir).length === 0) {
+        fs.rmdirSync(splitDir);
+      }
+    } catch (cleanupError) {
+      console.warn('清理拆分文件时出错:', cleanupError);
+    }
+    
+    // 计算最终结果
+    const overallSuccess = mergeResult.success && successfulSplits > 0;
+    
+    // 生成最终消息
+    let finalMessage: string;
+    if (overallSuccess) {
+      if (successfulSplits === splitCount) {
+        finalMessage = `PDF拆分转换完全成功！成功转换 ${successfulSplits}/${splitCount} 个拆分文件并合并结果`;
+      } else {
+        finalMessage = `PDF拆分转换部分成功！成功转换 ${successfulSplits}/${splitCount} 个拆分文件并合并结果`;
+      }
+    } else {
+      finalMessage = `PDF拆分转换失败！成功转换 ${successfulSplits}/${splitCount} 个拆分文件`;
+    }
+    
+    console.log(finalMessage);
+    
+    // 更新任务状态
+    if (backgroundTask && backgroundTask.taskId === taskId) {
+      backgroundTask.status = 'completed';
+      backgroundTask.result = {
+        success: overallSuccess,
+        message: finalMessage,
+        data: {
+          splitCount,
+          successfulSplits,
+          failedSplits,
+          type: 'split'
+        },
+        savedFiles: mergeResult.savedFiles,
+        convertedFiles: overallSuccess ? [filePath] : []
+      };
+    }
+    
+    // 更新持久化状态
+    persistentState.lastResult = backgroundTask?.result;
+    
+    // 更新文件状态
+    if (overallSuccess) {
+      updateFileStatus(filePath, 'success');
+    } else {
+      updateFileStatus(filePath, 'failed', mergeResult.error || `转换失败，成功: ${successfulSplits}/${splitCount}`);
+    }
+    
+    // 广播转换完成消息到所有窗口
+    const result = {
+      taskId,
+      success: overallSuccess,
+      message: finalMessage,
+      data: {
+        splitCount,
+        successfulSplits,
+        failedSplits,
+        type: 'split'
+      },
+      savedFiles: mergeResult.savedFiles,
+      convertedFiles: overallSuccess ? [filePath] : []
+    };
+    
+    // 发送完成通知到所有窗口
+    allWindows.forEach(window => {
+      window.webContents.send('pdf-convert-completed', result);
+    });
+    
+    // 清理已完成的任务
+    if (backgroundTask && backgroundTask.taskId === taskId) {
+      backgroundTask = null;
+    }
+    
+    console.log(`Split conversion completed for task: ${taskId} - ${successfulSplits}/${splitCount} splits successful`);
+    
+  } catch (error) {
+    console.error(`Split conversion failed for task ${taskId}:`, error);
+    
+    // 更新任务状态为失败
+    if (backgroundTask && backgroundTask.taskId === taskId) {
+      backgroundTask.status = 'failed';
+      backgroundTask.result = {
+        success: false,
+        message: `PDF拆分转换任务失败: ${error instanceof Error ? error.message : '未知错误'}`
+      };
+    }
+    
+    // 更新持久化状态
+    persistentState.lastResult = backgroundTask?.result;
+    
+    // 更新文件状态为失败
+    updateFileStatus(filePath, 'failed', error instanceof Error ? error.message : '未知错误');
+    
+    // 广播转换失败消息
+    const result = {
+      taskId,
+      success: false,
+      message: `PDF拆分转换任务失败: ${error instanceof Error ? error.message : '未知错误'}`,
+      convertedFiles: [filePath] // 包含失败的文件，用于前端处理
+    };
+    
+    const allWindows = BrowserWindow.getAllWindows();
+    allWindows.forEach(window => {
+      window.webContents.send('pdf-convert-completed', result);
+    });
+    
+    // 清理失败的任务
+    if (backgroundTask && backgroundTask.taskId === taskId) {
+      backgroundTask = null;
+    }
   }
 }
 

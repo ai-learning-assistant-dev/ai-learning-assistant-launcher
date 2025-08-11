@@ -75,6 +75,9 @@
     "@types/uuid": "^10.0.0",
     "electron-squirrel-startup": "^1.0.1",
     "form-data": "^4.0.4",
+    "pdf-lib": "^1.17.1",
+    "pdf-poppler": "^0.2.1",
+    "pdf2pic": "^3.2.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "uuid": "^11.1.0"

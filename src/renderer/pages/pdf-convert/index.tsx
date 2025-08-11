@@ -1,11 +1,12 @@
-import { Button, message, Card, Typography, Space, List, Tag, Tooltip } from 'antd';
-import { FileTextOutlined, PlusOutlined, DeleteOutlined, LoadingOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
+import { Button, message, Card, Typography, Space, List, Tag, Tooltip, Modal, InputNumber, Select } from 'antd';
+import { FileTextOutlined, PlusOutlined, DeleteOutlined, LoadingOutlined, CheckCircleOutlined, CloseCircleOutlined, ScissorOutlined } from '@ant-design/icons';
 import { NavLink } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { TerminalLogScreen } from '../../containers/terminal-log-screen';
 import './index.scss';
 
 const { Title, Text } = Typography;
+const { Option } = Select;
 
 interface ConversionResult {
   success: boolean;
@@ -17,6 +18,8 @@ interface FileItem {
   path: string;
   status?: 'pending' | 'converting' | 'success' | 'failed';
   error?: string;
+  splitParts?: number; // 拆分份数
+  currentSplitProgress?: number; // 当前拆分进度 (0-splitParts)
 }
 
 interface ProgressData {
@@ -27,6 +30,8 @@ interface ProgressData {
   failed: number;
   currentFile: string;
   message: string;
+  type?: 'split'; // 拆分类型标识
+  currentSplit?: number; // 当前拆分进度
 }
 
 export default function PdfConvert() {
@@ -37,14 +42,23 @@ export default function PdfConvert() {
   const [hasRunningTasks, setHasRunningTasks] = useState(false);
   const [isTaskSubmitted, setIsTaskSubmitted] = useState(false);
   const [progressData, setProgressData] = useState<ProgressData | null>(null);
+  
+  // 拆分功能相关状态
+  const [splitModalVisible, setSplitModalVisible] = useState(false);
+  const [selectedFileForSplit, setSelectedFileForSplit] = useState<FileItem | null>(null);
+  const [splitCount, setSplitCount] = useState(2);
 
   // 渲染文件状态图标和标签
   const renderFileStatus = (file: FileItem) => {
     switch (file.status) {
       case 'converting':
+        let convertingText = '转换中';
+        if (file.splitParts && file.currentSplitProgress !== undefined) {
+          convertingText = `拆分转换中 (${file.currentSplitProgress}/${file.splitParts})`;
+        }
         return (
           <Tag icon={<LoadingOutlined spin />} color="processing">
-            转换中
+            {convertingText}
           </Tag>
         );
       case 'failed':
@@ -68,6 +82,48 @@ export default function PdfConvert() {
             待处理
           </Tag>
         );
+    }
+  };
+
+  // 打开拆分对话框
+  const openSplitModal = (file: FileItem) => {
+    if (file.status === 'converting') {
+      message.warning('正在转换中的文件无法拆分');
+      return;
+    }
+    setSelectedFileForSplit(file);
+    setSplitModalVisible(true);
+  };
+
+  // 执行拆分转换
+  const executeSplitConversion = async () => {
+    if (!selectedFileForSplit) {
+      return;
+    }
+
+    if (splitCount < 2 || splitCount > 20) {
+      message.error('拆分份数必须在2-20之间');
+      return;
+    }
+
+    setSplitModalVisible(false);
+    setConverting(true);
+    setResult(null);
+
+    try {
+      // 通过IPC调用主进程的PDF拆分转换服务
+      window.electron.ipcRenderer.sendMessage('pdf-convert', 'split', 'PDF', [selectedFileForSplit.path], splitCount);
+    } catch (error) {
+      console.error('拆分转换失败:', error);
+      setResult({
+        success: false,
+        message: `拆分转换失败: ${error instanceof Error ? error.message : '未知错误'}`,
+      });
+      message.error('拆分转换失败，请检查PDF服务是否正在运行');
+      setConverting(false);
+      setIsTaskSubmitted(false);
+      setHasRunningTasks(false);
+      setBackgroundTask(null);
     }
   };
 
@@ -169,7 +225,7 @@ export default function PdfConvert() {
         }
         
         // 处理PDF转换响应
-        if (messageType === 'data' && data.action === 'convert') {
+        if (messageType === 'data' && (data.action === 'convert' || data.action === 'split')) {
           const { taskId, status, message: resultMessage } = data.data;
           
           if (status === 'started') {
@@ -190,7 +246,8 @@ export default function PdfConvert() {
           });
 
           if (success) {
-            message.success('PDF转换成功！');
+            const successMsg = data.action === 'split' ? 'PDF拆分转换成功！' : 'PDF转换成功！';
+            message.success(successMsg);
             // 从文件列表中移除已转换的文件
             if (convertedFiles && convertedFiles.length > 0) {
               setFileList(prevFiles => 
@@ -198,7 +255,8 @@ export default function PdfConvert() {
               );
             }
           } else {
-            message.error('PDF转换失败');
+            const errorMsg = data.action === 'split' ? 'PDF拆分转换失败' : 'PDF转换失败';
+            message.error(errorMsg);
           }
           setConverting(false);
           setBackgroundTask(null);
@@ -275,9 +333,11 @@ export default function PdfConvert() {
           });
 
           if (data.success) {
-            message.success('后台PDF转换成功！');
+            const successMsg = data.data?.type === 'split' ? '后台PDF拆分转换成功！' : '后台PDF转换成功！';
+            message.success(successMsg);
           } else {
-            message.error('后台PDF转换失败');
+            const errorMsg = data.data?.type === 'split' ? '后台PDF拆分转换失败' : '后台PDF转换失败';
+            message.error(errorMsg);
           }
           
           setConverting(false);
@@ -338,12 +398,23 @@ export default function PdfConvert() {
                   <List.Item
                     actions={[
                       <Button
+                        key="split"
+                        type="default"
+                        icon={<ScissorOutlined />}
+                        onClick={() => openSplitModal(file)}
+                        disabled={converting || hasRunningTasks || file.status === 'converting'}
+                        size="small"
+                      >
+                        拆分
+                      </Button>,
+                      <Button
                         key="delete"
                         type="text"
                         danger
                         icon={<DeleteOutlined />}
                         onClick={() => removeFile(index)}
                         disabled={converting || hasRunningTasks || file.status === 'converting'}
+                        size="small"
                       >
                         删除
                       </Button>
@@ -398,9 +469,22 @@ export default function PdfConvert() {
                 )}
                 {progressData && (
                   <div style={{ marginTop: '8px' }}>
-                    <Text strong style={{ display: 'block' }}>
-                      转换进度: {progressData.completed}/{progressData.total}
-                    </Text>
+                    {progressData.type === 'split' ? (
+                      <>
+                        <Text strong style={{ display: 'block' }}>
+                          拆分转换进度: {progressData.completed}/{progressData.total}
+                        </Text>
+                        {progressData.currentSplit && (
+                          <Text style={{ display: 'block', color: '#1890ff' }}>
+                            当前拆分: 第 {progressData.currentSplit} 部分
+                          </Text>
+                        )}
+                      </>
+                    ) : (
+                      <Text strong style={{ display: 'block' }}>
+                        转换进度: {progressData.completed}/{progressData.total}
+                      </Text>
+                    )}
                     <Text style={{ display: 'block', color: '#52c41a' }}>
                       成功: {progressData.successful} 个
                     </Text>
@@ -443,6 +527,47 @@ export default function PdfConvert() {
         rows={6}
         style={{ width: 'calc(100% - 20px)', marginTop: '16px' }}
       />
+      
+      {/* 拆分配置对话框 */}
+      <Modal
+        title="PDF拆分转换配置"
+        open={splitModalVisible}
+        onOk={executeSplitConversion}
+        onCancel={() => setSplitModalVisible(false)}
+        okText="开始拆分转换"
+        cancelText="取消"
+        confirmLoading={converting}
+      >
+        <Space direction="vertical" style={{ width: '100%' }}>
+          <div>
+            <Text strong>选择的文件:</Text>
+            <div style={{ marginTop: '8px', padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+              <Text>{selectedFileForSplit?.name}</Text>
+            </div>
+          </div>
+          
+          <div>
+            <Text strong>拆分份数:</Text>
+            <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <InputNumber
+                min={2}
+                max={20}
+                value={splitCount}
+                onChange={(value) => setSplitCount(value || 2)}
+                style={{ width: '120px' }}
+              />
+              <Text type="secondary">（范围: 2-20）</Text>
+            </div>
+          </div>
+          
+          <div>
+            <Text type="secondary" style={{ fontSize: '12px' }}>
+              拆分说明：PDF将被平均拆分为指定份数，每份单独进行转换，最后合并结果。
+              拆分后的文件将串行发送给PDF容器分析，分析结果会自动合并。
+            </Text>
+          </div>
+        </Space>
+      </Modal>
     </div>
   );
 } 
