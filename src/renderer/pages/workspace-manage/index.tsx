@@ -64,7 +64,7 @@ export default function WorkspaceManage() {
   const [availablePackages, setAvailablePackages] = useState<RemotePackageInfo[]>([]);
   const [selectedPackages, setSelectedPackages] = useState<string[]>([]);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [targetWorkspacePath, setTargetWorkspacePath] = useState<string | undefined>();
+  const [packageWorkspaceSelections, setPackageWorkspaceSelections] = useState<Record<string, string>>({});
 
   const {
     loading,
@@ -281,10 +281,21 @@ export default function WorkspaceManage() {
       message.warning('请至少选择一个学习包进行下载');
       return;
     }
-     if (!targetWorkspacePath) {
-        message.warning('请选择要导入的目标工作区');
+    
+    // 检查不包含data.md的学习包是否都选择了工作区
+    const packagesNeedingWorkspace = selectedPackages.filter(branch => {
+      const pkg = availablePackages.find(p => p.branch === branch);
+      return pkg && !pkg.hasDataMd;
+    });
+    
+    for (const branch of packagesNeedingWorkspace) {
+      if (!packageWorkspaceSelections[branch]) {
+        const pkg = availablePackages.find(p => p.branch === branch);
+        message.warning(`学习包 "${pkg?.name}" 需要选择目标工作区`);
         return;
+      }
     }
+    
     if (!vaultId) return;
 
     setIsDownloading(true);
@@ -292,10 +303,14 @@ export default function WorkspaceManage() {
       for (const branch of selectedPackages) {
         const pkg = availablePackages.find(p => p.branch === branch);
         const repo = pkg?.repo || remoteRepoUrl;
-        await remoteImportClonePackage(vaultId, repo, branch, targetWorkspacePath);
+        const targetWorkspacePath = packageWorkspaceSelections[branch] || '';
+        
+        await remoteImportClonePackage(vaultId, repo, branch, targetWorkspacePath, pkg?.hasDataMd);
       }
       message.success('选中的学习包已全部导入成功！');
       setIsRemoteImportModalVisible(false);
+      setSelectedPackages([]);
+      setPackageWorkspaceSelections({});
       getAllWorkspaces(vaultId);
     } catch (error) {
       console.error('下载学习包失败:', error);
@@ -311,9 +326,23 @@ export default function WorkspaceManage() {
         return [...new Set([...prev, branch])];
       } else {
         // 过滤掉未选中的项
-        return prev.filter(p => p !== branch);
+        const newSelected = prev.filter(p => p !== branch);
+        // 如果取消选择，也清除对应的工作区选择
+        setPackageWorkspaceSelections(prevSelections => {
+          const newSelections = { ...prevSelections };
+          delete newSelections[branch];
+          return newSelections;
+        });
+        return newSelected;
       }
     });
+  };
+
+  const handleWorkspaceSelectionChange = (branch: string, workspacePath: string) => {
+    setPackageWorkspaceSelections(prev => ({
+      ...prev,
+      [branch]: workspacePath
+    }));
   };
 
   const importMenu = (
@@ -553,7 +582,7 @@ export default function WorkspaceManage() {
                     type="primary" 
                     loading={isDownloading} 
                     onClick={handleDownloadSelected}
-                    disabled={selectedPackages.length === 0 || !targetWorkspacePath}
+                    disabled={selectedPackages.length === 0}
                 >
                     下载选中项
                 </Button>,
@@ -571,47 +600,57 @@ export default function WorkspaceManage() {
                 />
                 <Spin spinning={isFetchingPackages}>
                 <List
-                    // ... (List props are unchanged)
-                    header={
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span>可选的学习包</span>
-                            <Space>
-                                <Typography.Text>导入到工作区:</Typography.Text>
-                                <Select
-                                    placeholder="请选择工作区"
-                                    style={{ width: 250 }}
-                                    value={targetWorkspacePath}
-                                    onChange={(value) => setTargetWorkspacePath(value)}
-                                    // Disable if no packages are loaded yet
-                                    disabled={availablePackages.length === 0}
-                                >
-                                    {workspaces.map(ws => (
-                                        <Select.Option key={ws.path} value={ws.path}>
-                                            {ws.name}
-                                        </Select.Option>
-                                    ))}
-                                </Select>
-                            </Space>
-                        </div>
-                    }
+                    header={<span>可选的学习包</span>}
                     dataSource={availablePackages}
                     renderItem={(item: RemotePackageInfo) => (
                         <List.Item>
-                            <List.Item.Meta
-                                avatar={
-                                  <Checkbox 
+                            <div style={{ display: 'flex', alignItems: 'center', width: '100%', gap: '16px' }}>
+                                <Checkbox 
                                     checked={selectedPackages.includes(item.branch)}
                                     onChange={(e) => handleCheckboxChange(item.branch, e.target.checked)}
-                                  />
-                                }
-                                title={item.name}
-                                description={
-                                    <>
-                                        <Paragraph style={{ margin: 0 }}>{item.description}</Paragraph>
-                                        <Text type="secondary">分支: {item.branch}</Text> | <Text type="secondary">书籍: {Object.keys(item.books).join(', ')}</Text>
-                                    </>
-                                }
-                            />
+                                />
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+                                        {item.name}
+                                        {item.hasDataMd && (
+                                            <span style={{ 
+                                                marginLeft: '8px', 
+                                                padding: '2px 6px', 
+                                                backgroundColor: '#52c41a', 
+                                                color: 'white', 
+                                                fontSize: '12px', 
+                                                borderRadius: '4px' 
+                                            }}>
+                                                独立工作区
+                                            </span>
+                                        )}
+                                    </div>
+                                    <Paragraph style={{ margin: 0, fontSize: '14px' }}>{item.description}</Paragraph>
+                                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                                        分支: {item.branch} 
+                                    </Text>
+                                </div>
+                                {!item.hasDataMd && selectedPackages.includes(item.branch) && (
+                                    <div style={{ minWidth: '200px' }}>
+                                        <Text type="secondary" style={{ fontSize: '12px', display: 'block', marginBottom: '4px' }}>
+                                            选择目标工作区:
+                                        </Text>
+                                        <Select
+                                            placeholder="请选择工作区"
+                                            style={{ width: '100%' }}
+                                            value={packageWorkspaceSelections[item.branch]}
+                                            onChange={(value) => handleWorkspaceSelectionChange(item.branch, value)}
+                                            size="small"
+                                        >
+                                            {workspaces.map(ws => (
+                                                <Select.Option key={ws.path} value={ws.path}>
+                                                    {ws.name}
+                                                </Select.Option>
+                                            ))}
+                                        </Select>
+                                    </div>
+                                )}
+                            </div>
                         </List.Item>
                     )}
                     locale={{ emptyText: '请先获取学习包列表' }}

@@ -180,6 +180,26 @@ function clearWorkingDirectoryExceptGit(dir: string) {
   }
 }
 
+// 辅助函数：在已克隆的仓库目录中，通过 fetch + checkout 判断指定分支是否包含 data.md
+async function checkPackageHasDataMdInRepo(clonedRepoDir: string, branch: string): Promise<boolean> {
+  try {
+    // 拉取指定分支的最新内容（浅拉取，加速）
+    await git.fetch({ fs, http, dir: clonedRepoDir, remote: 'origin', ref: branch, singleBranch: true, depth: 1 });
+    // 切换到远程分支工作树
+    await git.checkout({ fs, dir: clonedRepoDir, ref: `origin/${branch}`, force: true });
+
+    const filelistPath = path.join(clonedRepoDir, 'filelist.json');
+    if (!existsSync(filelistPath)) {
+      return false;
+    }
+    const filesToCheck: string[] = JSON.parse(readFileSync(filelistPath, 'utf8'));
+    return filesToCheck.includes('data.md');
+  } catch (error) {
+    console.error(`检查学习包 ${branch} 是否包含data.md时出错:`, error);
+    return false;
+  }
+}
+
 export default async function init(ipcMain: IpcMain) {
   ipcMain.on(
     channel,
@@ -385,31 +405,47 @@ export default async function init(ipcMain: IpcMain) {
           const { repoUrl } = data;
           const tempDir = path.join(os.tmpdir(), `aila-repo-${Date.now()}`);
           try {
-            await gitClone(repoUrl, tempDir, 'master'); 
+            // 先克隆默认分支（浅克隆）到临时目录
+            await gitClone(repoUrl, tempDir);
             const indexPath = path.join(tempDir, 'index.json');
             if (!existsSync(indexPath)) {
-              throw new Error('仓库 master 分支下未找到 index.json 文件');
+              throw new Error('仓库默认分支下未找到 index.json 文件');
             }
             const packageList = JSON.parse(readFileSync(indexPath, 'utf8'));
-            event.reply(channel, MESSAGE_TYPE.DATA, new MessageData(action, serviceName, packageList));
+
+            // 在同一临时仓库中逐分支 fetch + checkout 进行判断，避免多次 clone
+            const packageListWithDataMdCheck = await Promise.all(
+              packageList.map(async (pkg: any) => {
+                const hasDataMd = await checkPackageHasDataMdInRepo(tempDir, pkg.branch);
+                return {
+                  ...pkg,
+                  hasDataMd,
+                };
+              }),
+            );
+
+            event.reply(
+              channel,
+              MESSAGE_TYPE.DATA,
+              new MessageData(action, serviceName, packageListWithDataMdCheck),
+            );
           } finally {
             if (existsSync(tempDir)) {
               rmSync(tempDir, { recursive: true, force: true });
             }
           }
         } else if (action === 'remote-import-clone-package') {
-        // 1. Get parameters from frontend, now including targetWorkspacePath
-        const { repoUrl, branch, targetWorkspacePath } = data;
+        // 1. Get parameters from frontend, now including targetWorkspacePath and hasDataMd
+        const { repoUrl, branch, targetWorkspacePath, hasDataMd } = data;
 
         const newFolderName = branch.startsWith('release/') ? branch.substring('release/'.length) : path.basename(branch);
+        const vaultPath = getVaultPath(vaultId)
         // 2. Determine storage and repository paths
-        // TODO: storagePath应该被更详细的决定，仓库名应该是：远程仓库名 + realease/xxx ,
-        // 否则会造成严重的冲突，比如filelist
         const storagePath = getGitStoragePath();
         const repoDirName = getRepoDirNameFromUrl(repoUrl);
         const base_repoStoragePath = path.join(storagePath, repoDirName);
 
-        const repoStoragePath = path.join(base_repoStoragePath,newFolderName)
+        const repoStoragePath = path.join(base_repoStoragePath, newFolderName)
         
         // 3. Clone or Fetch the repository in the storage area
         if (existsSync(repoStoragePath)) {
@@ -418,7 +454,7 @@ export default async function init(ipcMain: IpcMain) {
             await git.checkout({ fs, dir: repoStoragePath, ref: `origin/${branch}`, force: true });
         } else {
             console.log(`Cloning repository to ${repoStoragePath}...`);
-            await gitClone(repoUrl, repoStoragePath, branch); // gitClone should handle single branch and depth
+            await gitClone(repoUrl, repoStoragePath, branch);
         }
         
         // 4. Read filelist.json from the storage area
@@ -428,16 +464,32 @@ export default async function init(ipcMain: IpcMain) {
         }
         const filesToCopy: string[] = JSON.parse(readFileSync(filelistPath, 'utf8'));
 
-        // 5. Determine the final destination folder inside the selected workspace
-        const finalDestPath = path.join(targetWorkspacePath, newFolderName);
+        // 5. Determine the final destination based on whether the package contains data.md
+        let finalDestPath: string;
+        let successMessage: string;
+
+        if (hasDataMd) {
+            // 如果包含data.md，作为独立工作区导入到targetWorkspacePath
+            if (!vaultPath) {
+              throw new Error('未设置当前工作区路径,是一个bug，应该默认是当前vaultPath');
+          }
+            finalDestPath = path.join(vaultPath, newFolderName);
+            successMessage = `学习包 "${newFolderName}" 已成功导入为独立工作区！`;
+        } else {
+            // 如果不包含data.md，导入到指定的工作区内
+            if (!targetWorkspacePath) {
+                throw new Error('该学习包不包含data.md文件，需要指定目标工作区');
+            }
+            finalDestPath = path.join(targetWorkspacePath, newFolderName);
+            successMessage = `学习包 "${newFolderName}" 已成功导入到工作区 "${path.basename(targetWorkspacePath)}"！`;
+        }
         
         if (existsSync(finalDestPath)) {
-            // TODO：错误处理，引导用户进行更新？
-            throw new Error(`导入失败：工作区 "${path.basename(targetWorkspacePath)}" 内已存在名为 "${newFolderName}" 的文件夹。`);
+            throw new Error(`导入失败：目标位置已存在名为 "${newFolderName}" 的文件夹。`);
         }
         mkdirSync(finalDestPath, { recursive: true });
 
-        // 6. Copy files from storage to the target workspace according to filelist.json
+        // 6. Copy files from storage to the destination according to filelist.json
         for (const file of filesToCopy) {
             const sourceFile = path.join(repoStoragePath, file);
             const destFile = path.join(finalDestPath, file);
@@ -451,7 +503,7 @@ export default async function init(ipcMain: IpcMain) {
             }
         }
 
-        event.reply(channel, MESSAGE_TYPE.INFO, `学习包 "${newFolderName}" 已成功导入到工作区 "${path.basename(targetWorkspacePath)}"！`);
+        event.reply(channel, MESSAGE_TYPE.INFO, successMessage);
     }
         else if (action === 'update-workspace') {
                     // 'forceUpdate' is a new parameter to handle the conflict resolution option
