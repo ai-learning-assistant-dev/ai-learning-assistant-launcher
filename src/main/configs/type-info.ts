@@ -18,6 +18,8 @@ export interface ContainerConfig {
     };
     env?: Record<string, string>;
     mounts?: Array<ContainerCreateMountOption>;
+    privileged?: boolean;
+    restart_policy?: string;
   };
   TTS: {
     port: {
@@ -34,6 +36,8 @@ export interface ContainerConfig {
       forceNvidia: boolean;
       forceCPU: boolean;
     };
+    privileged?: boolean;
+    restart_policy?: string;
   };
   LLM: {
     port: {
@@ -46,6 +50,8 @@ export interface ContainerConfig {
     };
     env?: Record<string, string>;
     mounts?: Array<ContainerCreateMountOption>;
+    privileged?: boolean;
+    restart_policy?: string;
   };
   PDF: {
     port: {
@@ -58,11 +64,6 @@ export interface ContainerConfig {
     };
     env?: Record<string, string>;
     mounts?: Array<ContainerCreateMountOption>;
-    ulimits?: {
-      memlock: number;
-      stack: number;
-    };
-    ipc?: string;
     privileged?: boolean;
     restart_policy?: string;
   };
