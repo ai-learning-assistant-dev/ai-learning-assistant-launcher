@@ -457,23 +457,35 @@ export default async function init(ipcMain: IpcMain) {
             await gitClone(repoUrl, repoStoragePath, branch);
         }
         
-        // 4. Read filelist.json from the storage area
+        // 4.1 Read filelist.json from the storage area
         const filelistPath = path.join(repoStoragePath, 'filelist.json');
         if (!existsSync(filelistPath)) {
             throw new Error(`学习包 "(${branch})" 的存储库中缺少 filelist.json 文件。`);
         }
         const filesToCopy: string[] = JSON.parse(readFileSync(filelistPath, 'utf8'));
 
+        // 4.2 Read filelist.json from the storage area
+        const descPath = path.join(repoStoragePath, 'desc.json');
+        if (!existsSync(descPath)) {
+            throw new Error(`学习包 "(${branch})" 的存储库中缺少 desc.json 文件。`);
+        }
+        let workspaceName :string = JSON.parse(readFileSync(descPath, 'utf8'))[0].name;
+
         // 5. Determine the final destination based on whether the package contains data.md
         let finalDestPath: string;
         let successMessage: string;
+        let workspacePath :string;
 
         if (hasDataMd) {
             // 如果包含data.md，作为独立工作区导入到targetWorkspacePath
             if (!vaultPath) {
               throw new Error('未设置当前工作区路径,是一个bug，应该默认是当前vaultPath');
           }
-            finalDestPath = path.join(vaultPath, newFolderName);
+            workspacePath= path.join(vaultPath, workspaceName);
+            console.log(workspaceName)
+
+            finalDestPath = path.join(workspacePath, newFolderName);
+            console.log(finalDestPath)
             successMessage = `学习包 "${newFolderName}" 已成功导入为独立工作区！`;
         } else {
             // 如果不包含data.md，导入到指定的工作区内
@@ -485,18 +497,25 @@ export default async function init(ipcMain: IpcMain) {
         }
         
         if (existsSync(finalDestPath)) {
+            let failedMessage = `导入失败：目标位置已存在名为 "${newFolderName}" 的文件夹, 请切换仓库或者选择更新`
+            event.reply(channel, MESSAGE_TYPE.ERROR, failedMessage);
             throw new Error(`导入失败：目标位置已存在名为 "${newFolderName}" 的文件夹。`);
         }
         mkdirSync(finalDestPath, { recursive: true });
 
         // 6. Copy files from storage to the destination according to filelist.json
         for (const file of filesToCopy) {
+            
             const sourceFile = path.join(repoStoragePath, file);
             const destFile = path.join(finalDestPath, file);
             
             if (existsSync(sourceFile)) {
                 // Ensure the destination directory for the file exists
                 mkdirSync(path.dirname(destFile), { recursive: true });
+                if (file === 'data.md') {
+                  const destDataMdPath = path.join(workspacePath, 'data.md');
+                  copySync(sourceFile, destDataMdPath, { overwrite: true });
+                }
                 copySync(sourceFile, destFile);
             } else {
                 console.warn(`Warning: File "${file}" listed in filelist.json not found in the repository.`);
@@ -604,6 +623,7 @@ export default async function init(ipcMain: IpcMain) {
                         // if (localSha === remoteSha || localSha === mergeBase) {
                           if (localSha === remoteSha ) {
                             updateResults.push({ pkgName, message: '已是最新版本。', conflict: false });
+                            //event.reply(channel, MESSAGE_TYPE.INFO, `${pkgName}已是最新版本。`);
                             continue; // 跳到下一个包
                         }
 
@@ -638,7 +658,7 @@ export default async function init(ipcMain: IpcMain) {
                             }
                         }
                           updateResults.push({ pkgName, message: '更新成功！您的修改已与最新版自动合并。', conflict: false });
-          
+                          //event.reply(channel, MESSAGE_TYPE.INFO, `${pkgName}更新成功！您的修改已与最新版自动合并。`);
                         } catch (mergeError) {
                           // 如果不能合并 (发生冲突)
                           // 必须立即中止合并
@@ -670,7 +690,7 @@ export default async function init(ipcMain: IpcMain) {
           
                     // 汇总所有结果后，统一发送给前端
                     // 前端可以根据 'conflict: true' 字段来决定是否显示特殊UI（如强制更新按钮）
-                    event.reply(channel, MESSAGE_TYPE.DATA, new MessageData(action, serviceName, updateResults));
+                    event.reply(channel, MESSAGE_TYPE.INFO, updateResults.map(item => item.message).join('\n'));
         }
       } catch (error) {
         console.error(`workspace error on action ${action}:`, error);
