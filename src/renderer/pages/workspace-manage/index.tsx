@@ -226,7 +226,12 @@ export default function WorkspaceManage() {
     if (vaultId) {
       try {
         await createWorkspace(vaultId);
-        getAllWorkspaces(vaultId);
+        // 由于 createWorkspace 调用结束时 useWorkspace 内的 loading 状态可能尚未完成更新，
+        // 立即调用 getAllWorkspaces 会被并发限制拦截，导致列表无法刷新。
+        // 这里增加一个微小的延迟，确保 loading 状态已重置后再获取最新列表。
+        setTimeout(() => {
+          getAllWorkspaces(vaultId);
+        }, 200);
       } catch (error) {
         console.error('创建工作区失败:', error);
       }
@@ -238,7 +243,10 @@ export default function WorkspaceManage() {
     if (vaultId) {
         try {
             await localImportWorkspace(vaultId);
-            getAllWorkspaces(vaultId); // Refresh list after import
+            // 给列表刷新增加一点延时，避免 loading 状态尚未复位导致的刷新失败
+            setTimeout(() => {
+              getAllWorkspaces(vaultId);
+            }, 200);
         } catch(error) {
             console.error('本地导入失败:', error);
             // message is handled by the hook

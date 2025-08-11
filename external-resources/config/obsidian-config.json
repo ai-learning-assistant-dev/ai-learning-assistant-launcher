@@ -1,5 +1,5 @@
 {
   "obsidianApp": {
-    "bin": "E:\\software\\Obsidian\\Obsidian.exe"
+    "bin": "%localappdata%\\Programs\\Obsidian\\Obsidian.exe"
   }
 }
