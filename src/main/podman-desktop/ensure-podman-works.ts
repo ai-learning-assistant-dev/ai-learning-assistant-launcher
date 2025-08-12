@@ -1,11 +1,17 @@
 import path from 'node:path';
 import type { IpcMainEvent } from 'electron';
 import { appPath, Exec } from '../exec';
-import { isWindows } from '../exec/util';
-import { imageNameDict, imagePathDict, ServiceName } from './type-info';
+import { convertWindowsPathToPodmanMachinePath, isWindows } from '../exec/util';
+import {
+  imageNameDict,
+  imagePathDict,
+  podMachineName,
+  ServiceName,
+} from './type-info';
 import { Channels, MESSAGE_TYPE } from '../ipc-data-type';
 import { isWSLInstall } from '../cmd/is-wsl-install';
 import { wait } from '../util';
+import { loggerFactory } from '../terminal-log';
 
 const commandLine = new Exec();
 
@@ -43,7 +49,7 @@ async function isPodmanInstall() {
 async function isPodmanInit() {
   const output = await commandLine.exec(getPodmanCli(), ['machine', 'list']);
   console.debug('isPodmanInit', output);
-  if (output.stdout.indexOf('podman-machine-default') >= 0) {
+  if (output.stdout.indexOf(podMachineName) >= 0) {
     return true;
   }
   return false;
@@ -165,11 +171,13 @@ export async function initPodman() {
     'podman_machine.tar.zst',
   );
   const imagePathArgs = isWindows() ? ['--image', podmanMachineImagePath] : [];
-  const output = await commandLine.exec(getPodmanCli(), [
-    'machine',
-    'init',
-    ...imagePathArgs,
-  ]);
+  const output = await commandLine.exec(
+    getPodmanCli(),
+    ['machine', 'init', ...imagePathArgs],
+    {
+      logger: loggerFactory('podman'),
+    },
+  );
   console.debug('initPodman', output);
   return true;
 }
@@ -207,24 +215,108 @@ export async function isCDIReady() {
 }
 
 export async function setupCDI() {
-  await commandLine.exec(getPodmanCli(), [
-    'machine',
-    'ssh',
-    `curl -s -L https://mirrors.ustc.edu.cn/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo` +
-      ` | sed 's#nvidia.github.io/libnvidia-container/stable/#mirrors.ustc.edu.cn/libnvidia-container/stable/#g'` +
-      ` | sed 's#nvidia.github.io/libnvidia-container/experimental/#mirrors.ustc.edu.cn/libnvidia-container/experimental/#g'` +
-      ` | sudo tee /etc/yum.repos.d/nvidia-container-toolkit.repo`,
-  ]);
-  await commandLine.exec(getPodmanCli(), [
-    'machine',
-    'ssh',
-    `sudo yum install -y nvidia-container-toolkit`,
-  ]);
-  await commandLine.exec(getPodmanCli(), [
-    'machine',
-    'ssh',
-    'sudo nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml',
-  ]);
+  await commandLine.exec(
+    getPodmanCli(),
+    [
+      'machine',
+      'ssh',
+      'cp',
+      `'${convertWindowsPathToPodmanMachinePath(
+        path.join(
+          appPath,
+          'external-resources',
+          'ai-assistant-backend',
+          'nvidia-container-toolkit_x86_64.tar.gz',
+        ),
+      )}'`,
+      '~/',
+    ],
+    {
+      logger: loggerFactory('podman'),
+    },
+  );
+  await commandLine.exec(
+    getPodmanCli(),
+    [
+      'machine',
+      'ssh',
+      'tar',
+      '-zxvf',
+      '~/nvidia-container-toolkit_x86_64.tar.gz',
+      '-C',
+      '~/',
+    ],
+    {
+      logger: loggerFactory('podman'),
+    },
+  );
+  await commandLine.exec(
+    getPodmanCli(),
+    [
+      'machine',
+      'ssh',
+      'sudo',
+      'rpm',
+      '-i',
+      '~/release-v1.17.8-stable/packages/centos7/x86_64/libnvidia-container1-1.17.8-1.x86_64.rpm',
+    ],
+    {
+      logger: loggerFactory('podman'),
+    },
+  );
+  await commandLine.exec(
+    getPodmanCli(),
+    [
+      'machine',
+      'ssh',
+      'sudo',
+      'rpm',
+      '-i',
+      '~/release-v1.17.8-stable/packages/centos7/x86_64/libnvidia-container-tools-1.17.8-1.x86_64.rpm',
+    ],
+    {
+      logger: loggerFactory('podman'),
+    },
+  );
+  await commandLine.exec(
+    getPodmanCli(),
+    [
+      'machine',
+      'ssh',
+      'sudo',
+      'rpm',
+      '-i',
+      '~/release-v1.17.8-stable/packages/centos7/x86_64/nvidia-container-toolkit-base-1.17.8-1.x86_64.rpm',
+    ],
+    {
+      logger: loggerFactory('podman'),
+    },
+  );
+  await commandLine.exec(
+    getPodmanCli(),
+    [
+      'machine',
+      'ssh',
+      'sudo',
+      'rpm',
+      '-i',
+      '~/release-v1.17.8-stable/packages/centos7/x86_64/nvidia-container-toolkit-1.17.8-1.x86_64.rpm',
+    ],
+    {
+      logger: loggerFactory('podman'),
+    },
+  );
+  await commandLine.exec(
+    getPodmanCli(),
+    [
+      'machine',
+      'ssh',
+      'sudo nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml',
+    ],
+    {
+      logger: loggerFactory('podman'),
+    },
+  );
   return true;
 }
 

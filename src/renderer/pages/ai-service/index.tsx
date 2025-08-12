@@ -23,6 +23,7 @@ import {
 } from '../../../main/cmd/type-info';
 import useCmd from '../../containers/use-cmd';
 import { MESSAGE_TYPE, MessageData } from '../../../main/ipc-data-type';
+import { TerminalLogScreen } from '../../containers/terminal-log-screen';
 
 interface ContainerItem {
   name: string;
@@ -369,6 +370,12 @@ export default function AiService() {
             {item.name}
           </List.Item>
         )}
+      />
+      <TerminalLogScreen
+        id="terminal-log"
+        cols={100}
+        rows={8}
+        style={{ width: 'calc(100% - 20px)' }}
       />
     </div>
   );

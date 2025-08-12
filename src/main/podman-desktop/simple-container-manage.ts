@@ -23,7 +23,7 @@ import { getContainerConfig } from '../configs';
 import { wait } from '../util';
 import path from 'node:path';
 import { appPath } from '../exec';
-import { isWindows } from '../exec/util';
+import { convertWindowsPathToPodmanMachinePath, isWindows } from '../exec/util';
 import convertPath from '@stdlib/utils-convert-path';
 import { ContainerConfig } from '../configs/type-info';
 
@@ -351,10 +351,9 @@ export async function createContainer(serviceName: ServiceName) {
     env: config.env,
     mounts: config.mounts
       ? config.mounts.map((mount) => {
-          mount.Source = path.join(appPath, mount.Source);
-          if (isWindows()) {
-            mount.Source = `/mnt${convertPath(mount.Source, 'posix')}`;
-          }
+          mount.Source = convertWindowsPathToPodmanMachinePath(
+            path.join(appPath, mount.Source),
+          );
           return mount;
         })
       : [],

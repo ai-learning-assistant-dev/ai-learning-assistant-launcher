@@ -18,6 +18,7 @@ import {
 import { RunResult } from '@podman-desktop/api';
 import { podMachineName } from '../podman-desktop/type-info';
 import { isWSLInstall } from './is-wsl-install';
+import { loggerFactory } from '../terminal-log';
 
 const commandLine = new Exec();
 
@@ -479,6 +480,7 @@ export async function movePodman(path: string) {
       {
         encoding: 'utf16le',
         shell: true,
+        logger: loggerFactory('podman'),
       },
     );
     console.debug('movePodman', output2);
