@@ -515,6 +515,7 @@ export default async function init(ipcMain: IpcMain) {
                 if (file === 'data.md') {
                   const destDataMdPath = path.join(workspacePath, 'data.md');
                   copySync(sourceFile, destDataMdPath, { overwrite: true });
+                  continue
                 }
                 copySync(sourceFile, destFile);
             } else {
