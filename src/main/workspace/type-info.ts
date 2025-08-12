@@ -7,7 +7,11 @@ export type ActionName = 'save-config'
             | 'get-file-list' 
             | 'delete-config' 
             | 'get-workspace-list'
-            | 'create-workspace';
+            | 'create-workspace'
+            | 'remote-import-get-list'
+            | 'remote-import-clone-package'
+            | 'local-import-workspace'
+            | 'update-workspace';
 
 export const channel: Channels = 'workspace';
 
