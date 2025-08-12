@@ -65,24 +65,6 @@ const config: ForgeConfig = {
 
       const buildPath = outputPaths[0];
       const copyRules = [path.join(__dirname, 'external-resources', '**')];
-      copyRules.push(
-        '!' +
-          path.join(
-            __dirname,
-            'external-resources',
-            'ai-assistant-backend',
-            'ai-voice.tar',
-          ),
-      );
-      copyRules.push(
-        '!' +
-          path.join(
-            __dirname,
-            'external-resources',
-            'ai-assistant-backend',
-            '*.tar.gz',
-          ),
-      );
       if (process.env.MAKE_MINI) {
         copyRules.push(
           '!' +
@@ -109,6 +91,15 @@ const config: ForgeConfig = {
               'external-resources',
               'ai-assistant-backend',
               '*.tar.zst',
+            ),
+        );
+        copyRules.push(
+          '!' +
+            path.join(
+              __dirname,
+              'external-resources',
+              'ai-assistant-backend',
+              '*.tar.gz',
             ),
         );
       }
