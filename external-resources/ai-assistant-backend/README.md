@@ -22,3 +22,12 @@ podman WSL虚拟机的Nvidia显卡工具，让容器内程序能调用Nvidia显�
 
 ## install_lm_studio.exe
 AI大模型的支撑程序，可以在LM Studio官网下载到，相对项目根目录的路径为 ```./ai-assistant-backend/install_lm_studio.exe```，但是为了避免git太大，不要把安装包上传到git
+
+## container-config.json
+存储各个服务的容器参数
+
+## index-tts
+TTS服务所需的音色配置文件，被挂载到容器内部
+
+## kokoro
+TTS服务所需的音色配置文件，被挂载到容器内部
