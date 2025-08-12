@@ -249,23 +249,22 @@ export default function AiService() {
                   shape="round"
                   size="small"
                   disabled={
-                    !isInstallWSL || checkingWsl || loading || cmdLoading || (item.serviceName === 'PDF' && item.state === '正在运行')
+                    !isInstallWSL ||
+                    checkingWsl ||
+                    loading ||
+                    cmdLoading ||
+                    (item.serviceName === 'PDF' && item.state === '正在运行')
                   }
                 >
                   设置
                 </Button>
               </NavLink>,
-              item.serviceName === 'PDF' && item.state === '正在运行'
-                ? (
-                  <Button
-                    shape="round"
-                    size="small"
-                    disabled={true}
-                  >
-                    更新
-                  </Button>
-                )
-                : (item.state !== '还未安装' && (
+              item.serviceName === 'PDF' && item.state === '正在运行' ? (
+                <Button shape="round" size="small" disabled={true}>
+                  更新
+                </Button>
+              ) : (
+                item.state !== '还未安装' && (
                   <Button
                     shape="round"
                     size="small"
@@ -279,14 +278,17 @@ export default function AiService() {
                   >
                     更新
                   </Button>
-                )),
+                )
+              ),
               item.serviceName === 'PDF' && item.state === '正在运行' && (
                 <NavLink key="convert" to="/pdf-convert">
                   <Button
                     shape="round"
                     size="small"
                     type="primary"
-                    disabled={!isInstallWSL || checkingWsl || loading || cmdLoading}
+                    disabled={
+                      !isInstallWSL || checkingWsl || loading || cmdLoading
+                    }
                   >
                     转换PDF
                   </Button>
@@ -370,12 +372,6 @@ export default function AiService() {
             {item.name}
           </List.Item>
         )}
-      />
-      <TerminalLogScreen
-        id="terminal-log"
-        cols={100}
-        rows={8}
-        style={{ width: 'calc(100% - 20px)' }}
       />
     </div>
   );
