@@ -166,11 +166,11 @@ export default function AiService() {
             </Link>
             <div>
               <Popconfirm
-                title="搬迁安装位置"
+                title="修改安装位置"
                 description={
                   <div>
                     <div>
-                      搬迁安装位置时，会自动停止WSL，搬迁完成后请手动启动服务。
+                      修改安装位可能需要5分钟时间，实际用时和你的磁盘读写速度有关。
                     </div>
                     <div style={{ color: 'red' }}>
                       提示Docker用户：如果您的电脑上还有Docker软件，请您先手动关闭Docker软件前台和后台程序以避免Docker文件被损坏。搬迁完成后如果出现无法正常运行Docker的情况，请您重启电脑后再打开Docker。
@@ -178,21 +178,19 @@ export default function AiService() {
                   </div>
                 }
                 onConfirm={() => clickCmd('move', 'podman')}
-                okText="确认搬迁"
-                cancelText="不搬迁"
+                okText="修改"
+                cancelText="不修改"
               >
                 <Button
                   disabled={!isInstallWSL || cmdLoading || loading}
-                  type="primary"
                   shape="round"
-                  danger
                   loading={
                     cmdLoading &&
                     cmdOperating.serviceName === 'podman' &&
                     cmdOperating.actionName === 'move'
                   }
                 >
-                  搬迁安装位置
+                  修改安装位置
                 </Button>
               </Popconfirm>
               <div style={{ width: '20px', display: 'inline-block' }}></div>

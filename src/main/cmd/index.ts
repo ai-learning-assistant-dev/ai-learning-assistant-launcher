@@ -2,13 +2,22 @@ import { dialog, IpcMain } from 'electron';
 import { ActionName, channel, ServiceName } from './type-info';
 import { appPath, Exec } from '../exec';
 import { isMac, isWindows } from '../exec/util';
-import { getObsidianConfig, setVaultDefaultOpen, getObsidianVaultConfig } from '../configs';
+import {
+  getObsidianConfig,
+  setVaultDefaultOpen,
+  getObsidianVaultConfig,
+} from '../configs';
 import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 import path from 'node:path';
 import { statSync } from 'node:fs';
-import { getPodmanCli, resetPodman } from '../podman-desktop/ensure-podman-works';
+import {
+  ensurePodmanWorks,
+  getPodmanCli,
+  resetPodman,
+} from '../podman-desktop/ensure-podman-works';
 import { RunResult } from '@podman-desktop/api';
 import { podMachineName } from '../podman-desktop/type-info';
+import { isWSLInstall } from './is-wsl-install';
 
 const commandLine = new Exec();
 
@@ -33,8 +42,7 @@ export default async function init(ipcMain: IpcMain) {
               setVaultDefaultOpen(vaultId);
             }
             let obsidianPath = getObsidianConfig().obsidianApp.bin;
-            let vaultName  = null;
-    
+            let vaultName = null;
             // 获取仓库路径
             if (vaultId) {
               const vaults = getObsidianVaultConfig();
@@ -162,14 +170,24 @@ export default async function init(ipcMain: IpcMain) {
             event.reply(channel, MESSAGE_TYPE.INFO, '成功查询');
           }
         } else if (action === 'move') {
-          const result = await movePodman();
+          const dialogResult = await dialog.showOpenDialog({
+            title: '请选择服务的安装位置',
+            properties: ['openDirectory', 'showHiddenFiles'],
+          });
+          const path = dialogResult.filePaths[0];
+          if (!path || path === '') {
+            event.reply(channel, MESSAGE_TYPE.ERROR, '未选择正确的安装位置');
+            return;
+          }
+          await ensurePodmanWorks(event, channel);
+          const result = await movePodman(path);
           if (result.success) {
             event.reply(
               channel,
               MESSAGE_TYPE.DATA,
               new MessageData(action, serviceName, true),
             );
-            event.reply(channel, MESSAGE_TYPE.INFO, '成功迁移');
+            event.reply(channel, MESSAGE_TYPE.INFO, '成功修改安装位置');
           } else {
             event.reply(channel, MESSAGE_TYPE.ERROR, result.errorMessage);
           }
@@ -316,30 +334,6 @@ export async function installWSL() {
   return success1 && success2;
 }
 
-export async function isWSLInstall() {
-  let wslWork = false;
-  try {
-    const output = await commandLine.exec('wsl.exe', ['--status'], {
-      encoding: 'utf16le',
-      shell: true,
-    });
-    console.debug('isWSLInstall', output);
-    if (
-      output.stdout.indexOf('Wsl/WSL_E_WSL_OPTIONAL_COMPONENT_REQUIRED') >= 0 ||
-      output.stdout.indexOf('wsl.exe --install') >= 0
-    ) {
-      wslWork = false;
-    } else {
-      wslWork = true;
-    }
-  } catch (e) {
-    console.warn('isWSLInstall', e);
-    wslWork = false;
-  }
-
-  return wslWork;
-}
-
 async function checkWSLComponent() {
   let virtualMachinePlatformInstalled = true;
   try {
@@ -418,7 +412,7 @@ export async function isObsidianInstall() {
       '%localappdata%',
       process.env.LOCALAPPDATA,
     );
-    console.debug('getObsidianConfig' ,obsidianPath)
+    console.debug('getObsidianConfig', obsidianPath);
     const stat = statSync(obsidianPath);
     if (stat.isFile()) {
       return true;
@@ -462,14 +456,9 @@ export async function isLMStudioInstall() {
   }
 }
 
-export async function movePodman() {
+export async function movePodman(path: string) {
   let success = false;
   let errorMessage = '迁移失败';
-  const dialogResult = await dialog.showOpenDialog({
-    title: '请选择服务的安装位置',
-    properties: ['openDirectory', 'showHiddenFiles'],
-  });
-  const path = dialogResult.filePaths[0];
   if (!path || path === '') {
     errorMessage = '未选择正确的安装位置';
     return { success: false, errorMessage };

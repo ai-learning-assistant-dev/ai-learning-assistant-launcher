@@ -4,7 +4,7 @@ import { appPath, Exec } from '../exec';
 import { isWindows } from '../exec/util';
 import { imageNameDict, imagePathDict, ServiceName } from './type-info';
 import { Channels, MESSAGE_TYPE } from '../ipc-data-type';
-import { isWSLInstall } from '../cmd';
+import { isWSLInstall } from '../cmd/is-wsl-install';
 import { wait } from '../util';
 
 const commandLine = new Exec();
