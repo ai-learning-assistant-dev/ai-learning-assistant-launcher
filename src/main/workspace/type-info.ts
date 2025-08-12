@@ -19,6 +19,7 @@ export interface WorkspaceConfig {
   version: string;
   personas?: Persona[];
   excludedPaths?: string[];
+  description?: string; // 添加 description 字段
 }
 
 export interface Persona {

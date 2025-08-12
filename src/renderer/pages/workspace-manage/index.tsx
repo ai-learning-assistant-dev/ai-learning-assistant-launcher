@@ -35,7 +35,8 @@ const DEFAULT_WORKSPACE_CONFIG: WorkspaceConfig = {
     name: '默认人设',
     prompt: '这是一个示例人设'
   }],
-  excludedPaths: []
+  excludedPaths: [],
+  description: ''
 };
 
 interface WorkspaceItem {
@@ -484,6 +485,13 @@ export default function WorkspaceManage() {
                     <Form form={form} layout="vertical">
                     <Form.Item label="版本号" name="version" style={{ marginBottom: 16 }}>
                         <Input placeholder="例如: 1.0.0" />
+                    </Form.Item>
+
+                    <Form.Item label="工作区描述" name="description" style={{ marginBottom: 16 }}>
+                      <Input.TextArea 
+                        placeholder="请输入工作区的描述信息" 
+                        autoSize={{ minRows: 2, maxRows: 6 }}
+                      />
                     </Form.Item>
 
                     <div className="section-title">人设管理</div>

@@ -310,7 +310,8 @@ export default async function init(ipcMain: IpcMain) {
                 name: '默认人设',
                 prompt: '这是一个示例人设'
               }],
-              excludedPaths: []
+              excludedPaths: [],
+              description: ''
             };
             
             writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2));
