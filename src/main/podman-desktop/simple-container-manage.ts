@@ -397,24 +397,22 @@ export async function removeContainer(serviceName: ServiceName) {
 }
 
 export async function selectImageFile(serviceName: ServiceName) {
-  if (serviceName === 'TTS' || serviceName === 'ASR') {
-    const result = await dialog.showOpenDialog({
-      title: `请选择${serviceName}服务的镜像文件`,
-      properties: ['openFile', 'showHiddenFiles'],
-      filters: [{ name: `服务镜像`, extensions: ['tar', 'tar.gz'] }],
-    });
-    const path = result.filePaths[0];
-    if (path && path.length > 0) {
-      try {
-        return path;
-      } catch (e) {
-        console.error(e);
-        return false;
-      }
-    } else {
-      console.warn('没有选择正确的镜像');
+  const result = await dialog.showOpenDialog({
+    title: `请选择${serviceName}服务的镜像文件`,
+    properties: ['openFile', 'showHiddenFiles'],
+    filters: [{ name: `服务镜像`, extensions: ['tar', 'tar.gz'] }],
+  });
+  const path = result.filePaths[0];
+  if (path && path.length > 0) {
+    try {
+      return path;
+    } catch (e) {
+      console.error(e);
       return false;
     }
+  } else {
+    console.warn('没有选择正确的镜像');
+    return false;
   }
   return false;
 }
