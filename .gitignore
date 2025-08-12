@@ -101,3 +101,5 @@ external-resources/ai-assistant-backend/
 
 # 忽略Obsidian配置文件
 external-resources/config/obsidian-config.json
+# 忽略存储区配置文件
+external-resources/user-workspace/git-storage.json
