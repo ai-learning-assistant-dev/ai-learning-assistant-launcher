@@ -45,11 +45,13 @@ export default function ContainerLogs(props: { serviceName: ServiceName }) {
             .split('\n')
             .filter((log) => log != '')
             .map<LogEntry>((log, index) => {
+              const time = new Date(log.split(' ')[0]).toLocaleString();
+              const content = log.split(' ').slice(1).join(' ');
               return {
                 id: index.toString(),
-                timestamp: new Date(log.substring(0, 25)).toLocaleString(),
+                timestamp: time,
                 level: 'info',
-                message: log.substring(25),
+                message: time === 'Invalid Date' ? log : content,
               };
             });
           setLogs(newLogs);
