@@ -28,6 +28,8 @@ if (require('electron-squirrel-startup')) {
 }
 
 async function firstLog() {
+  console.log('源码版本', __COMMIT_HASH__);
+  console.log('版本号', __NPM_PACKAGE_VERSION__);
   await autoAdaptEncodingForWindows();
   await logDeviceInfo();
 }
