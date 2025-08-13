@@ -11,7 +11,6 @@ import git from 'isomorphic-git';
 import fs from 'fs';
 import http from 'isomorphic-git/http/node';
 import { appPath ,Exec} from '../exec';
-import { sourceMapsEnabled } from 'node:process';
 const commandLine = new Exec();
 
 // 定义需要排除的目录名列表
