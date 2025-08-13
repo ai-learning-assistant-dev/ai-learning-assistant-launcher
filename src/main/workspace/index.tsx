@@ -7,11 +7,12 @@ import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 import { getObsidianVaultConfig } from '../configs';
 import { gitClone } from '../git'; // 引入gitClone
 import { copySync } from 'fs-extra'; // 使用fs-extra来简化目录复制
-import { execSync } from 'node:child_process';
 import git from 'isomorphic-git';
 import fs from 'fs';
 import http from 'isomorphic-git/http/node';
-import { appPath } from '../exec';
+import { appPath ,Exec} from '../exec';
+import { sourceMapsEnabled } from 'node:process';
+const commandLine = new Exec();
 
 // 定义需要排除的目录名列表
 const EXCLUDED_DIRS = new Set([
@@ -49,93 +50,35 @@ function copyDirectory(src: string, dest: string) {
 function getGitStoragePath(): string {
   // Define the path for the configuration file.
 
-  const configDir = path.join(appPath, 'external-resources', 'user-workspace');
-  const configFilePath = path.join(configDir, 'git-storage.json');
-  const storageDirName = '.git-storage';
+  // const configDir = path.join(appPath, 'external-resources', 'user-workspace');
+  // const configFilePath = path.join(configDir, 'git-storage.json');
+  // const storageDirName = '.git-storage';
 
-  // 1. Try to read the path from the cached config file first.
-  if (existsSync(configFilePath)) {
-    try {
-      const config = JSON.parse(readFileSync(configFilePath, 'utf8'));
-      // Verify that the cached path actually exists on the filesystem.
-      if (config.storagePath && existsSync(config.storagePath)) {
-        console.log(`Using cached storage path: ${config.storagePath}`);
-        return config.storagePath;
-      } else {
-        console.warn('Configured storage path not found or invalid. Recalculating...');
-      }
-    } catch (error) {
-      console.error('Error reading git-storage.json. Recalculating...', error);
-      // Proceed to recalculate if the file is corrupt.
-    }
-  }
+  // // 1. Try to read the path from the cached config file first.
+  // if (existsSync(configFilePath)) {
+  //   try {
+  //     const config = JSON.parse(readFileSync(configFilePath, 'utf8'));
+  //     // Verify that the cached path actually exists on the filesystem.
+  //     if (config.storagePath && existsSync(config.storagePath)) {
+  //       console.log(`Using cached storage path: ${config.storagePath}`);
+  //       return config.storagePath;
+  //     } else {
+  //       console.warn('Configured storage path not found or invalid. Recalculating...');
+  //     }
+  //   } catch (error) {
+  //     console.error('Error reading git-storage.json. Recalculating...', error);
+  //     // Proceed to recalculate if the file is corrupt.
+  //   }
+  // }
 
-  // 2. If cache doesn't exist or is invalid, calculate the best path.
-  console.log('No valid cached path found. Determining best drive for storage...');
-  let bestDrive = '';
-  let maxFreeSpace = -1;
-
-  try {
-    const platform = os.platform();
-    if (platform === 'win32') {
-      const stdout = execSync('wmic logicaldisk get caption,freespace /format:csv').toString();
-      const lines = stdout.trim().split('\n').slice(1); // Skip header
-      for (const line of lines) {
-        const parts = line.split(',');
-        if (parts.length >= 3) {
-          const caption = parts[1].trim();
-          const freeSpace = parseInt(parts[2].trim(), 10);
-          if (caption && !isNaN(freeSpace) && freeSpace > maxFreeSpace) {
-            maxFreeSpace = freeSpace;
-            bestDrive = caption;
-          }
-        }
-      }
-    } else { // macOS and Linux
-      const stdout = execSync('df -kP').toString();
-      const lines = stdout.trim().split('\n').slice(1);
-      for (const line of lines) {
-        const parts = line.split(/\s+/);
-        const freeSpace = parseInt(parts[3], 10) * 1024; // Convert KB to Bytes
-        const mountPoint = parts[5];
-        if (mountPoint === '/' && freeSpace > maxFreeSpace) {
-          maxFreeSpace = freeSpace;
-          bestDrive = mountPoint;
-        }
-      }
-      // For Linux/macOS, we'll place it in the user's home directory if root isn't ideal
-      bestDrive = os.homedir();
-    }
-  } catch (error) {
-    console.warn('Could not determine best drive for storage, defaulting to home directory.', error);
-    bestDrive = os.homedir();
-  }
-
-  // On Windows, bestDrive might be 'C:'. We need to add a trailing slash for path.join to work correctly.
-  if (os.platform() === 'win32' && bestDrive.endsWith(':')) {
-      bestDrive += '\\';
-  }
-  
-  const storagePath = path.join(bestDrive, storageDirName);
-  
-  // 3. Create the actual storage directory.
-  if (!existsSync(storagePath)) {
-    mkdirSync(storagePath, { recursive: true });
-  }
-
-  // 4. Save the newly calculated path to the config file for future use.
-  try {
-    // Ensure the directory for the config file itself exists.
-    if (!existsSync(configDir)) {
-      mkdirSync(configDir, { recursive: true });
-    }
-    const configData = { storagePath: storagePath };
-    writeFileSync(configFilePath, JSON.stringify(configData, null, 2), 'utf8');
-    console.log(`Saved new storage path to ${configFilePath}`);
-  } catch (error) {
-    console.error(`Failed to save storage path to config file:`, error);
-    // The function can still succeed by returning the path, but it won't be cached.
-  }
+  // // 2. If cache doesn't exist or is invalid, calculate the best path.
+  // console.log('No valid cached path found. Determining best drive for storage...');
+  const storagePath = path.join(
+    appPath,
+    'external-resources',
+    'obsidian-plugins-template',
+    '.git-storage'
+  );
 
   return storagePath;
 }
@@ -560,14 +503,22 @@ export default async function init(ipcMain: IpcMain) {
                       const releaseBranch = `release/${pkgName}`;
                       const userBranch = `user/${pkgName}`;
                       const remoteReleaseBranch = `origin/${releaseBranch}`;
-          
+                      let isWorkSpace: boolean = false
+                      
+                      // 区分是资料还是工作区，否则行为会不同，工作区要考虑data.md的影响
+                      const filelistPath = path.join(repoStoragePath, "filelist.json");
+                      const filesToCheck: string[] = JSON.parse(readFileSync(filelistPath, 'utf8'));
+                      if (filesToCheck.includes('data.md')){
+                        isWorkSpace = true
+                      }
+
                       try {
                         // a. 定位仓库并获取最新信息
-                        execSync('git fetch origin', { cwd: repoStoragePath, stdio: 'pipe' });
+                        await commandLine.exec('git', ['fetch', 'origin'], { cwd: repoStoragePath});
           
                         // 检查远端分支是否存在，不存在则跳过
                         try {
-                          execSync(`git show-ref --verify --quiet refs/remotes/${remoteReleaseBranch}`, { cwd: repoStoragePath, stdio: 'pipe' });
+                          commandLine.exec('git', ['show-ref', '--verify', '--quiet', `refs/remotes/${remoteReleaseBranch}`], { cwd: repoStoragePath});
                         } catch (e) {
                           updateResults.push({ pkgName, message: `远端仓库缺少 ${releaseBranch} 分支，已跳过。`, conflict: false });
                           continue;
@@ -576,9 +527,9 @@ export default async function init(ipcMain: IpcMain) {
                         // 如果是强制更新，则走“放弃修改，强制更新”逻辑
                         if (forceUpdate) {
                           // 确保 user/xxx 分支存在并检出
-                          execSync(`git checkout -B ${userBranch} ${releaseBranch}`, { cwd: repoStoragePath, stdio: 'pipe' });
+                          await commandLine.exec('git', ['checkout', '-B', userBranch, releaseBranch], { cwd: repoStoragePath });
                           // 强制重置为远端最新版
-                          execSync(`git reset --hard ${remoteReleaseBranch}`, { cwd: repoStoragePath, stdio: 'pipe' });
+                          await commandLine.exec('git', ['reset', '--hard', remoteReleaseBranch], { cwd: repoStoragePath});
                           
                           // 清空工作区并从存储区复制回最新内容
                           clearWorkingDirectoryExceptGit(currentPackageWorkspacePath);
@@ -591,39 +542,53 @@ export default async function init(ipcMain: IpcMain) {
                       // b. 准备 user 分支
                       let userBranchExists = false;
                       try {
-                        execSync(`git show-ref --verify --quiet refs/heads/${userBranch}`, { cwd: repoStoragePath, stdio: 'pipe' });
+                        await commandLine.exec('git', ['show-ref', '--verify', '--quiet', `refs/heads/${userBranch}`], { cwd: repoStoragePath });
                         userBranchExists = true;
                       } catch (e) { /* Branch does not exist */ }
 
                       if (userBranchExists) {
-                        execSync(`git checkout ${userBranch}`, { cwd: repoStoragePath, stdio: 'pipe' });
+                        await commandLine.exec('git', ['checkout', userBranch], { cwd: repoStoragePath });
                       } else {
-                        execSync(`git checkout -B ${userBranch} ${releaseBranch}`, { cwd: repoStoragePath, stdio: 'pipe' });
+                        await commandLine.exec('git', ['checkout', '-B', userBranch, releaseBranch], { cwd: repoStoragePath });
                       }
 
                       // c. 【核心修改】同步用户工作区的修改
                       // 我们将工作区内容“叠加”到存储库工作目录，而不是先清空。
                       // 这可以保留存储库中的 filelist.json 等文件，避免 "modify/delete" 冲突。
+                      
                       copySync(currentPackageWorkspacePath, repoStoragePath, {
                         overwrite: true,
                         filter: (src) => !src.includes('.git') // 确保不触碰.git目录
                       });
+                      if (isWorkSpace){
+                        //追加data.md
+                        const sourceDataMdPath = path.join(targetWorkspacePath,"data.md")
+                        const destDataMdPath = path.join(repoStoragePath,"data.md")
+                        copySync(sourceDataMdPath,destDataMdPath)
+                      }
                       
-                      execSync('git add .', { cwd: repoStoragePath, stdio: 'pipe' });
+                      await commandLine.exec('git', ['add', '.'], { cwd: repoStoragePath });
                       try {
-                        execSync('git commit -m "Sync user workspace changes before update"', { cwd: repoStoragePath, stdio: 'pipe' });
+                        await commandLine.exec('git', ['commit', '-m', 'Sync user workspace changes before update'], { cwd: repoStoragePath });
                       } catch (commitError) {
                         if (!commitError.stdout?.toString().includes('nothing to commit')) {
                           throw commitError;
                         }
-                        // 如果没有变化，直接检查远端是否有更新
-                        const localSha = execSync(`git rev-parse HEAD`, { cwd: repoStoragePath }).toString().trim();
-                        const remoteSha = execSync(`git rev-parse ${remoteReleaseBranch}`, { cwd: repoStoragePath }).toString().trim();
-                        const mergeBase = execSync(`git merge-base HEAD ${remoteReleaseBranch}`, { cwd: repoStoragePath }).toString().trim();
+                        console.log(commitError)
                         
-                        // 如果本地已经是远端的后代或相同，则无需更新
-                        // if (localSha === remoteSha || localSha === mergeBase) {
-                          if (localSha === remoteSha ) {
+
+                      }finally{
+                        // 如果没有变化，直接检查远端是否有更新
+                        const { stdout: localSha } = await commandLine.exec('git', ['rev-parse', 'HEAD'], { cwd: repoStoragePath });
+                        const { stdout: remoteSha } = await commandLine.exec('git', ['rev-parse', remoteReleaseBranch], { cwd: repoStoragePath });
+                        const { stdout: mergeBase } = await commandLine.exec('git', ['merge-base', 'HEAD', remoteReleaseBranch], { cwd: repoStoragePath });
+
+                        console.log("localSha: ",localSha.trim());
+                        console.log("remoteSha: ",remoteSha.trim());
+                        console.log("mergeBase: ",mergeBase.trim());
+
+                        // 如果本地已经是远端或者远程落后于本地，则无需更新
+                          if (localSha.trim() === remoteSha.trim() || mergeBase.trim() === remoteSha.trim()) {
                             updateResults.push({ pkgName, message: '已是最新版本。', conflict: false });
                             //event.reply(channel, MESSAGE_TYPE.INFO, `${pkgName}已是最新版本。`);
                             continue; // 跳到下一个包
@@ -634,7 +599,7 @@ export default async function init(ipcMain: IpcMain) {
                         // d. 执行三路合并
                         try {
                           // 在 user/xxx 分支上，尝试合并远程最新的 release/xxx 分支
-                          execSync(`git merge ${remoteReleaseBranch} -m "Merge remote-tracking branch '${remoteReleaseBranch}'"`, { cwd: repoStoragePath, stdio: 'pipe' });
+                          await commandLine.exec('git', ['merge', remoteReleaseBranch, '-m', `Merge remote-tracking branch '${remoteReleaseBranch}'`], { cwd: repoStoragePath });
                           
                           console.log(`远程与本地合并成功`);
                           // 如果可以成功合并 (无冲突)
@@ -645,7 +610,7 @@ export default async function init(ipcMain: IpcMain) {
                           }
 
                           const filesToSync: string[] = JSON.parse(readFileSync(filelistPath, 'utf8'));
-
+                          
                           for (const fileRelativePath of filesToSync) {
                             const sourceFile = path.join(repoStoragePath, fileRelativePath);
                             const destFile = path.join(currentPackageWorkspacePath, fileRelativePath);
@@ -653,6 +618,13 @@ export default async function init(ipcMain: IpcMain) {
                             if (existsSync(sourceFile)) {
                                 // 确保目标文件的父目录存在
                                 mkdirSync(path.dirname(destFile), { recursive: true });
+                                // 特殊处理data.md
+                                if ( fileRelativePath === "data.md" ){
+                                  const destDataMdPath = path.join(targetWorkspacePath, 'data.md');
+                                  copySync(sourceFile, destDataMdPath, { overwrite: true });
+                                  console.log("data.md已被正确的复制到：",destDataMdPath)
+                                  continue
+                                }
                                 copySync(sourceFile, destFile, { overwrite: true });
                             } else {
                                 // 这种情况理论上不应发生，但作为警告是好的
@@ -664,7 +636,7 @@ export default async function init(ipcMain: IpcMain) {
                         } catch (mergeError) {
                           // 如果不能合并 (发生冲突)
                           // 必须立即中止合并
-                          execSync('git merge --abort', { cwd: repoStoragePath, stdio: 'pipe' });
+                          await commandLine.exec('git', ['merge', '--abort'], { cwd: repoStoragePath });
 
                           const stderr = mergeError.stderr?.toString() || 'No stderr output';
                           const stdout = mergeError.stdout?.toString() || 'No stdout output';
@@ -682,7 +654,7 @@ export default async function init(ipcMain: IpcMain) {
                         // e. 收尾：将存储区仓库的活动分支切回 release/xxx
                         try {
                           if (existsSync(repoStoragePath)) {
-                            execSync(`git checkout ${releaseBranch}`, { cwd: repoStoragePath, stdio: 'pipe' });
+                            await commandLine.exec('git', ['checkout', releaseBranch], { cwd: repoStoragePath });
                           }
                         } catch (e) {
                           console.error(`[${pkgName}]: 收尾操作失败，无法切回 ${releaseBranch} 分支。`);
