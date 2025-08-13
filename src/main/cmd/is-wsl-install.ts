@@ -24,3 +24,17 @@ export async function isWSLInstall() {
 
   return wslWork;
 }
+
+export async function wslVersion() {
+  try {
+    const output = await commandLine.exec('wsl.exe', ['--version'], {
+      encoding: 'utf16le',
+      shell: true,
+    });
+    console.debug('wslVersion', output);
+    return output.stdout;
+  } catch (e) {
+    console.warn(e);
+  }
+  return '';
+}

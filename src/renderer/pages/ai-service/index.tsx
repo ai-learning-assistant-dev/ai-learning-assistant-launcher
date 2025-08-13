@@ -46,6 +46,7 @@ export default function AiService() {
   const { containers, action, loading, initing } = useDocker();
   const {
     isInstallWSL,
+    wslVersion,
     checkingWsl,
     action: cmdAction,
     loading: cmdLoading,
@@ -166,6 +167,32 @@ export default function AiService() {
               <Button disabled={loading || cmdLoading}>返回</Button>
             </Link>
             <div>
+              <Popconfirm
+                title="升级WSL"
+                description={
+                  <div>
+                    <div>您当前的WSL版本是</div>
+                    <div>{wslVersion}</div>
+                    <div>确认升级WSL吗？</div>
+                  </div>
+                }
+                onConfirm={() => clickCmd('update', 'WSL')}
+                okText="升级"
+                cancelText="不升级"
+              >
+                <Button
+                  disabled={!isInstallWSL || cmdLoading || loading}
+                  shape="round"
+                  loading={
+                    cmdLoading &&
+                    cmdOperating.serviceName === 'WSL' &&
+                    cmdOperating.actionName === 'update'
+                  }
+                >
+                  升级WSL
+                </Button>
+              </Popconfirm>
+              <div style={{ width: '20px', display: 'inline-block' }}></div>
               <Popconfirm
                 title="修改安装位置"
                 description={

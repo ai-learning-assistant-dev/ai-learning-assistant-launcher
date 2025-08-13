@@ -17,7 +17,7 @@ import {
 } from '../podman-desktop/ensure-podman-works';
 import { RunResult } from '@podman-desktop/api';
 import { podMachineName } from '../podman-desktop/type-info';
-import { isWSLInstall } from './is-wsl-install';
+import { isWSLInstall, wslVersion } from './is-wsl-install';
 import { loggerFactory } from '../terminal-log';
 
 const commandLine = new Exec();
@@ -108,10 +108,14 @@ export default async function init(ipcMain: IpcMain) {
               '预计需要10分钟，请耐心等待',
             );
             const result = await installWSL();
+            const version = await wslVersion();
             event.reply(
               channel,
               MESSAGE_TYPE.DATA,
-              new MessageData(action, serviceName, result),
+              new MessageData(action, serviceName, {
+                version,
+                installed: result,
+              }),
             );
           } else if (serviceName === 'obsidianApp') {
             try {
@@ -149,10 +153,14 @@ export default async function init(ipcMain: IpcMain) {
           }
         } else if (action === 'query') {
           if (serviceName === 'WSL') {
+            const version = await wslVersion();
             event.reply(
               channel,
               MESSAGE_TYPE.DATA,
-              new MessageData(action, serviceName, await isWSLInstall()),
+              new MessageData(action, serviceName, {
+                version,
+                installed: await isWSLInstall(),
+              }),
             );
           } else if (serviceName === 'obsidianApp') {
             event.reply(
@@ -193,8 +201,26 @@ export default async function init(ipcMain: IpcMain) {
             event.reply(channel, MESSAGE_TYPE.ERROR, result.errorMessage);
           }
         } else if (action === 'update') {
-          const result = await commandLine.exec('echo %cd%');
-          event.reply(channel, MESSAGE_TYPE.INFO, '成功更新');
+          if (serviceName === 'WSL') {
+            event.reply(
+              channel,
+              MESSAGE_TYPE.PROGRESS,
+              '预计需要10分钟，请耐心等待',
+            );
+            const result = await installWSL();
+            const version = await wslVersion();
+            event.reply(
+              channel,
+              MESSAGE_TYPE.DATA,
+              new MessageData(action, serviceName, {
+                version,
+                installed: result,
+              }),
+            );
+          } else {
+            const result = await commandLine.exec('echo %cd%');
+            event.reply(channel, MESSAGE_TYPE.INFO, '成功更新');
+          }
         } else {
           event.reply(channel, MESSAGE_TYPE.ERROR, '现在还没有这个功能');
         }
@@ -459,7 +485,7 @@ export async function isLMStudioInstall() {
 
 export async function movePodman(path: string) {
   let success = false;
-  let errorMessage = '迁移失败';
+  let errorMessage = '修改失败';
   if (!path || path === '') {
     errorMessage = '未选择正确的安装位置';
     return { success: false, errorMessage };
@@ -501,6 +527,8 @@ export async function movePodman(path: string) {
       e.stdout.indexOf('Wsl/Service/MoveDistro/0' + 'x80070070') >= 0
     ) {
       errorMessage = '磁盘空间不足';
+    } else if (e && e.message.indexOf('exitCode: 4294967295') >= 0) {
+      errorMessage = '修改失败，可能是WSL版本太低，请尝试升级WSL';
     }
     success = false;
   }

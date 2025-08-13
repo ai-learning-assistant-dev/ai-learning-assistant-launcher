@@ -5,6 +5,7 @@ import { MESSAGE_TYPE, MessageData } from '../../../main/ipc-data-type';
 
 export default function useCmd() {
   const [isInstallWSL, setIsInstallWSL] = useState<boolean>(true);
+  const [wslVersion, setWSLVersion] = useState<boolean>(true);
   const [checkingWsl, setCheckingWsl] = useState<boolean>(true);
   const [isInstallObsidian, setIsInstallObsidian] = useState<boolean>(true);
   const [isInstallLMStudio, setIsInstallLMStudio] = useState<boolean>(true);
@@ -55,7 +56,8 @@ export default function useCmd() {
           } = data as MessageData;
           if (actionName === 'query') {
             if (service === 'WSL') {
-              setIsInstallWSL(payload);
+              setIsInstallWSL(payload.installed);
+              setWSLVersion(payload.version);
               setCheckingWsl(false);
             } else if (service === 'obsidianApp') {
               setIsInstallObsidian(payload);
@@ -64,13 +66,20 @@ export default function useCmd() {
             }
           } else if (actionName === 'install') {
             if (service === 'WSL') {
-              setIsInstallWSL(payload);
+              setIsInstallWSL(payload.installed);
+              setWSLVersion(payload.version);
               setLoading(false);
             } else if (service === 'obsidianApp') {
               setIsInstallObsidian(payload);
               setLoading(false);
             } else if (service === 'lm-studio') {
               setIsInstallLMStudio(payload);
+              setLoading(false);
+            }
+          } else if (actionName === 'update') {
+            if (service === 'WSL') {
+              setIsInstallWSL(payload.installed);
+              setWSLVersion(payload.version);
               setLoading(false);
             }
           }
@@ -103,7 +112,7 @@ export default function useCmd() {
     return () => {
       cancel();
     };
-  }, [setIsInstallWSL, setIsInstallObsidian, setCheckingWsl]);
+  }, [setIsInstallWSL, setIsInstallObsidian, setCheckingWsl, setWSLVersion]);
 
   useEffect(() => {
     query();
@@ -116,5 +125,6 @@ export default function useCmd() {
     checkingWsl,
     action,
     loading,
+    wslVersion,
   };
 }
