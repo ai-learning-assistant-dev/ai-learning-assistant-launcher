@@ -11,8 +11,35 @@ import {
 import { Exec } from '../exec';
 import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 import { RunResult } from '@podman-desktop/api';
-import { loggerFactory } from '../terminal-log';
+import { loggerFactory, write } from '../terminal-log';
 const commandLine = new Exec();
+
+// 添加一个存储正在运行任务的 Map
+const runningTasks = new Map<string, SimpleCancellationToken>();
+
+// 创建一个简单的取消令牌实现
+class SimpleCancellationToken {
+  private _isCancelled = false;
+  private _callbacks: (() => void)[] = [];
+
+  public get isCancelled() {
+    return this._isCancelled;
+  }
+
+  public onCancellationRequested(callback: () => void) {
+    if (this._isCancelled) {
+      callback();
+    } else {
+      this._callbacks.push(callback);
+    }
+  }
+
+  public cancel() {
+    this._isCancelled = true;
+    this._callbacks.forEach(callback => callback());
+    this._callbacks = [];
+  }
+}
 
 export default async function init(ipcMain: IpcMain) {
   ipcMain.on(
@@ -45,18 +72,93 @@ export default async function init(ipcMain: IpcMain) {
             }
           }
         } else {
+          // 添加对取消动作的处理
+          if (action === 'cancel') {
+            const taskId = `install-${serviceName}`;
+            console.log(`收到取消请求: ${taskId}`);
+            const cancelToken = runningTasks.get(taskId);
+            if (cancelToken) {
+              console.log(`找到任务并执行取消: ${taskId}`);
+              cancelToken.cancel();
+              runningTasks.delete(taskId);
+              // 发送日志消息指示下载已被取消
+              write(serviceName, '\n--- 下载已取消 ---\n');
+              // event.reply(
+              //   channel,
+              //   MESSAGE_TYPE.WARNING,
+              //   `正在取消下载模型${serviceName}...`,
+              // );
+              return; // 处理完取消请求后直接返回
+            } else {
+              console.log(`未找到任务: ${taskId}`);
+              event.reply(
+                channel,
+                MESSAGE_TYPE.WARNING,
+                `没有找到正在下载的模型${serviceName}任务`,
+              );
+              return;
+            }
+          }
+
+          // 在安装操作中添加任务管理
           if (action === 'install') {
+            const taskId = `install-${serviceName}`;
+            console.log(`开始安装任务: ${taskId}`);
+            // 检查是否已经有相同的任务在运行
+            if (runningTasks.has(taskId)) {
+              console.log(`任务已在运行: ${taskId}`);
+              event.reply(
+                channel,
+                MESSAGE_TYPE.WARNING,
+                `模型${serviceName}已在下载中，请勿重复操作`,
+              );
+              return;
+            }
+
+            // 创建新的取消令牌并存储
+            const cancelToken = new SimpleCancellationToken();
+            runningTasks.set(taskId, cancelToken);
+            console.log(`任务已创建并存储: ${taskId}`);
+
             event.reply(
               channel,
               MESSAGE_TYPE.PROGRESS,
               `开始下载模型${serviceName}，下方日志区可查看下载进度。`,
             );
-            const result = await installModel(serviceName);
-            event.reply(
-              channel,
-              MESSAGE_TYPE.INFO,
-              `下载模型${serviceName}成功`,
-            );
+
+            try {
+              const result = await installModel(serviceName, cancelToken);
+              // 任务完成后从Map中移除
+              runningTasks.delete(taskId);
+              console.log(`任务成功完成并移除: ${taskId}`);
+              event.reply(
+                channel,
+                MESSAGE_TYPE.INFO,
+                `下载模型${serviceName}成功`,
+              );
+            } catch (e) {
+              // 任务完成后从Map中移除
+              runningTasks.delete(taskId);
+              console.log(`任务失败并移除: ${taskId}`);
+              // 检查是否是取消操作导致的异常
+              if (cancelToken.isCancelled) {
+                console.log(`任务被取消: ${taskId}`);
+                event.reply(
+                  channel,
+                  MESSAGE_TYPE.WARNING,
+                  `下载模型${serviceName}已取消`,
+                );
+              } else {
+                event.reply(
+                  channel,
+                  MESSAGE_TYPE.ERROR,
+                  `下载模型${serviceName}失败`,
+                );
+                // 记录错误日志而不是重新抛出异常
+                console.error(`下载模型${serviceName}失败:`, e);
+              }
+            }
+            return; // 处理完安装请求后直接返回
           } else if (action === 'start') {
             event.reply(
               channel,
@@ -84,7 +186,8 @@ export default async function init(ipcMain: IpcMain) {
                   MESSAGE_TYPE.ERROR,
                   `模型${serviceName}加载错误`,
                 );
-                throw e;
+                // 记录错误日志而不是重新抛出异常
+                console.error(`加载模型${serviceName}失败:`, e);
               }
             }
           } else if (action === 'stop') {
@@ -114,7 +217,8 @@ export default async function init(ipcMain: IpcMain) {
                   MESSAGE_TYPE.ERROR,
                   `模型${serviceName}卸载错误`,
                 );
-                throw e;
+                // 记录错误日志而不是重新抛出异常
+                console.error(`卸载模型${serviceName}失败:`, e);
               }
             }
           }
@@ -171,16 +275,23 @@ async function queryModelStatus() {
   }
 }
 
-async function installModel(serviceName: ServiceName) {
+async function installModel(serviceName: ServiceName, cancelToken?: SimpleCancellationToken) {
   try {
+    const options: any = {
+      shell: true,
+      encoding: 'utf8',
+      logger: loggerFactory(serviceName),
+    };
+
+    // 如果提供了取消令牌，则添加到选项中
+    if (cancelToken) {
+      options.token = cancelToken;
+    }
+
     const result = await commandLine.exec(
       'lms',
       ['get', lmsGetNameDict[serviceName], '--yes'],
-      {
-        shell: true,
-        encoding: 'utf8',
-        logger: loggerFactory(serviceName),
-      },
+      options,
     );
     console.debug('installModel', result);
     return result;

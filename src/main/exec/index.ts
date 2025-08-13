@@ -215,6 +215,7 @@ export class Exec {
     return new Promise((resolve, reject) => {
       let stdout = '';
       let stderr = '';
+      let isCancelled = false; // 添加一个标志来跟踪取消状态
 
       console.debug(`Executing command: ${command} ${args?.join(' ')}`);
 
@@ -225,32 +226,36 @@ export class Exec {
       );
 
       options?.token?.onCancellationRequested(() => {
-        if (!childProcess.killed) {
-          childProcess.kill();
-          options?.logger?.error('Execution cancelled');
-          const errResult: RunError = new RunErrorImpl(
-            'Execution cancelled',
-            'Failed to execute command: Execution cancelled',
-            1,
-            command,
-            stdout.trim(),
-            stderr.trim(),
-            true,
-            childProcess.killed,
-          );
-          reject(errResult);
+        if (isCancelled) {
+          return; // 已处理取消
         }
-        options?.logger?.error(
-          'Failed to execute cancel: Process has been already killed',
-        );
+        isCancelled = true; // 设置取消标志
+        
+        // 1. 立即清理所有事件监听器，这是关键
+        try {
+          childProcess.stdout.removeAllListeners();
+          childProcess.stderr.removeAllListeners();
+          childProcess.removeAllListeners();
+          // 销毁流，阻止后续数据进入日志
+          try { childProcess.stdout.destroy(); } catch {}
+          try { childProcess.stderr.destroy(); } catch {}
+        } catch {}
+
+        // 2. 简化进程终止逻辑
+        try {
+          childProcess.kill('SIGKILL'); // 直接强制终止
+        } catch {}
+
+        // 3. 立即 reject，并提供清晰的取消信息
+        options?.logger?.error('Execution cancelled by user');
         const errResult: RunError = new RunErrorImpl(
-          'Failed to execute cancel: Process has been already killed',
-          'Failed to execute cancel: Process has been already killed',
+          'Execution cancelled',
+          'Command execution was cancelled by the user.',
           1,
           command,
           stdout.trim(),
           stderr.trim(),
-          false,
+          true,
           childProcess.killed,
         );
         reject(errResult);
@@ -285,6 +290,9 @@ export class Exec {
       });
 
       childProcess.on('close', (exitCode) => {
+        if (isCancelled) {
+          return; // 如果已取消，则不执行任何操作
+        }
         if (exitCode === 0) {
           const result: RunResult = {
             command,

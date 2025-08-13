@@ -18,24 +18,28 @@ export default function useLMStudio() {
   });
   const [loading, setLoading] = useState(false);
   const [initing, setIniting] = useState(true);
-  function action(actionName: ActionName, serviceName: ServiceName) {
-    if (initing) {
-      notification.warning({
-        message: '正在获取服务状态，请稍等',
-        placement: 'topRight',
-      });
-      return;
-    }
-    if (loading) {
-      notification.warning({
-        message: '请等待上一个操作完成后再操作',
-        placement: 'topRight',
-      });
-      return;
-    }
-    setLoading(true);
-    window.electron.ipcRenderer.sendMessage(channel, actionName, serviceName);
+function action(actionName: ActionName, serviceName: ServiceName) {
+  if (initing) {
+    notification.warning({
+      message: '正在获取服务状态，请稍等',
+      placement: 'topRight',
+    });
+    return;
   }
+  // 允许取消动作在加载状态下执行
+  if (loading && actionName !== 'cancel') {
+    notification.warning({
+      message: '请等待上一个操作完成后再操作',
+      placement: 'topRight',
+    });
+    return;
+  }
+  // 只有非取消动作才设置loading状态
+  if (actionName !== 'cancel') {
+    setLoading(true);
+  }
+  window.electron.ipcRenderer.sendMessage(channel, actionName, serviceName);
+}
 
   function queryServicese() {
     window.electron.ipcRenderer.sendMessage(channel, 'query');
@@ -70,8 +74,14 @@ export default function useLMStudio() {
           notification.success({ message: data, placement: 'topRight' });
         } else if (messageType === MESSAGE_TYPE.PROGRESS_ERROR) {
           notification.error({ message: data, placement: 'topRight' });
-        } else if (messageType === MESSAGE_TYPE.WARNING) {
+} else if (messageType === MESSAGE_TYPE.WARNING) {
           notification.warning({ message: data, placement: 'topRight' });
+          // 如果是取消操作相关的警告，也需要重置加载状态
+          if (typeof data === 'string' && (data.includes('已取消') || data.includes('正在取消'))) {
+            setLoading(false);
+            // 取消操作完成后，重新查询服务状态以更新UI
+            queryServicese();
+          }
         }
       },
     );

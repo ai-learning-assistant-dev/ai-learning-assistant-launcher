@@ -77,7 +77,8 @@ export default function LMService() {
   });
 
   function click(actionName: ActionName, serviceName: ServiceName) {
-    if (loading || checkingWsl) {
+    // 允许取消动作在加载状态下执行
+    if ((loading || checkingWsl) && actionName !== 'cancel') {
       notification.warning({
         message: '请等待上一个操作完成后再操作',
         placement: 'topRight',
@@ -225,21 +226,34 @@ export default function LMService() {
                 </Popconfirm>
               ),
               item.state === '还未安装' && (
-                <Button
-                  shape="round"
-                  size="small"
-                  disabled={checkingWsl || cmdLoading || !isInstallLMStudio}
-                  loading={
-                    initing ||
-                    (loading &&
-                      operating.serviceName === item.serviceName &&
-                      operating.actionName === 'install')
-                  }
-                  onClick={() => click('install', item.serviceName)}
-                  type="primary"
-                >
-                  安装
-                </Button>
+                <>
+                  {loading && operating.serviceName === item.serviceName && operating.actionName === 'install' ? (
+                    <Button
+                      shape="round"
+                      size="small"
+                      onClick={() => click('cancel', item.serviceName)}
+                      danger
+                    >
+                      取消
+                    </Button>
+                  ) : (
+                    <Button
+                      shape="round"
+                      size="small"
+                      disabled={checkingWsl || cmdLoading || !isInstallLMStudio}
+                      loading={
+                        initing ||
+                        (loading &&
+                          operating.serviceName === item.serviceName &&
+                          operating.actionName === 'install')
+                      }
+                      onClick={() => click('install', item.serviceName)}
+                      type="primary"
+                    >
+                      安装
+                    </Button>
+                  )}
+                </>
               ),
             ].filter((button) => button)}
           >

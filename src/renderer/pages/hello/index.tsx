@@ -4,6 +4,16 @@ import icon from './icon.png';
 import './index.scss';
 
 export default function Hello() {
+  // 触发渲染进程异常的函数
+  const triggerRendererError = () => {
+    throw new Error('这是一个人工触发的渲染进程异常');
+  };
+
+  // 触发主进程异常的函数
+  const triggerMainError = () => {
+    window.electron?.ipcRenderer.sendMessage('ipc-example', 'query', 'service1', 'testMainError', '这是一个人工触发的主进程异常');
+  };
+
   return (
     <div className="hello-root">
       <div className="Hello">
@@ -29,6 +39,15 @@ export default function Hello() {
         <NavLink to="/lm-service">
           <Button>AI大模型</Button>
         </NavLink>
+        <br />
+        {/* 测试按钮 */}
+        <Button onClick={triggerRendererError} danger>
+          触发渲染进程异常
+        </Button>
+        <br />
+        <Button onClick={triggerMainError} danger>
+          触发主进程异常
+        </Button>
         <br />
         {process.env.NODE_ENV === 'development' ? (
           <NavLink

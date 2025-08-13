@@ -16,7 +16,9 @@ export type ActionName =
   | 'start'
   | 'stop'
   | 'remove'
-  | 'update';
+  | 'cancel'
+  | 'update'
+  ;
 
 export const channel: Channels = 'lm-studio';
 

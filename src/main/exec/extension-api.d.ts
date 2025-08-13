@@ -2107,17 +2107,17 @@ declare module '@podman-desktop/api' {
      * Icon for the panel shown in UI.
      */
     iconPath?:
-      | Uri
-      | {
-          /**
-           * The icon path for the light theme.
-           */
-          readonly light: Uri;
-          /**
-           * The icon path for the dark theme.
-           */
-          readonly dark: Uri;
-        };
+    | Uri
+    | {
+      /**
+       * The icon path for the light theme.
+       */
+      readonly light: Uri;
+      /**
+       * The icon path for the dark theme.
+       */
+      readonly dark: Uri;
+    };
 
     /**
      * {@linkcode Webview} belonging to the panel.
