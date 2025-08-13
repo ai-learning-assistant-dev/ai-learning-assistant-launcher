@@ -5,7 +5,7 @@ import { MESSAGE_TYPE, MessageData } from '../../../main/ipc-data-type';
 
 export default function useCmd() {
   const [isInstallWSL, setIsInstallWSL] = useState<boolean>(true);
-  const [wslVersion, setWSLVersion] = useState<boolean>(true);
+  const [wslVersion, setWSLVersion] = useState<string>('');
   const [checkingWsl, setCheckingWsl] = useState<boolean>(true);
   const [isInstallObsidian, setIsInstallObsidian] = useState<boolean>(true);
   const [isInstallLMStudio, setIsInstallLMStudio] = useState<boolean>(true);
