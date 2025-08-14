@@ -12,6 +12,9 @@ import { Exec } from '../exec';
 import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 import { RunResult } from '@podman-desktop/api';
 import { loggerFactory } from '../terminal-log';
+import * as os from 'os';
+import * as path from 'path';
+import * as fs from 'fs';
 const commandLine = new Exec();
 
 export default async function init(ipcMain: IpcMain) {
@@ -127,6 +130,28 @@ export default async function init(ipcMain: IpcMain) {
   );
 }
 
+function resolveModelAbsolutePath(p: string): string {
+  try {
+    if (!p) return p;
+    // If already absolute, normalize and return
+    if (path.isAbsolute(p)) {
+      return path.normalize(p);
+    }
+    // Default LM Studio models directory under user home
+    const modelsBaseDir = path.join(os.homedir(), '.lmstudio', 'models');
+    // lms returns POSIX-style separators sometimes; normalize to current OS
+    const normalizedRelative = p.replace(/\//g, path.sep);
+    const absCandidate = path.normalize(path.join(modelsBaseDir, normalizedRelative));
+    // Only adopt absolute path if it actually exists to avoid misleading display
+    if (fs.existsSync(absCandidate)) {
+      return absCandidate;
+    }
+    return p;
+  } catch {
+    return p;
+  }
+}
+
 async function queryServerStatus() {
   const serverStatusResult = await commandLine.exec(
     'lms',
@@ -156,10 +181,25 @@ async function queryModelStatus() {
     const downloadedModel = JSON.parse(result.stdout) as LMModel[];
     const loadedModel = JSON.parse(result2.stdout) as LMModel[];
     for (const model of downloadedModel) {
+      // Convert model.path to absolute path for UI display
+      if (model && typeof model.path === 'string') {
+        model.path = resolveModelAbsolutePath(model.path);
+      }
       if (loadedModel.findIndex((m) => m.modelKey === model.modelKey) >= 0) {
         model.isLoaded = true;
       } else {
         model.isLoaded = false;
+      }
+      
+      // 尝试从模型名称中提取参数量信息
+      if (model.displayName) {
+        // 匹配类似 "Qwen3 4B" 或 "Gemma 3 27B Instruct" 的模式
+        const paramMatch = model.displayName.match(/(\d+(?:\.\d+)?)\s*([BM])/i);
+        if (paramMatch) {
+          const value = parseFloat(paramMatch[1]);
+          const unit = paramMatch[2].toUpperCase();
+          model.parameterCount = unit === 'B' ? value * 1000000000 : value * 1000000;
+        }
       }
     }
 

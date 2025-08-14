@@ -1,24 +1,77 @@
-
-.lm-service{
+.lm-service {
   display: flex;
   width: 100%;
   justify-content: center;
   flex-direction: column;
-  .lm-service-list{
+  align-items: center;
+  height: 100%;
+
+  .lm-service-list {
     width: calc(100% - 20px);
     flex: 0 0 auto;
   }
-  height: 100%;
-  align-items: center;
 
-  .header-container{
+  .header-container {
     display: flex;
     justify-content: space-between;
   }
 }
 
-.lm-studio-demo{
+.lm-studio-demo {
   width: 575px;
   height: 312px;
   background-size: contain;
+}
+
+.model-list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  > div:first-child {
+    flex-grow: 1;
+    min-width: 0;
+  }
+
+  /* 调整服务地址的容器，并确保它不换行 */
+  .service-address {
+    flex-shrink: 0;
+    margin-left: 20px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 150px;
+    max-width: 250px;
+    text-align: right;
+  }
+
+  /* 为列表项操作按钮区域设置固定宽度，避免因按钮数量变化导致的布局问题 */
+  .ant-list-item-action {
+    flex-shrink: 0;
+    width: 300px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-left: 20px;
+  }
+}
+
+.model-name {
+  color: #1890ff;
+  font-weight: 600;
+  margin-left: 8px; /* 给状态和名称之间添加一些间距 */
+}
+
+.service-address {
+  margin-left: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 150px;
+  max-width: 250px;
+  text-align: right;
+
+  .service-url {
+    color: #1890ff; /* 保持超链接的颜色 */
+  }
 }

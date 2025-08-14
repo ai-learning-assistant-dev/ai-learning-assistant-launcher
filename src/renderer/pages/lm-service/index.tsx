@@ -1,4 +1,4 @@
-import { Button, List, notification, Popconfirm, Typography } from 'antd';
+import { Button, List, notification, Popconfirm, Typography, Modal, Descriptions } from 'antd';
 import { Link } from 'react-router-dom';
 import './index.scss';
 import { useState } from 'react';
@@ -38,6 +38,32 @@ function getState(
   return '还未安装';
 }
 
+function formatBytes(bytes?: number): string {
+  if (bytes === undefined || bytes === null) {
+    return '未知';
+  }
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function formatParameterCount(count?: number): string {
+  if (count === undefined || count === null) {
+    return '未知';
+  }
+  if (count >= 1000000000) {
+    return (count / 1000000000).toFixed(1) + 'B';
+  } else if (count >= 1000000) {
+    return (count / 1000000).toFixed(1) + 'M';
+  } else if (count >= 1000) {
+    return (count / 1000).toFixed(1) + 'K';
+  } else {
+    return count.toString();
+  }
+}
+
 export default function LMService() {
   const { lmServerStatus, lMModels, action, loading, initing } = useLMStudio();
   const {
@@ -61,6 +87,8 @@ export default function LMService() {
     serviceName: 'WSL',
     actionName: 'install',
   });
+  const [showDetail, setShowDetail] = useState(false);
+  const [selectedModel, setSelectedModel] = useState<LMModel | null>(null);
   // const llmContainer = containers.filter(
   //   (item) => item.Names.indexOf() >= 0,
   // )[0];
@@ -170,7 +198,36 @@ export default function LMService() {
           <List.Item
             key={item.serviceName}
             actions={[
-              `http://127.0.0.1:${lmServerStatus.port}`,
+              (item.state === '已经安装' || item.state === '已经加载') &&
+              <Button
+                shape="round"
+                size="small"
+                onClick={() => {
+                  const model = lMModels.find(
+                    (m) => m.modelKey === item.name || m.displayName === modelNameDict[item.serviceName]
+                  );
+                  if (model) {
+                    setSelectedModel(model);
+                  } else {
+                    // 创建一个临时的模型对象用于显示
+                    setSelectedModel({
+                      modelKey: item.name,
+                      displayName: modelNameDict[item.serviceName],
+                      isLoaded: item.state === '已经加载',
+                      port: lmServerStatus.port,
+                      type: '',
+                      format: '',
+                      path: '',
+                      sizeBytes: 0,
+                      architecture: '',
+                      maxContextLength: 0,
+                    } as LMModel);
+                  }
+                  setShowDetail(true);
+                }}
+              >
+                详情
+              </Button>,
               item.state === '已经加载' && (
                 <Button
                   shape="round"
@@ -242,9 +299,23 @@ export default function LMService() {
                 </Button>
               ),
             ].filter((button) => button)}
+            className="model-list-item"
           >
-            <Typography.Text type="success">[{item.state}]</Typography.Text>
-            {item.name}
+            <div>
+              <Typography.Text type={
+                item.state === '已经加载' ? 'success' :
+                  item.state === '已经安装' ? 'success' :
+                    'secondary'
+              }>
+                [{item.state}]
+              </Typography.Text>
+              <Typography.Text className="model-name">
+                {item.name}
+              </Typography.Text>
+            </div>
+            <Typography.Text className="service-address">
+              服务地址: <span className="service-url">http://127.0.0.1:{lmServerStatus.port}</span>
+            </Typography.Text>
           </List.Item>,
         ]}
       />
@@ -254,6 +325,47 @@ export default function LMService() {
         rows={3}
         style={{ width: 'calc(100% - 20px)' }}
       />
+      <Modal
+        open={showDetail}
+        title="模型信息"
+        onCancel={() => setShowDetail(false)}
+        footer={null}
+        width="70%"
+        style={{ maxWidth: 720, minWidth: 300 }}
+      >
+        <Descriptions bordered column={1} size="small">
+          <Descriptions.Item label="名称">
+            {selectedModel?.displayName || selectedModel?.modelKey || '未知'}
+          </Descriptions.Item>
+          <Descriptions.Item label="大小">
+            {formatBytes(selectedModel?.sizeBytes)}
+          </Descriptions.Item>
+          <Descriptions.Item label="参数量">
+            {formatParameterCount(selectedModel?.parameterCount)}
+          </Descriptions.Item>
+          <Descriptions.Item label="路径">
+            {selectedModel?.path || '未知'}
+          </Descriptions.Item>
+          <Descriptions.Item label="格式">
+            {selectedModel?.format || '未知'}
+          </Descriptions.Item>
+          {/* <Descriptions.Item label="架构">
+            {selectedModel?.architecture || '未知'}
+          </Descriptions.Item> */}
+          <Descriptions.Item label="上下文长度">
+            {selectedModel?.maxContextLength ?? '未知'}
+          </Descriptions.Item>
+          <Descriptions.Item label="唯一标识">
+            {selectedModel?.modelKey || '未知'}
+          </Descriptions.Item>
+          {/* <Descriptions.Item label="加载状态">
+            {selectedModel?.isLoaded ? '已加载' : '未加载'}
+          </Descriptions.Item> */}
+          <Descriptions.Item label="服务地址">
+            {`http://127.0.0.1:${lmServerStatus.port}`}
+          </Descriptions.Item>
+        </Descriptions>
+      </Modal>
     </div>
   );
 }

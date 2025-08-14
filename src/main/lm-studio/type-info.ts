@@ -34,6 +34,7 @@ const modelListSample = {
 export type LMModel = typeof modelListSample & {
   isLoaded: boolean;
   port: number;
+  parameterCount?: number; // 添加参数量字段
 };
 
 const serverStatusExample = { running: true, port: 1234 };
