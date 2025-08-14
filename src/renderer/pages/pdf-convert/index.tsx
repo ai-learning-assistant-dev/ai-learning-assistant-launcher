@@ -1,4 +1,4 @@
-import { Button, message, Card, Typography, Space, List, Tag, Tooltip } from 'antd';
+import { Button, message, Card, Typography, Space, List, Tag, Tooltip, InputNumber } from 'antd';
 import { FileTextOutlined, PlusOutlined, DeleteOutlined, LoadingOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import { NavLink } from 'react-router-dom';
 import { useState, useEffect } from 'react';
@@ -17,6 +17,7 @@ interface FileItem {
   path: string;
   status?: 'pending' | 'converting' | 'success' | 'failed';
   error?: string;
+  splitCount?: number; // 拆分数量，默认为1
 }
 
 interface ProgressData {
@@ -88,6 +89,13 @@ export default function PdfConvert() {
     }
   };
 
+  // 更新文件拆分数量
+  const updateSplitCount = (index: number, splitCount: number) => {
+    const newFileList = [...fileList];
+    newFileList[index].splitCount = splitCount;
+    setFileList(newFileList);
+  };
+
   // 页面加载时恢复状态
   useEffect(() => {
     // 请求恢复持久化状态
@@ -114,11 +122,14 @@ export default function PdfConvert() {
     setResult(null);
 
     try {
-      // 获取文件路径
-      const filePaths = fileList.map((file) => file.path);
+      // 构建包含拆分信息的文件数据
+      const fileData = fileList.map((file) => ({
+        path: file.path,
+        splitCount: file.splitCount || 1
+      }));
       
-      // 通过IPC调用主进程的PDF转换服务
-      window.electron.ipcRenderer.sendMessage('pdf-convert', 'convert', 'PDF', filePaths);
+      // 通过IPC调用主进程的PDF转换服务，传递文件数据
+      window.electron.ipcRenderer.sendMessage('pdf-convert', 'convert', 'PDF', fileData);
 
     } catch (error) {
       console.error('转换失败:', error);
@@ -210,7 +221,8 @@ export default function PdfConvert() {
             // 将文件路径转换为FileItem格式
             const newFiles: FileItem[] = filePaths.map((filePath: string) => ({
               name: filePath.split(/[\\/]/).pop() || filePath, // 获取文件名
-              path: filePath
+              path: filePath,
+              splitCount: 1 // 默认拆分数量为1
             }));
             
             // 合并到现有文件列表，避免重复
@@ -337,6 +349,19 @@ export default function PdfConvert() {
                 renderItem={(file, index) => (
                   <List.Item
                     actions={[
+                      <div key="split-control" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Text type="secondary" style={{ fontSize: '12px' }}>拆分:</Text>
+                        <InputNumber
+                          size="small"
+                          min={1}
+                          max={10}
+                          value={file.splitCount || 1}
+                          onChange={(value) => updateSplitCount(index, value || 1)}
+                          disabled={converting || hasRunningTasks || file.status === 'converting'}
+                          style={{ width: '60px' }}
+                        />
+                        <Text type="secondary" style={{ fontSize: '12px' }}>份</Text>
+                      </div>,
                       <Button
                         key="delete"
                         type="text"
@@ -353,6 +378,11 @@ export default function PdfConvert() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <Text>{file.name}</Text>
                         {renderFileStatus(file)}
+                        {(file.splitCount || 1) > 1 && (
+                          <Tag color="blue">
+                            拆分{file.splitCount}份
+                          </Tag>
+                        )}
                       </div>
                       <Text type="secondary" style={{ fontSize: '12px' }}>
                         {file.path}
