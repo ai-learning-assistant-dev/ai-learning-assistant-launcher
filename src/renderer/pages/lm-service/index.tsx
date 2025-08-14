@@ -313,7 +313,7 @@ export default function LMService() {
                 {item.name}
               </Typography.Text>
             </div>
-            <Typography.Text className="service-address" copyable={{ text: `http://127.0.0.1:${lmServerStatus.port}` }}>
+            <Typography.Text className="service-address">
               服务地址: <span className="service-url">http://127.0.0.1:{lmServerStatus.port}</span>
             </Typography.Text>
           </List.Item>,
