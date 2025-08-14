@@ -157,7 +157,18 @@ export default function PdfConvert() {
           const { fileList: persistedFileList, lastResult, runningTasks } = data.data;
           
           if (persistedFileList && persistedFileList.length > 0) {
-            setFileList(persistedFileList);
+            // 恢复文件列表时，保持前端已设置的 splitCount
+            setFileList(prevFileList => {
+              const newFileList = persistedFileList.map((persistedFile: FileItem) => {
+                // 查找前端是否已有这个文件的 splitCount 设置
+                const existingFile = prevFileList.find(f => f.path === persistedFile.path);
+                return {
+                  ...persistedFile,
+                  splitCount: existingFile?.splitCount || persistedFile.splitCount || 1
+                };
+              });
+              return newFileList;
+            });
           }
           
           if (lastResult) {
@@ -273,7 +284,29 @@ export default function PdfConvert() {
         // 处理文件状态更新
         if (data.fileList !== undefined && data.updatedFile) {
           console.debug('文件状态更新:', data.updatedFile);
-          setFileList(data.fileList);
+          
+          // 保持前端的 splitCount 设置，只更新状态信息
+          setFileList(prevFileList => {
+            const newFileList = [...prevFileList];
+            
+            // 找到需要更新的文件并保持其 splitCount
+            const targetIndex = newFileList.findIndex(f => f.path === data.updatedFile.path);
+            if (targetIndex !== -1) {
+              // 保留原有的 splitCount，只更新状态
+              const originalSplitCount = newFileList[targetIndex].splitCount;
+              newFileList[targetIndex] = {
+                ...data.updatedFile,
+                splitCount: originalSplitCount
+              };
+            }
+            
+            // 处理后端删除的文件（status为success时会从后端列表删除）
+            if (data.updatedFile.status === 'success') {
+              return newFileList.filter(f => f.path !== data.updatedFile.path);
+            }
+            
+            return newFileList;
+          });
           return;
         }
         
