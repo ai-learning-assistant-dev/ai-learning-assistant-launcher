@@ -11,7 +11,7 @@ import {
 } from './type-info';
 import {
   ensurePodmanWorks,
-  haveNvidia,
+  haveCDIGPU,
   isImageReady,
   loadImageFromPath,
   removeImage,
@@ -338,7 +338,7 @@ export async function createContainer(serviceName: ServiceName) {
   const imageName = imageNameDict[serviceName];
   const containerName = containerNameDict[serviceName];
   const config = getContainerConfig()[serviceName];
-  const haveNvidiaFlag = await haveNvidia();
+  const haveNvidiaFlag = await haveCDIGPU();
   return connectionGlobal.createPodmanContainer({
     image: imageName,
     name: containerName,
