@@ -16,6 +16,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************** */
 
+import convertPath from '@stdlib/utils-convert-path';
 import { Buffer } from 'node:buffer';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -71,4 +72,11 @@ export function requireNonUndefined<T>(
   }
 
   return obj;
+}
+
+export function convertWindowsPathToPodmanMachinePath(path: string){
+  if (isWindows()) {
+    return `/mnt${convertPath(path, 'posix')}`;
+  }
+  return path;
 }

@@ -70,5 +70,31 @@
         "host": 7000
       }
     ]
+  },
+  "PDF": {
+    "port": [
+      {
+        "container": 5000,
+        "host": 5000
+      }
+    ],
+    "command": {
+      "start": [
+        "mineru-api",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "5000"
+      ],
+      "stop": [
+        "sh",
+        "./stop.sh"
+      ]
+    },
+    "env": {
+      "MINERU_MODEL_SOURCE": "local"
+    },
+    "privileged": true,
+    "restart_policy": "no"
   }
 }

@@ -1,8 +1,8 @@
 import type { Channels } from '../ipc-data-type';
 import { ContainerCreateMountOption } from '../podman-desktop/libpod-dockerode';
 
-export type ServiceName = 'obsidianApp' | 'obsidianVault' | 'container' | 'TTS';
-export type ActionName = 'query' | 'update' | 'selectVoiceFile' | 'initVoiceFileList' | 'deleteVoiceFile';
+export type ServiceName = 'obsidianApp' | 'obsidianVault' | 'container' | 'TTS' | 'PDF';
+export type ActionName = 'query' | 'update' | 'selectVoiceFile' | 'initVoiceFileList' | 'deleteVoiceFile' | 'get' | 'set';
 
 export const channel: Channels = 'configs';
 
@@ -18,6 +18,8 @@ export interface ContainerConfig {
     };
     env?: Record<string, string>;
     mounts?: Array<ContainerCreateMountOption>;
+    privileged?: boolean;
+    restart_policy?: string;
   };
   TTS: {
     port: {
@@ -34,6 +36,8 @@ export interface ContainerConfig {
       forceNvidia: boolean;
       forceCPU: boolean;
     };
+    privileged?: boolean;
+    restart_policy?: string;
   };
   LLM: {
     port: {
@@ -46,6 +50,22 @@ export interface ContainerConfig {
     };
     env?: Record<string, string>;
     mounts?: Array<ContainerCreateMountOption>;
+    privileged?: boolean;
+    restart_policy?: string;
+  };
+  PDF: {
+    port: {
+      container: number;
+      host: number;
+    }[];
+    command: {
+      start: string[];
+      stop: string[];
+    };
+    env?: Record<string, string>;
+    mounts?: Array<ContainerCreateMountOption>;
+    privileged?: boolean;
+    restart_policy?: string;
   };
 }
 
@@ -68,4 +88,12 @@ export interface VoiceConfig {
 
 export interface VoiceConfigFile {
   voices: VoiceConfig[];
+}
+
+// PDF配置接口
+export interface PdfConfig {
+  start_page_id: number;
+  end_page_id: number;
+  table_enable: boolean;
+  formula_enable: boolean;
 }

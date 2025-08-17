@@ -91,14 +91,14 @@ export default async function init(ipcMain: IpcMain) {
             event.reply(
               channel,
               MESSAGE_TYPE.PROGRESS,
-              `开始卸载模型${serviceName}`,
+              `开始停止模型${serviceName}`,
             );
             try {
               const result = await stopModel(serviceName);
               event.reply(
                 channel,
                 MESSAGE_TYPE.INFO,
-                `卸载模型${serviceName}成功`,
+                `停止模型${serviceName}成功`,
               );
             } catch (e) {
               console.warn(e);
@@ -106,13 +106,13 @@ export default async function init(ipcMain: IpcMain) {
                 event.reply(
                   channel,
                   MESSAGE_TYPE.ERROR,
-                  `模型${serviceName}已经卸载`,
+                  `模型${serviceName}已经停止`,
                 );
               } else {
                 event.reply(
                   channel,
                   MESSAGE_TYPE.ERROR,
-                  `模型${serviceName}卸载错误`,
+                  `模型${serviceName}停止错误`,
                 );
                 throw e;
               }
@@ -141,9 +141,9 @@ async function queryServerStatus() {
 
 async function queryModelStatus() {
   try {
-    const result = await await Promise.race([
+    const result = await Promise.race([
       new Promise<RunResult>((resolve, reject) =>
-        setTimeout(() => reject('queryModelStatus命令超时'), 4000),
+        setTimeout(() => reject('queryModelStatus命令超时'), 15000),
       ),
       commandLine.exec('lms', ['ls', '--json'], {
         shell: true,

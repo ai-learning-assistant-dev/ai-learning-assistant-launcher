@@ -2,13 +2,23 @@ import { dialog, IpcMain } from 'electron';
 import { ActionName, channel, ServiceName } from './type-info';
 import { appPath, Exec } from '../exec';
 import { isMac, isWindows } from '../exec/util';
-import { getObsidianConfig, setVaultDefaultOpen, getObsidianVaultConfig } from '../configs';
+import {
+  getObsidianConfig,
+  setVaultDefaultOpen,
+  getObsidianVaultConfig,
+} from '../configs';
 import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 import path from 'node:path';
 import { statSync } from 'node:fs';
-import { getPodmanCli, resetPodman } from '../podman-desktop/ensure-podman-works';
+import {
+  ensurePodmanWorks,
+  getPodmanCli,
+  resetPodman,
+} from '../podman-desktop/ensure-podman-works';
 import { RunResult } from '@podman-desktop/api';
 import { podMachineName } from '../podman-desktop/type-info';
+import { isWSLInstall, wslVersion } from './is-wsl-install';
+import { loggerFactory } from '../terminal-log';
 
 const commandLine = new Exec();
 
@@ -33,8 +43,7 @@ export default async function init(ipcMain: IpcMain) {
               setVaultDefaultOpen(vaultId);
             }
             let obsidianPath = getObsidianConfig().obsidianApp.bin;
-            let vaultName  = null;
-    
+            let vaultName = null;
             // 获取仓库路径
             if (vaultId) {
               const vaults = getObsidianVaultConfig();
@@ -99,10 +108,14 @@ export default async function init(ipcMain: IpcMain) {
               '预计需要10分钟，请耐心等待',
             );
             const result = await installWSL();
+            const version = await wslVersion();
             event.reply(
               channel,
               MESSAGE_TYPE.DATA,
-              new MessageData(action, serviceName, result),
+              new MessageData(action, serviceName, {
+                version,
+                installed: result,
+              }),
             );
           } else if (serviceName === 'obsidianApp') {
             try {
@@ -140,10 +153,14 @@ export default async function init(ipcMain: IpcMain) {
           }
         } else if (action === 'query') {
           if (serviceName === 'WSL') {
+            const version = await wslVersion();
             event.reply(
               channel,
               MESSAGE_TYPE.DATA,
-              new MessageData(action, serviceName, await isWSLInstall()),
+              new MessageData(action, serviceName, {
+                version,
+                installed: await isWSLInstall(),
+              }),
             );
           } else if (serviceName === 'obsidianApp') {
             event.reply(
@@ -162,20 +179,48 @@ export default async function init(ipcMain: IpcMain) {
             event.reply(channel, MESSAGE_TYPE.INFO, '成功查询');
           }
         } else if (action === 'move') {
-          const result = await movePodman();
+          const dialogResult = await dialog.showOpenDialog({
+            title: '请选择服务的安装位置',
+            properties: ['openDirectory', 'showHiddenFiles'],
+          });
+          const path = dialogResult.filePaths[0];
+          if (!path || path === '') {
+            event.reply(channel, MESSAGE_TYPE.ERROR, '未选择正确的安装位置');
+            return;
+          }
+          await ensurePodmanWorks(event, channel);
+          const result = await movePodman(path);
           if (result.success) {
             event.reply(
               channel,
               MESSAGE_TYPE.DATA,
               new MessageData(action, serviceName, true),
             );
-            event.reply(channel, MESSAGE_TYPE.INFO, '成功迁移');
+            event.reply(channel, MESSAGE_TYPE.INFO, '成功修改安装位置');
           } else {
             event.reply(channel, MESSAGE_TYPE.ERROR, result.errorMessage);
           }
         } else if (action === 'update') {
-          const result = await commandLine.exec('echo %cd%');
-          event.reply(channel, MESSAGE_TYPE.INFO, '成功更新');
+          if (serviceName === 'WSL') {
+            event.reply(
+              channel,
+              MESSAGE_TYPE.PROGRESS,
+              '预计需要10分钟，请耐心等待',
+            );
+            const result = await installWSL();
+            const version = await wslVersion();
+            event.reply(
+              channel,
+              MESSAGE_TYPE.DATA,
+              new MessageData(action, serviceName, {
+                version,
+                installed: result,
+              }),
+            );
+          } else {
+            const result = await commandLine.exec('echo %cd%');
+            event.reply(channel, MESSAGE_TYPE.INFO, '成功更新');
+          }
         } else {
           event.reply(channel, MESSAGE_TYPE.ERROR, '现在还没有这个功能');
         }
@@ -316,30 +361,6 @@ export async function installWSL() {
   return success1 && success2;
 }
 
-export async function isWSLInstall() {
-  let wslWork = false;
-  try {
-    const output = await commandLine.exec('wsl.exe', ['--status'], {
-      encoding: 'utf16le',
-      shell: true,
-    });
-    console.debug('isWSLInstall', output);
-    if (
-      output.stdout.indexOf('Wsl/WSL_E_WSL_OPTIONAL_COMPONENT_REQUIRED') >= 0 ||
-      output.stdout.indexOf('wsl.exe --install') >= 0
-    ) {
-      wslWork = false;
-    } else {
-      wslWork = true;
-    }
-  } catch (e) {
-    console.warn('isWSLInstall', e);
-    wslWork = false;
-  }
-
-  return wslWork;
-}
-
 async function checkWSLComponent() {
   let virtualMachinePlatformInstalled = true;
   try {
@@ -418,7 +439,7 @@ export async function isObsidianInstall() {
       '%localappdata%',
       process.env.LOCALAPPDATA,
     );
-    console.debug('getObsidianConfig' ,obsidianPath)
+    console.debug('getObsidianConfig', obsidianPath);
     const stat = statSync(obsidianPath);
     if (stat.isFile()) {
       return true;
@@ -449,9 +470,9 @@ export async function isLMStudioInstall() {
   try {
     const result = await Promise.race([
       new Promise<RunResult>((resolve, reject) =>
-        setTimeout(() => reject('命令超时'), 4000),
+        setTimeout(() => reject('isLMStudioInstall命令超时'), 15000),
       ),
-      // 如果用户安装lmstudio然后又卸载了lmstudio，那么这个命令会一直卡着，也不报错，所以要用一个4000ms的报错promise与它竞赛
+      // 如果用户安装lmstudio然后又卸载了lmstudio，那么这个命令会一直卡着，也不报错，所以要用一个10000ms的报错promise与它竞赛
       commandLine.exec('lms', ['ls']),
     ]);
     console.debug('isLMStudioInstall', result);
@@ -462,14 +483,9 @@ export async function isLMStudioInstall() {
   }
 }
 
-export async function movePodman() {
+export async function movePodman(path: string) {
   let success = false;
-  let errorMessage = '迁移失败';
-  const dialogResult = await dialog.showOpenDialog({
-    title: '请选择服务的安装位置',
-    properties: ['openDirectory', 'showHiddenFiles'],
-  });
-  const path = dialogResult.filePaths[0];
+  let errorMessage = '修改失败';
   if (!path || path === '') {
     errorMessage = '未选择正确的安装位置';
     return { success: false, errorMessage };
@@ -490,6 +506,7 @@ export async function movePodman() {
       {
         encoding: 'utf16le',
         shell: true,
+        logger: loggerFactory('podman'),
       },
     );
     console.debug('movePodman', output2);
@@ -510,6 +527,8 @@ export async function movePodman() {
       e.stdout.indexOf('Wsl/Service/MoveDistro/0' + 'x80070070') >= 0
     ) {
       errorMessage = '磁盘空间不足';
+    } else if (e && e.message.indexOf('exitCode: 4294967295') >= 0) {
+      errorMessage = '修改失败，可能是WSL版本太低，请尝试升级WSL';
     }
     success = false;
   }

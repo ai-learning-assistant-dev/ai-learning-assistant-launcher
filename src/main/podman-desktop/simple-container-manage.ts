@@ -11,7 +11,7 @@ import {
 } from './type-info';
 import {
   ensurePodmanWorks,
-  haveNvidia,
+  haveCDIGPU,
   isImageReady,
   loadImageFromPath,
   removeImage,
@@ -23,8 +23,9 @@ import { getContainerConfig } from '../configs';
 import { wait } from '../util';
 import path from 'node:path';
 import { appPath } from '../exec';
-import { isWindows } from '../exec/util';
+import { convertWindowsPathToPodmanMachinePath, isWindows } from '../exec/util';
 import convertPath from '@stdlib/utils-convert-path';
+import { ContainerConfig } from '../configs/type-info';
 
 let connectionGlobal: LibPod & Dockerode;
 
@@ -205,8 +206,8 @@ export default async function init(ipcMain: IpcMain) {
                 containersHaveSameImage = containersHaveSameImage.filter(
                   (item) => {
                     return (
-                      item !== containerName ||
-                      imageNameDict[item] !== imageName
+                      item !== containerName &&
+                      imageNameDict[item] === imageName
                     );
                   },
                 );
@@ -337,7 +338,7 @@ export async function createContainer(serviceName: ServiceName) {
   const imageName = imageNameDict[serviceName];
   const containerName = containerNameDict[serviceName];
   const config = getContainerConfig()[serviceName];
-  const haveNvidiaFlag = await haveNvidia();
+  const haveNvidiaFlag = await haveCDIGPU();
   return connectionGlobal.createPodmanContainer({
     image: imageName,
     name: containerName,
@@ -350,13 +351,14 @@ export async function createContainer(serviceName: ServiceName) {
     env: config.env,
     mounts: config.mounts
       ? config.mounts.map((mount) => {
-          mount.Source = path.join(appPath, mount.Source);
-          if (isWindows()) {
-            mount.Source = `/mnt${convertPath(mount.Source, 'posix')}`;
-          }
+          mount.Source = convertWindowsPathToPodmanMachinePath(
+            path.join(appPath, mount.Source),
+          );
           return mount;
         })
       : [],
+    privileged: config.privileged,
+    restart_policy: config.restart_policy,
   });
 }
 
@@ -395,24 +397,22 @@ export async function removeContainer(serviceName: ServiceName) {
 }
 
 export async function selectImageFile(serviceName: ServiceName) {
-  if (serviceName === 'TTS' || serviceName === 'ASR') {
-    const result = await dialog.showOpenDialog({
-      title: '请选择后缀名为.tar的镜像文件',
-      properties: ['openFile', 'showHiddenFiles'],
-      filters: [{ name: '', extensions: ['tar'] }],
-    });
-    const path = result.filePaths[0];
-    if (path && path.length > 0) {
-      try {
-        return path;
-      } catch (e) {
-        console.error(e);
-        return false;
-      }
-    } else {
-      console.warn('没有选择正确的镜像');
+  const result = await dialog.showOpenDialog({
+    title: `请选择${serviceName}服务的镜像文件`,
+    properties: ['openFile', 'showHiddenFiles'],
+    filters: [{ name: `服务镜像`, extensions: ['tar', 'tar.gz'] }],
+  });
+  const path = result.filePaths[0];
+  if (path && path.length > 0) {
+    try {
+      return path;
+    } catch (e) {
+      console.error(e);
       return false;
     }
+  } else {
+    console.warn('没有选择正确的镜像');
+    return false;
   }
   return false;
 }

@@ -23,6 +23,7 @@ import {
 } from '../../../main/cmd/type-info';
 import useCmd from '../../containers/use-cmd';
 import { MESSAGE_TYPE, MessageData } from '../../../main/ipc-data-type';
+import { TerminalLogScreen } from '../../containers/terminal-log-screen';
 
 interface ContainerItem {
   name: string;
@@ -45,6 +46,7 @@ export default function AiService() {
   const { containers, action, loading, initing } = useDocker();
   const {
     isInstallWSL,
+    wslVersion,
     checkingWsl,
     action: cmdAction,
     loading: cmdLoading,
@@ -73,6 +75,9 @@ export default function AiService() {
   const asrContainer = containers.filter(
     (item) => item.Names.indexOf(containerNameDict.ASR) >= 0,
   )[0];
+  const pdfContainer = containers.filter(
+    (item) => item.Names.indexOf(containerNameDict.PDF) >= 0,
+  )[0];
 
   const containerInfos: ContainerItem[] = [
     // {
@@ -92,6 +97,12 @@ export default function AiService() {
       serviceName: 'TTS',
       state: getState(ttsContainer),
       port: 8000,
+    },
+    {
+      name: 'PDF处理服务',
+      serviceName: 'PDF',
+      state: getState(pdfContainer),
+      port: 5000,
     },
   ];
 
@@ -157,11 +168,37 @@ export default function AiService() {
             </Link>
             <div>
               <Popconfirm
-                title="搬迁安装位置"
+                title="升级WSL"
+                description={
+                  <div>
+                    <div>您当前的WSL版本是</div>
+                    <div>{wslVersion}</div>
+                    <div>确认升级WSL吗？</div>
+                  </div>
+                }
+                onConfirm={() => clickCmd('update', 'WSL')}
+                okText="升级"
+                cancelText="不升级"
+              >
+                <Button
+                  disabled={!isInstallWSL || cmdLoading || loading}
+                  shape="round"
+                  loading={
+                    cmdLoading &&
+                    cmdOperating.serviceName === 'WSL' &&
+                    cmdOperating.actionName === 'update'
+                  }
+                >
+                  升级WSL
+                </Button>
+              </Popconfirm>
+              <div style={{ width: '20px', display: 'inline-block' }}></div>
+              <Popconfirm
+                title="修改安装位置"
                 description={
                   <div>
                     <div>
-                      搬迁安装位置时，会自动停止WSL，搬迁完成后请手动启动服务。
+                      修改安装位可能需要5分钟时间，实际用时和你的磁盘读写速度有关。
                     </div>
                     <div style={{ color: 'red' }}>
                       提示Docker用户：如果您的电脑上还有Docker软件，请您先手动关闭Docker软件前台和后台程序以避免Docker文件被损坏。搬迁完成后如果出现无法正常运行Docker的情况，请您重启电脑后再打开Docker。
@@ -169,21 +206,19 @@ export default function AiService() {
                   </div>
                 }
                 onConfirm={() => clickCmd('move', 'podman')}
-                okText="确认搬迁"
-                cancelText="不搬迁"
+                okText="修改"
+                cancelText="不修改"
               >
                 <Button
                   disabled={!isInstallWSL || cmdLoading || loading}
-                  type="primary"
                   shape="round"
-                  danger
                   loading={
                     cmdLoading &&
                     cmdOperating.serviceName === 'podman' &&
                     cmdOperating.actionName === 'move'
                   }
                 >
-                  搬迁安装位置
+                  修改安装位置
                 </Button>
               </Popconfirm>
               <div style={{ width: '20px', display: 'inline-block' }}></div>
@@ -241,26 +276,50 @@ export default function AiService() {
                   shape="round"
                   size="small"
                   disabled={
-                    !isInstallWSL || checkingWsl || loading || cmdLoading
+                    !isInstallWSL ||
+                    checkingWsl ||
+                    loading ||
+                    cmdLoading ||
+                    (item.serviceName === 'PDF' && item.state === '正在运行')
                   }
                 >
                   设置
                 </Button>
               </NavLink>,
-              item.state !== '还未安装' && (
-                <Button
-                  shape="round"
-                  size="small"
-                  disabled={!isInstallWSL || checkingWsl || cmdLoading}
-                  loading={
-                    loading &&
-                    operating.serviceName === item.serviceName &&
-                    operating.actionName === 'update'
-                  }
-                  onClick={() => click('update', item.serviceName)}
-                >
+              item.serviceName === 'PDF' && item.state === '正在运行' ? (
+                <Button shape="round" size="small" disabled={true}>
                   更新
                 </Button>
+              ) : (
+                item.state !== '还未安装' && (
+                  <Button
+                    shape="round"
+                    size="small"
+                    disabled={!isInstallWSL || checkingWsl || cmdLoading}
+                    loading={
+                      loading &&
+                      operating.serviceName === item.serviceName &&
+                      operating.actionName === 'update'
+                    }
+                    onClick={() => click('update', item.serviceName)}
+                  >
+                    更新
+                  </Button>
+                )
+              ),
+              item.serviceName === 'PDF' && item.state === '正在运行' && (
+                <NavLink key="convert" to="/pdf-convert">
+                  <Button
+                    shape="round"
+                    size="small"
+                    type="primary"
+                    disabled={
+                      !isInstallWSL || checkingWsl || loading || cmdLoading
+                    }
+                  >
+                    转换PDF
+                  </Button>
+                </NavLink>
               ),
               item.state === '正在运行' && (
                 <Button
