@@ -49,10 +49,13 @@ export async function ttsConfig(
       containerConfig.TTS.gpuConfig.forceCPU = forceCPU;
       if (forceNvidia) {
         containerConfig.TTS.env.TTS_MODELS = 'index-tts';
+        containerConfig.TTS.env.USE_GPU = 'true';
       } else if (forceCPU) {
         containerConfig.TTS.env.TTS_MODELS = 'kokoro';
+        containerConfig.TTS.env.USE_GPU = 'false';
       } else {
         delete containerConfig.TTS.env.TTS_MODELS;
+        delete containerConfig.TTS.env.USE_GPU;
       }
 
       // 写回配置文件
