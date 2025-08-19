@@ -1,7 +1,7 @@
 {
   "name": "ai-learning-assistant-launcher",
   "productName": "AI-Learning-Assistant-Launcher",
-  "version": "1.3.1",
+  "version": "1.3.2-prelease.1",
   "description": "My Electron application description",
   "main": ".webpack/main",
   "scripts": {
