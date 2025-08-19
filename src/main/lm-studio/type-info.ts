@@ -5,9 +5,9 @@ export const lmStudioServiceNameList = [
   'qwen/qwen3-8b',
   'qwen/qwen3-14b',
   'qwen/qwen3-32b',
-  'ala/WMZ4BQ80',
-  'ala/WMZ4BFP16',
-  'ala/WMZ8BQ80',
+  'ala/AIVMZ4BQ80',
+  'ala/AIVMZ4BFP16',
+  'ala/AIVMZ8BQ80',
   'google/gemma-3-27b',
   'qwen/qwen3-embedding-0.6b',
   'vonjack/bge-m3-gguf',
@@ -44,9 +44,9 @@ const serverStatusExample = { running: true, port: 1234 };
 export type ServerStatus = typeof serverStatusExample;
 
 export const modelNameDict: Record<ServiceName, string> = {
-  'ala/WMZ4BQ80': 'WMZ4BQ80',
-  'ala/WMZ4BFP16': 'WMZ4BFP16',
-  'ala/WMZ8BQ80': 'WMZ8BQ80',
+  'ala/AIVMZ4BQ80': 'AIVMZ4BQ80',
+  'ala/AIVMZ4BFP16': 'AIVMZ4BFP16',
+  'ala/AIVMZ8BQ80': 'AIVMZ8BQ80',
   'qwen/qwen3-4b': 'Qwen3 4B',
   'qwen/qwen3-8b': 'Qwen3 8B',
   'qwen/qwen3-14b': 'Qwen3 14B',
@@ -57,9 +57,9 @@ export const modelNameDict: Record<ServiceName, string> = {
 };
 
 export const lmsGetNameDict: Record<ServiceName, string> = {
-  'ala/WMZ4BQ80': 'WMZ4BQ80',
-  'ala/WMZ4BFP16': 'WMZ4BFP16',
-  'ala/WMZ8BQ80': 'WMZ8BQ80',
+  'ala/AIVMZ4BQ80': 'AIVMZ4BQ80',
+  'ala/AIVMZ4BFP16': 'AIVMZ4BFP16',
+  'ala/AIVMZ8BQ80': 'AIVMZ8BQ80',
   'qwen/qwen3-4b': 'qwen3-4b',
   'qwen/qwen3-8b': 'qwen3-8b',
   'qwen/qwen3-14b': 'qwen3-14b',
