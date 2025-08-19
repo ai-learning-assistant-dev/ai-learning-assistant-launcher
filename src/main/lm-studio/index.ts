@@ -1,4 +1,4 @@
-import { IpcMain } from 'electron';
+import { dialog, IpcMain } from 'electron';
 import {
   ActionName,
   channel,
@@ -12,6 +12,7 @@ import { Exec } from '../exec';
 import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 import { RunResult } from '@podman-desktop/api';
 import { loggerFactory } from '../terminal-log';
+import path from 'path';
 const commandLine = new Exec();
 
 export default async function init(ipcMain: IpcMain) {
@@ -46,17 +47,26 @@ export default async function init(ipcMain: IpcMain) {
           }
         } else {
           if (action === 'install') {
-            event.reply(
-              channel,
-              MESSAGE_TYPE.PROGRESS,
-              `开始下载模型${serviceName}，下方日志区可查看下载进度。`,
-            );
-            const result = await installModel(serviceName);
-            event.reply(
-              channel,
-              MESSAGE_TYPE.INFO,
-              `下载模型${serviceName}成功`,
-            );
+            if (serviceName.indexOf('ala') === 0) {
+              const { success, errorMessage } = await importModel(serviceName);
+              event.reply(
+                channel,
+                success ? MESSAGE_TYPE.INFO : MESSAGE_TYPE.ERROR,
+                errorMessage,
+              );
+            } else {
+              event.reply(
+                channel,
+                MESSAGE_TYPE.PROGRESS,
+                `开始下载模型${serviceName}，下方日志区可查看下载进度。`,
+              );
+              const result = await installModel(serviceName);
+              event.reply(
+                channel,
+                MESSAGE_TYPE.INFO,
+                `下载模型${serviceName}成功`,
+              );
+            }
           } else if (action === 'start') {
             event.reply(
               channel,
@@ -188,6 +198,46 @@ async function installModel(serviceName: ServiceName) {
     console.error(e);
     throw e;
   }
+}
+
+async function importModel(serviceName: ServiceName) {
+  let errorMessage = '导入成功';
+  let success = false;
+  const result = await dialog.showOpenDialog({
+    title: '选择模型文件',
+    properties: ['openFile', 'showHiddenFiles'],
+    filters: [{ name: modelNameDict[serviceName], extensions: ['gguf'] }],
+  });
+  const pathStr = result.filePaths[0];
+  if (pathStr && pathStr.length > 0) {
+    try {
+      console.debug('importModel basename', path.basename(pathStr));
+      if (
+        path.basename(pathStr) != `${modelNameDict[serviceName]}.gguf` &&
+        path.basename(pathStr) != `${modelNameDict[serviceName]}.GGUF`
+      ) {
+        errorMessage = `必须选择文件名为${modelNameDict[serviceName]}.gguf的文件`;
+        return { success, errorMessage };
+      }
+      const result = await commandLine.exec(
+        'lms',
+        ['import', path.join(pathStr), '--copy', '--user-repo', serviceName],
+        {
+          encoding: 'utf8',
+          logger: loggerFactory(serviceName),
+        },
+      );
+      console.debug('importModel', result);
+      success = true;
+    } catch (e) {
+      console.error(e);
+      success = false;
+      errorMessage = '导入失败';
+    }
+  } else {
+    errorMessage = '没有选择正确的文件';
+  }
+  return { success, errorMessage };
 }
 
 async function startModel(serviceName: ServiceName) {
