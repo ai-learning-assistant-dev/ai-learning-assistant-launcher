@@ -231,7 +231,7 @@ async function importModel(serviceName: ServiceName) {
       console.debug('importModel', result);
       try {
         // TODO 要关注LM Studio更新对这里的影响
-        fixModelList(modelNameDict[serviceName]);
+        fixModelList(`${serviceName}/${modelNameDict[serviceName]}`);
       } catch (error) {
         console.warn('importModel fixModelList', result);
       }
