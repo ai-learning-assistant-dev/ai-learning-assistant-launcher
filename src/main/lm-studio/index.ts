@@ -13,6 +13,7 @@ import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 import { RunResult } from '@podman-desktop/api';
 import { loggerFactory } from '../terminal-log';
 import path from 'path';
+import { fixModelList } from './lmstudio-paths';
 const commandLine = new Exec();
 
 export default async function init(ipcMain: IpcMain) {
@@ -228,6 +229,12 @@ async function importModel(serviceName: ServiceName) {
         },
       );
       console.debug('importModel', result);
+      try {
+        // TODO 要关注LM Studio更新对这里的影响
+        fixModelList(modelNameDict[serviceName]);
+      } catch (error) {
+        console.warn('importModel fixModelList', result);
+      }
       success = true;
     } catch (e) {
       console.error(e);
