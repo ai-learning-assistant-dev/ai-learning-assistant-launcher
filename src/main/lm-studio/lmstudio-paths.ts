@@ -22,7 +22,7 @@ export const serverConfigPath = join(
   '.internal',
   'http-server-config.json',
 );
-export const modelData = join(lmstudioHome, '.internal', 'model-data.json');
+export const modelDataPath = join(lmstudioHome, '.internal', 'model-data.json');
 const modelDataExample = {
   json: [
     [
@@ -43,7 +43,7 @@ type ModelDataStruct = typeof modelDataExample;
  */
 export function fixModelList(keyword: string) {
   const modelDataObj = JSON.parse(
-    readFileSync(modelData, {
+    readFileSync(modelDataPath, {
       encoding: 'utf8',
     }),
   ) as ModelDataStruct;
@@ -54,5 +54,5 @@ export function fixModelList(keyword: string) {
       break;
     }
   }
-  writeFileSync(modelData, JSON.stringify(modelDataObj), { encoding: 'utf8' });
+  writeFileSync(modelDataPath, JSON.stringify(modelDataObj), { encoding: 'utf8' });
 }
