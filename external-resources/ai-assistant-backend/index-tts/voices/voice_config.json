@@ -27,6 +27,20 @@
       "filename": "female3.wav",
       "text": "能用的办法试了个遍，沙子还是哗哗地往下掉。",
       "language": "Chinese"
+    },    
+    {
+      "name": "张正午声线",
+      "description": "张姐声线",
+      "filename": "张正午.WAV",
+      "text": "你唯一能做的就是就是接受，就是去承认，对吧？或者去重新创造这个。你把这个债变成你不得不做变成你想做的，对不对？",
+      "language": "Chinese"
+    },
+    {
+      "name": "未明子声线",
+      "description": "未老哥声线",
+      "filename": "未明子.wav",
+      "text": "本身就是历史的尘埃，要汇聚成这个汇聚成一阵雨，把这个贫瘠的土壤重新浇灌，然后生机能够滋长。",
+      "language": "Chinese"
     }
   ]
 }
