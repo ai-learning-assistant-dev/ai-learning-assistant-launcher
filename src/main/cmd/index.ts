@@ -496,7 +496,7 @@ export async function movePodman(path: string) {
       ['--shutdown', podMachineName],
       {
         encoding: 'utf16le',
-        shell: true,
+        shell: false,
       },
     );
     console.debug('movePodman', output1);
@@ -505,7 +505,7 @@ export async function movePodman(path: string) {
       ['--manage', podMachineName, '--move', path],
       {
         encoding: 'utf16le',
-        shell: true,
+        shell: false,
         logger: loggerFactory('podman'),
       },
     );
@@ -514,7 +514,7 @@ export async function movePodman(path: string) {
       getPodmanCli(),
       ['machine', 'start'],
       {
-        shell: true,
+        shell: false,
       },
     );
     console.debug('movePodman', output3);
