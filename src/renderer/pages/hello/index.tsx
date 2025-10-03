@@ -7,8 +7,11 @@ import tools_icon from './tools.png';
 import llm_icon from './llm.png';
 import course_icon from './course.png';
 import './index.scss';
+import useLogger from '../../containers/use-logger';
 
 export default function Hello() {
+  const { exporting, exportLog } = useLogger();
+  const handleExportLog = () => { exportLog(); };
    const items = [
     {
       key: 'reader',
@@ -42,10 +45,10 @@ export default function Hello() {
 
   return (
     <div className="hello-root">
-      {/* 右侧纵向按钮：日志导出 */}
-      <NavLink to="/log-export" className="side-export">
+      {/* 右上角：日志导出 */}
+      <button type="button" className="side-export" onClick={handleExportLog}>
         日志导出
-      </NavLink>
+      </button>
 
       {/* 头部：Logo + 标题 */}
       <header className="hero">

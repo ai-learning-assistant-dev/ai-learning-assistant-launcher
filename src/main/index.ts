@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import initLogger from './logger';
+import initLoggerExport from './logger/export-log';
 import initPodman from './podman-desktop/simple-container-manage';
 import initCmd from './cmd';
 import initConfigs from './configs';
@@ -48,6 +49,7 @@ initContainerLogs(ipcMain);
 initLMStudio(ipcMain);
 initExampleMain(ipcMain);
 initPdfConvert(ipcMain);
+initLoggerExport(ipcMain);
 updateTemplate();
 
 const createWindow = (): void => {

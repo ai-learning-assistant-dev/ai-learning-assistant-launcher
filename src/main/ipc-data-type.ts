@@ -12,7 +12,8 @@ export type Channels =
   | 'terminal-log'
   | 'pdf-convert'
   | 'pdf-convert-completed'
-  | 'pdf-config';
+  | 'pdf-config'
+  | 'logger';
 
 export enum MESSAGE_TYPE {
   /** 阻断性错误，会把转圈中的按钮变成不转圈 */
@@ -61,6 +62,10 @@ import {
   ActionName as ActionNamePdfConvert,
   ServiceName as ServiceNamePdfConvert,
 } from './pdf-convert/type-info';
+import {
+  ActionName as ActionNameLogger,
+  ServiceName as ServiceNameLogger,
+} from './logger/type-info';
 export type AllAction =
   | ActionNamePodman
   | ActionNameCmd
@@ -69,7 +74,8 @@ export type AllAction =
   | ActionNamePdfConvert
   | ActionNameLMStudio
   | ActionNameExampleMain
-  | ActionNameWorkspace; // 添加 workspace 类型
+  | ActionNameWorkspace
+  | ActionNameLogger; // 添加 logger 类型
 
 export type AllService =
   | ServiceNamePodman
@@ -79,7 +85,8 @@ export type AllService =
   | ServiceNamePdfConvert
   | ServiceNameLMStudio
   | ServiceNameExampleMain
-  | ServiceNameWorkspace; // 添加 workspace 类型
+  | ServiceNameWorkspace
+  | ServiceNameLogger; // 添加 logger 类型
 
 export class MessageData<
   A extends AllAction = AllAction,

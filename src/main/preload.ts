@@ -55,7 +55,7 @@ async function ipcInvoke<T>(channel: string, ...args: unknown[]): Promise<T> {
 const mainHandle = {
   installExampleHandle: async (service: ServiceNameExample): Promise<boolean> => {
     return ipcInvoke(installExampleHandle, service);
-  }
+  },
 }
 
 export type MainHandle = typeof mainHandle;
