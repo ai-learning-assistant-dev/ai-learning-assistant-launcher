@@ -1,61 +1,157 @@
 .hello-root {
   position: relative;
-  color: white;
-  height: 100vh;
-  font-family: sans-serif;
-  overflow-y: hidden;
+  min-height: 100vh;
+  overflow: hidden;
   display: flex;
-  justify-content: center;
-  align-items: center;
   flex-direction: column;
-  background: linear-gradient(
-    200.96deg,
-    #fedc2a -29.09%,
-    #dd5789 51.77%,
-    #7a2c9e 129.35%
-  );
+  align-items: center;
+  /* 背景渐变（接近截图的紫—蓝） */
+    background: url('./background.png') no-repeat center center / cover;
 
-  button {
-    background-color: white;
-    padding: 10px 20px;
-    border-radius: 10px;
-    border: none;
-    appearance: none;
-    font-size: 1.3rem;
-    box-shadow: 0px 8px 28px -6px rgba(24, 39, 75, 0.12),
-      0px 18px 88px -4px rgba(24, 39, 75, 0.14);
-    transition: all ease-in 0.1s;
-    cursor: pointer;
-    opacity: 0.9;
-  }
-
-  button:hover {
-    transform: scale(1.05);
-    opacity: 1;
-  }
-
-  li {
-    list-style: none;
-  }
-
-  a {
-    text-decoration: none;
-    height: fit-content;
-    width: fit-content;
-    margin: 10px;
-  }
-
-  a:hover {
-    opacity: 1;
-    text-decoration: none;
-  }
-
-  .Hello {
+  /* 顶部：Logo + 标题 */
+  .hero {
     display: flex;
-    justify-content: center;
     align-items: center;
-    margin: 20px 0;
-    flex-direction: column;
+    gap: 20px;
+    margin-top: 48px;
+    margin-bottom: 20px;
+  }
+  .logo {
+    filter: drop-shadow(0 12px 30px rgba(0, 0, 0, 0.15));
+  }
+  .title {
+    margin: 0;
+    font-weight: 700;
+    font-size: 28px;
+    color: #121417;
+    letter-spacing: 1px;
   }
 
+  /* 卡片栅格 */
+  .feature-grid {
+  width: min(1120px, 92vw);
+  /* 关键修改：使用 Flexbox */
+  display: flex;
+  gap: 28px;
+  padding: 24px 0 40px;
+  }
+
+  .feature-card {
+    flex: 1;
+    /* 增加一个最小宽度，防止卡片被无限压缩，导致内容变形 */
+    min-width: 125px; 
+
+    position: relative;
+    padding: 26px 22px 80px;
+    border-radius: 18px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.86) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.65);
+    box-shadow: 0 10px 30px rgba(50, 60, 90, 0.15);
+    backdrop-filter: blur(8px);
+    color: #1f2329;
+  }
+
+  .card-hd {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+    .card-icon {
+    width: 40px;
+    height: 48px;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    font-size: 22px;
+    color: #4d2ea7;
+    /* 使用和卡片一样的背景渐变 */
+    background: linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.86) 100%);
+    /* 使用和卡片一样的边框 */
+    border: 1px solid rgba(255, 255, 255, 0.65);
+  }
+  .card-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: #171a1f;
+  }
+  .card-desc {
+    margin: 10px 0 0;
+    line-height: 1.65;
+    color: #4b5563;
+    min-height: 98px; /* 让四张卡片文字高度对齐 */
+  }
+
+  /* 启动按钮（绿色胶囊样式，右下角对齐） */
+  .launch-link {
+    position: absolute;
+    left: 22px;
+    bottom: 22px;
+  }
+  .launch-btn.ant-btn {
+    padding: 0 18px;
+    height: 40px;
+    border-radius: 999px;
+    border: none;
+    font-size: 16px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: linear-gradient(180deg, #27e167 0%, #0fb86a 100%);
+    box-shadow: 0 10px 26px rgba(22, 163, 74, 0.35);
+  }
+  .launch-btn.ant-btn:hover,
+  .launch-btn.ant-btn:focus {
+    filter: brightness(1.03);
+    transform: translateY(-1px);
+  }
+
+  /* 【已修改】将“日志导出”按钮移至右上角，并改为横向样式 */
+  .side-export {
+    position: fixed;
+    top: 24px;
+    right: 24px;
+    padding: 8px 16px;
+    border-radius: 999px; /* 水平药丸形状 */
+    color: #fff;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    background: linear-gradient(180deg, #20da62 0%, #0ea55a 100%);
+    border: 1px solid rgba(255,255,255,0.6);
+    box-shadow: 0 10px 24px rgba(16, 185, 129, 0.35);
+    text-decoration: none;
+    transition: transform .15s ease, filter .15s ease;
+    z-index: 10;
+  }
+  .side-export:hover { 
+    filter: brightness(1.05); 
+    transform: scale(1.03); 
+  }
+
+  /* 角落版本信息 */
+  .meta {
+    position: fixed;
+    bottom: 10px;
+    font-size: 13px;
+    color: #f5f7ff;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.25);
+  }
+  .meta-left { left: 10px; }
+  .meta-right { right: 10px; }
+
+  /* 开发态示例入口（左上角） */
+  .dev-link {
+    position: fixed;
+    left: 20px;
+    top: 20px;
+  }
+
+  /* 响应式：宽度变窄时改为两列/一列 */
+  @media (max-width: 1180px) {
+    .feature-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .title { font-size: 26px; }
+    .feature-grid { grid-template-columns: 1fr; }
+  }
 }
