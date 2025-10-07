@@ -110,6 +110,15 @@ export default function LMService() {
               <Button disabled={loading || cmdLoading}>返回</Button>
             </Link>
             <div>
+              <Link to="/llm-api-config">
+                <Button
+                  type="primary"
+                  shape="round"
+                  style={{ marginRight: '20px' }}
+                >
+                  大模型API配置
+                </Button>
+              </Link>
               <Popconfirm
                 title="修改模型存储位置的方法"
                 description={

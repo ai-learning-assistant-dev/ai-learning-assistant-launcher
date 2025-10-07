@@ -75,7 +75,13 @@
     "xterm-theme": "^1.1.0"
   },
   "dependencies": {
+    "@langchain/anthropic": "^0.3.30",
+    "@langchain/deepseek": "^0.1.0",
+    "@langchain/google-genai": "^0.2.18",
+    "@langchain/ollama": "^0.2.4",
+    "@langchain/openai": "^0.6.14",
     "electron-squirrel-startup": "^1.0.1",
+    "langchain": "^0.3.35",
     "pdf-lib": "^1.17.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"

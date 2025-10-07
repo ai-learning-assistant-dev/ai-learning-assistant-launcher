@@ -1,8 +1,8 @@
 import type { Channels } from '../ipc-data-type';
 import { ContainerCreateMountOption } from '../podman-desktop/libpod-dockerode';
 
-export type ServiceName = 'obsidianApp' | 'obsidianVault' | 'container' | 'TTS' | 'PDF';
-export type ActionName = 'query' | 'update' | 'selectVoiceFile' | 'initVoiceFileList' | 'deleteVoiceFile' | 'get' | 'set';
+export type ServiceName = 'obsidianApp' | 'obsidianVault' | 'container' | 'TTS' | 'PDF' | 'LLM' | 'copilot';
+export type ActionName = 'query' | 'update' | 'selectVoiceFile' | 'initVoiceFileList' | 'deleteVoiceFile' | 'get' | 'set' | 'testConnection' | 'syncAllApiKeys';
 
 export const channel: Channels = 'configs';
 
@@ -97,3 +97,19 @@ export interface PdfConfig {
   table_enable: boolean;
   formula_enable: boolean;
 }
+
+export interface CustomModel {
+  id?: string;
+  name: string;
+  provider: string;
+  baseUrl: string;
+  apiKey?: string;
+  displayName?: string;
+  isEmbeddingModel?: boolean;
+  capabilities?: string[];
+}
+
+export interface LLMConfig {
+  models: CustomModel[];
+}
+

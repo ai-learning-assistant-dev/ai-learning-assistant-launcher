@@ -9,6 +9,7 @@ import {
   ServiceName,
   ContainerConfig,
   VoiceConfigFile,
+  LLMConfig
 } from '../../../main/configs/type-info';
 import { channel as cmdChannel } from '../../../main/cmd/type-info';
 
@@ -18,9 +19,11 @@ export default function useConfigs() {
     useState<ObsidianVaultConfig[]>();
   const [containerConfig, setContainerConfig] = useState<ContainerConfig>();
   const [voiceConfig, setVoiceConfig] = useState<VoiceConfigFile>();
+  const [llmConfig, setLlmConfig] = useState<LLMConfig>();
   const [loading, setLoading] = useState(false);
   const [selectedVoiceFile, setSelectedVoiceFile] = useState<string | null>(null);
   const [voiceFileList, setVoiceFileList] = useState<string[]>([]);
+  const [testingResult, setTestingResult] = useState<{success: boolean, message: string} | null>(null);
   
   function action(
     actionName: ActionName,
@@ -48,6 +51,7 @@ export default function useConfigs() {
     window.electron.ipcRenderer.sendMessage(channel, 'query', 'obsidianApp');
     window.electron.ipcRenderer.sendMessage(channel, 'query', 'obsidianVault');
     window.electron.ipcRenderer.sendMessage(channel, 'query', 'container');
+    window.electron.ipcRenderer.sendMessage(channel, 'query', 'LLM');
   }, []);
   
   const queryVoice = useCallback((modelType: 'gpu' | 'cpu' = 'gpu') => {
@@ -101,7 +105,31 @@ export default function useConfigs() {
             console.debug('voice payload', payload);
             setVoiceConfig(payload);
             setLoading(false);
-          } else if (actionName === 'selectVoiceFile' && service === 'TTS') {
+          } else if (actionName === 'query' && service === 'LLM') {
+            console.debug('llm payload', payload);
+            setLlmConfig(payload);
+            setLoading(false);
+          } else if (actionName === 'testConnection' && service === 'LLM') {
+            console.debug('test connection payload', payload);
+           // 处理测试连接结果
+            setTestingResult({
+              success: payload.success,
+              message: payload.message
+            });
+            
+            if (payload.success) {
+              notification.success({
+                message: payload.message,
+                placement: 'topRight',
+              });
+            } else {
+              notification.error({
+                message: payload.message,
+                placement: 'topRight',
+              });    
+            }
+            setLoading(false);
+          }else if (actionName === 'selectVoiceFile' && service === 'TTS') {
             console.debug('selected voice file payload', payload);
             if (payload.canceled) {
               // 用户取消选择，只重置loading状态
@@ -159,11 +187,13 @@ export default function useConfigs() {
     obsidianVaultConfig,
     containerConfig,
     voiceConfig,
+    llmConfig,
     loading,
     queryVoice,
     selectedVoiceFile,
     voiceFileList,
     initVoiceFileList,
     deleteVoiceFile,
+    testingResult
   };
 }
