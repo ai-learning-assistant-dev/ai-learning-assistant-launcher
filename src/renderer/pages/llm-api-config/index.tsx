@@ -250,6 +250,9 @@ const LLMConfig: React.FC = () => {
         id: modelId
       };
       
+      // 调用测试连接功能前重置loading状态
+      setShowTestResult(false);
+      setLocalTestingResult(null);
       // 调用测试连接功能
       action('testConnection', 'LLM', model);
     }).catch(errorInfo => {

@@ -434,13 +434,13 @@ async function testModelConnection(model: CustomModel): Promise<{success: boolea
         default:
           // 对于其他提供商，尝试通用的 OpenAI 格式
           const generic = new ChatOpenAI({
-            apiKey: model.apiKey,
             model: model.name,
             temperature: 0,
             maxTokens: undefined,
             timeout: undefined,
             maxRetries: 2,
             configuration: {
+              apiKey: model.apiKey,
               baseURL: model.baseUrl
             }
           });

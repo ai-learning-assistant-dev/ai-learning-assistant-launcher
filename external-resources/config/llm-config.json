@@ -30,6 +30,7 @@
       "provider": "lm-studio",
       "baseUrl": "http://localhost:1234/v1",
       "apiKey": "",
+      "isEmbeddingModel": false,
       "id": "lm-studio-qwen3-4b"
     },
     {
@@ -43,9 +44,10 @@
     },
     {
       "name": "text-embedding-nomic-embed-text-v1.5",
+      "displayName": "BAAI/bge-m3",
       "provider": "lm-studio",
       "baseUrl": "http://localhost:1234/v1",
-      "apiKey": "1",
+      "apiKey": "",
       "isEmbeddingModel": true,
       "id": "lm-studio-text-embedding-nomic-embed-text-v1.5"
     }
