@@ -276,8 +276,8 @@ export default function AiService() {
                   shape="round"
                   size="small"
                   disabled={
-                    // (item.serviceName !== 'TTS' && (!isInstallWSL || checkingWsl)) ||
-                    !isInstallWSL ||
+                    (item.serviceName !== 'TTS' && (!isInstallWSL || checkingWsl)) ||
+                    // !isInstallWSL ||
                     checkingWsl ||
                     loading ||
                     cmdLoading ||

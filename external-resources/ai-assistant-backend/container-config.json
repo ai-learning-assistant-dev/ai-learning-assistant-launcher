@@ -39,11 +39,11 @@
     },
     "env": {
       "SERVICE_TYPE": "tts",
-      "TTS_MODELS": "index-tts"
+      "TTS_MODELS": "kokoro"
     },
     "gpuConfig": {
-      "forceNvidia": true,
-      "forceCPU": false
+      "forceNvidia": false,
+      "forceCPU": true
     },
     "mounts": [
       {

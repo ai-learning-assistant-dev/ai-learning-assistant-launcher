@@ -74,7 +74,7 @@ async function syncTtsConfigToAloud(event: any, model: string) {
     event.reply(
       channel, 
       MESSAGE_TYPE.INFO, 
-      `批量同步完成: 成功${successCount}个, 失败${failCount}个\n${results.join('\n')}。\n音色选择请到aloud插件中设置`
+      `批量同步aloud插件配置完成: 成功${successCount}个, 失败${failCount}个\n${results.join('\n')}，音色选择请到aloud插件中设置。`
     );
     
   } catch (error) {
