@@ -61,6 +61,11 @@ import {
   ActionName as ActionNamePdfConvert,
   ServiceName as ServiceNamePdfConvert,
 } from './pdf-convert/type-info';
+import {
+  ActionName as LogActionName,
+  ServiceName as LogServiceName,
+} from './log-main/type-info';
+
 export type AllAction =
   | ActionNamePodman
   | ActionNameCmd
@@ -69,7 +74,8 @@ export type AllAction =
   | ActionNamePdfConvert
   | ActionNameLMStudio
   | ActionNameExampleMain
-  | ActionNameWorkspace; // 添加 workspace 类型
+  | ActionNameWorkspace // 添加 workspace 类型
+  | LogActionName;
 
 export type AllService =
   | ServiceNamePodman
@@ -79,7 +85,8 @@ export type AllService =
   | ServiceNamePdfConvert
   | ServiceNameLMStudio
   | ServiceNameExampleMain
-  | ServiceNameWorkspace; // 添加 workspace 类型
+  | ServiceNameWorkspace
+  | LogServiceName;
 
 export class MessageData<
   A extends AllAction = AllAction,
