@@ -38,10 +38,11 @@
       ]
     },
     "env": {
-      "SERVICE_TYPE": "tts"
+      "SERVICE_TYPE": "tts",
+      "TTS_MODELS": "index-tts"
     },
     "gpuConfig": {
-      "forceNvidia": false,
+      "forceNvidia": true,
       "forceCPU": false
     },
     "mounts": [
@@ -51,7 +52,9 @@
         "Propagation": "rprivate",
         "Type": "bind",
         "RW": true,
-        "Options": ["rbind"]
+        "Options": [
+          "rbind"
+        ]
       },
       {
         "Destination": "/app/tts/models/index-tts/voices",
@@ -59,7 +62,9 @@
         "Propagation": "rprivate",
         "Type": "bind",
         "RW": true,
-        "Options": ["rbind"]
+        "Options": [
+          "rbind"
+        ]
       }
     ]
   },
