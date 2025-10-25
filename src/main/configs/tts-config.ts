@@ -16,8 +16,10 @@ const containerConfigPath = path.join(
   'container-config.json',
 );
 
+export { syncTtsConfigToAloud };
+
 // 同步TTS配置到Aloud插件
-async function syncTtsConfigToAloud(event: any, model: string) {
+async function syncTtsConfigToAloud(event: any, channel: string, model: string) {
   try {
     // 获取Obsidian配置路径
     const obsidianConfigPath = '%APPDATA%\\Obsidian\\obsidian.json'.replace(
@@ -54,7 +56,7 @@ async function syncTtsConfigToAloud(event: any, model: string) {
           // 为每个仓库同步Aloud插件配置
           await syncSingleAloudConfig(vaultId, obsidianConfig.vaults[vaultId], model);
           successCount++;
-          results.push(`仓库 ${vaultName} 同步成功`);
+          results.push(`仓库 ${vaultName} 同步成功；`);
         } catch (error) {
           const vaultPath = obsidianConfig.vaults[vaultId].path;
           const pathParts = vaultPath.split(/[/\\]/);
@@ -74,7 +76,7 @@ async function syncTtsConfigToAloud(event: any, model: string) {
     event.reply(
       channel, 
       MESSAGE_TYPE.INFO, 
-      `批量同步aloud插件配置完成: 成功${successCount}个, 失败${failCount}个\n${results.join('\n')}，音色选择请到aloud插件中设置。`
+      `批量同步aloud插件配置完成: 成功${successCount}个, 失败${failCount}个；${results.join('\n')}音色选择请到aloud插件中设置。`
     );
     
   } catch (error) {
@@ -222,7 +224,7 @@ export async function ttsConfig(
       );
 
       // 同步配置到aloud插件
-      await syncTtsConfigToAloud(event, model);
+      await syncTtsConfigToAloud(event, channel, model);
 
       console.debug('TTS config updated successfully');
       event.reply(

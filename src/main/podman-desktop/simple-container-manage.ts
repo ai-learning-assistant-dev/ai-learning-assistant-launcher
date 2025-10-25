@@ -26,6 +26,7 @@ import { appPath } from '../exec';
 import { convertWindowsPathToPodmanMachinePath, isWindows } from '../exec/util';
 import convertPath from '@stdlib/utils-convert-path';
 import { ContainerConfig } from '../configs/type-info';
+import { syncTtsConfigToAloud } from '../configs/tts-config';
 
 let connectionGlobal: LibPod & Dockerode;
 
@@ -155,8 +156,19 @@ export default async function init(ipcMain: IpcMain) {
             if (action === 'start') {
               await improveStablebility(async () => {
                 try {
-                  await container.start();
+                  // await container.start();
                   event.reply(channel, MESSAGE_TYPE.INFO, '成功启动服务');
+                  // 如果是TTS服务，同步配置到aloud插件
+                  if (serviceName === 'TTS') {
+                    // 获取当前使用的模型
+                    const config = getContainerConfig();
+                    let model = 'kokoro'; // 默认模型
+                    if (config.TTS.env && config.TTS.env.TTS_MODELS) {
+                      model = config.TTS.env.TTS_MODELS;
+                    }
+                    // 同步配置到aloud插件
+                    await syncTtsConfigToAloud(event, channel, model);
+                  }
                 } catch (e) {
                   console.error(e);
                   if (
