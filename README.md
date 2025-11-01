@@ -19,6 +19,7 @@ npm run make
 #打包-压缩包-不包含依赖软件，最终包体积大约100MB
 npm run make-mini
 ```
+当你在windows上开发时，请使用CMD来运行npm run start等命令，不要再Git Bash中运行npm run start，因为这样会导致程序内的各种命令路径出错
 
 ## 目录结构
 ```

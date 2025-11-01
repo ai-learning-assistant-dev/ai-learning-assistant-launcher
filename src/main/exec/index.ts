@@ -232,7 +232,7 @@ export class Exec {
             'Execution cancelled',
             'Failed to execute command: Execution cancelled',
             1,
-            command,
+            `${command} ${args?.join(' ')}`,
             stdout.trim(),
             stderr.trim(),
             true,
@@ -247,7 +247,7 @@ export class Exec {
           'Failed to execute cancel: Process has been already killed',
           'Failed to execute cancel: Process has been already killed',
           1,
-          command,
+          `${command} ${args?.join(' ')}`,
           stdout.trim(),
           stderr.trim(),
           false,
@@ -275,7 +275,7 @@ export class Exec {
           error.name,
           `Failed to execute command: ${error.message}`,
           1,
-          command,
+          `${command} ${args?.join(' ')}`,
           stdout.trim(),
           stderr.trim(),
           false,
@@ -294,16 +294,20 @@ export class Exec {
           resolve(result);
         } else {
           options?.logger?.error(
-            `Command execution failed with exit code ${exitCode}`,
+            `Command execution failed with exit code ${exitCode}\n` +
+              `command: ${command} ${args?.join(' ')}\n` +
+              `exitCode: ${exitCode}\n` +
+              `stdout: ${stdout.trim()}\n` +
+              `stderr: ${stderr.trim()}\n`,
           );
           const errResult: RunError = new RunErrorImpl(
             `Command execution failed with exit code ${exitCode}`,
-            `command: ${command}\n` +
+            `command: ${command} ${args?.join(' ')}\n` +
               `exitCode: ${exitCode}\n` +
               `stdout: ${stdout.trim()}\n` +
               `stderr: ${stderr.trim()}\n`,
             exitCode ?? 1,
-            command,
+            `${command} ${args?.join(' ')}`,
             stdout.trim(),
             stderr.trim(),
             false,
