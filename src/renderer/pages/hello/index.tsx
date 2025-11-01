@@ -1,4 +1,4 @@
-import { Button, message, Space } from 'antd';
+import { Button, message, Space, Modal } from 'antd';
 import { NavLink } from 'react-router-dom';
 import { useEffect, useState, useRef } from 'react'; // 添加 useRef 导入
 import obsidianLogo from './2023_Obsidian_logo.png';
@@ -6,6 +6,11 @@ import toolsIcon from './Tools_Icon.png';
 import llmIcon from './LLM_Icon.png';
 import heroImage from './Frame 2.png';
 import welcomeImage from './Welcome.png';
+// 添加新的图片导入
+import aiLearningAssistant1 from './AILearningAssistant1.png';
+import aiLearningAssistant2 from './AILearningAssistant2.png';
+import qrCodeImage from './QR_code_image.png'; // 新增二维码图片导入
+import subjectIcon from './subject_icon.png'; // 新增学科培训图标导入
 import './index.scss';
 import { LeftOutlined, RightOutlined } from '@ant-design/icons';
 import { useLogContainer } from '../../containers/log-container';
@@ -14,6 +19,9 @@ export default function Hello() {
   // 使用新的日志容器
   const { openLogsDirectory, setupLogListener } = useLogContainer();
   
+  // 添加二维码模态框的状态
+  const [isModalVisible, setIsModalVisible] = useState(false);
+
   // 设置监听器
   useEffect(() => {
     const cancel = setupLogListener(
@@ -36,10 +44,13 @@ export default function Hello() {
   // 轮播图数据
   const slides = [
     {
-      content: <img src={welcomeImage} alt="Welcome" className="welcome-image" />
+      content: <img src={heroImage} alt="Hero" className="hero-image-slide" />
     },
     {
-      content: <img src={heroImage} alt="Hero" className="hero-image-slide" />
+    content: <img src={aiLearningAssistant1} alt="AILearningAssistant 1" className="hero-image-slide" />
+    },
+    {
+      content: <img src={aiLearningAssistant2} alt="AILearningAssistant 2" className="hero-image-slide" />
     }
   ];
 
@@ -89,6 +100,17 @@ export default function Hello() {
     openLogsDirectory();
   };
 
+  // 显示二维码模态框
+  const showQrCodeModal = () => {
+    setIsModalVisible(true);
+  };
+
+  // 隐藏二维码模态框
+  const handleCancel = () => {
+    setIsModalVisible(false);
+  };
+
+
   // 设置自动轮播效果
   useEffect(() => {
     startAutoSlide();
@@ -103,33 +125,47 @@ export default function Hello() {
     <div className="hello-root">
       <div className="hello-container">
         <div className="hello-content">
-          {/* 轮播图容器 */}
-          <div className="carousel-container">
-            {slides.map((slide, index) => (
-              <div key={index} className={`carousel-slide ${index === currentSlide ? 'active' : ''}`}>
-                {slide.content}
+          {/* 固定布局：左侧 Welcome 图片，右侧轮播图 */}
+          <div className="hello-header">
+            <div className="header-content">
+              {/* 左侧固定 Welcome 图片 */}
+              <div className="logo-section">
+                <div className="logo-container">
+                  <img src={welcomeImage} alt="Welcome" />
+                </div>
               </div>
-            ))}
-          </div>
-
-          {/* 底部控制区域 */}
-          <div className="carousel-bottom-controls">
-            <div className="carousel-indicators">
-              {slides.map((_, index) => (
-                <div
-                  key={index}
-                  className={`indicator ${index === currentSlide ? 'active' : ''}`}
-                  onClick={() => goToSlide(index)}
-                />
-              ))}
-            </div>
-            <div className="carousel-navigation">
-              <button className="carousel-control-bottom" onClick={prevSlide}>
-                <Space><LeftOutlined /></Space>
-              </button>
-              <button className="carousel-control-bottom" onClick={nextSlide}>
-                <Space><RightOutlined /></Space>
-              </button>
+              
+              {/* 右侧轮播图容器 */}
+              <div className="hero-image">
+                <div className="carousel-container">
+                  {slides.map((slide, index) => (
+                    <div key={index} className={`carousel-slide ${index === currentSlide ? 'active' : ''}`}>
+                      {slide.content}
+                    </div>
+                  ))}
+                </div>
+                
+                {/* 底部控制区域 - 指示器和切换按钮在同一行 */}
+                <div className="carousel-bottom-controls">
+                  <div className="carousel-indicators">
+                    {slides.map((_, index) => (
+                      <div
+                        key={index}
+                        className={`indicator ${index === currentSlide ? 'active' : ''}`}
+                        onClick={() => goToSlide(index)}
+                      />
+                    ))}
+                  </div>
+                  <div className="carousel-navigation">
+                    <button className="carousel-control-bottom" onClick={prevSlide}>
+                      <Space><LeftOutlined /></Space>
+                    </button>
+                    <button className="carousel-control-bottom" onClick={nextSlide}>
+                      <Space><RightOutlined /></Space>
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
            
@@ -189,6 +225,31 @@ export default function Hello() {
                   </NavLink>
                 </div>
               </div>
+
+              {/* Subject Training Card */}
+              <div className="feature-card">
+                <div className="feature-wrapper">
+                  <div className="feature-icon-text">
+                    <div className="subject-icon-container">
+                      <img className="subject-icon" src={subjectIcon} alt="Subject Icon" />
+                    </div>
+                    <span className="feature-title">学科培训</span>
+                  </div>
+                  <div className="feature-description">
+                    <p className="description-text">AI辅助的学科知识培训，学员建档设立目标，帮助补齐技能知识短板</p>
+                  </div>
+                </div>
+                <div className="feature-button-container">
+                  <Button 
+                    className="feature-button" 
+                    block 
+                    size="large"
+                    onClick={() => message.info('即将开放学科培训功能')}
+                  >
+                    <span>开始</span>
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
           
@@ -205,18 +266,27 @@ export default function Hello() {
               >
                 <span className="log-text">日志导出</span>
               </Button>
-              {process.env.NODE_ENV === 'development' && (
-                <NavLink
-                  to="/example"
-                  className="dev-example-link-inline"
-                >
-                  <Button className="dev-example-button">代码示例页</Button>
-                </NavLink>
-              )}
+              <Button 
+                className="get-help-button" 
+                onClick={showQrCodeModal}
+              >
+                获取帮助
+              </Button>
             </div>
           </div>
         </div>
       </div>
+      {/* 二维码模态框 */}
+      <Modal
+        className="qr-modal"
+        open={isModalVisible}
+        onCancel={handleCancel}
+        footer={null}
+        centered
+      >
+        <img className="qr-code-image" src={qrCodeImage} alt="QQ群二维码" />
+        <p className="qr-description">扫描二维码加入QQ群，关于AI学习助手，在群中提出你的任何疑问，会有专业人员解答</p>
+      </Modal>
     </div>
   );
 }

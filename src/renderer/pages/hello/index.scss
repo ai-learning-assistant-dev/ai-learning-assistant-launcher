@@ -113,188 +113,6 @@ body{
       }
     }
 
-    // 轮播图样式
-    .carousel-container {
-      position: relative;
-      width: 100%;
-      max-width: 817px;
-      min-height: 350px;
-      margin: 0 auto 20px;
-      margin: 0 auto 30px; // 增加底部边距
-      border: 1px solid rgba(0, 0, 0, 0.05); // 添加轻微边框
-      border-radius: 8px; // 圆角边框
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05); // 添加轻微阴影增强边界感
-      overflow: hidden; // 隐藏超出边界的内容
-
-      .carousel-slides-wrapper {
-        display: flex;
-        width: 100%;
-        height: 100%;
-        transition: transform 0.5s ease-in-out; // 添加平滑过渡效果
-      }
-
-      .carousel-slide {
-        display: none;
-        width: 100%;
-        height: 350px;
-        
-        &.active {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        
-        .slide-content {
-          display: flex;
-          width: 100%;
-          height: 100%;
-          
-          .logo-section {
-            width: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            
-            .logo-container {
-              width: 150px;
-              height: 113px;
-              filter: drop-shadow(0px 4px 4px rgba(236, 234, 234, 0.25));
-              border-radius: 85px;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              margin-right: 20px;
-              
-              img {
-                width: 150px;
-                height: 113px;
-                max-width: 100%;
-                height: auto;
-              }
-            }
-          }
-          
-          .image-section {
-            width: 50%;
-            background-size: contain;
-            background-repeat: no-repeat;
-            background-position: center;
-          }
-        }
-        
-        .welcome-image,
-        .hero-image-slide {
-          width: 100%;
-          height: 100%;
-          object-fit: contain;
-          display: block;
-          margin: 0 auto;
-          max-width: 100%;
-        }
-      }
-      
-      .carousel-control {
-        position: absolute;
-        top: 50%;
-        transform: translateY(-50%);
-        background: rgba(0, 0, 0, 0.3);
-        color: white;
-        border: none;
-        font-size: 24px;
-        cursor: pointer;
-        padding: 16px;
-        border-radius: 50%;
-        z-index: 10;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-
-        &.prev {
-          left: -50px;
-        }
-        
-        &.next {
-          right: -50px;
-        }
-      }
-    }
-
-    // 新增底部控制区域样式
-    .carousel-bottom-controls {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      width: 100%;
-      max-width: 817px;
-      margin: 0 auto 20px;
-      
-      .carousel-indicators {
-        display: flex;
-        justify-content: flex-start;
-        align-items: center;
-        gap: 10px;
-        margin: 0;
-        
-        .indicator {
-          width: 12px;
-          height: 12px;
-          border-radius: 50%;
-          background-color: #c9ccce;
-          cursor: pointer;
-          transition: background-color 0.3s ease;
-          
-          &.active {
-            background-color: #f081a3;
-            transform: scale(1.2);
-          }
-        }
-      }
-      
-      .carousel-navigation {
-        display: flex;
-        gap: 10px;
-        
-        .carousel-control-bottom {
-          background: rgba(142, 159, 161, 0.39);
-          color: white;
-          border: none;
-          font-size: 16px;
-          cursor: pointer;
-          padding: 8px 12px;
-          border-radius: 4px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          
-          &:hover {
-            background: rgba(19, 19, 19, 0.925);
-          }
-        }
-      }
-    }
-
-    // 响应式调整
-    @media screen and (max-width: 768px) {
-      .carousel-container {
-        margin: 0 auto 20px;
-        min-height: 250px;
-        
-        .carousel-slide {
-          height: 250px;
-        }
-      }
-      
-      .carousel-bottom-controls {
-        max-width: 100%;
-        padding: 0 10px;
-        box-sizing: border-box;
-        
-        .carousel-indicators {
-          gap: 8px;
-        }
-      }
-    }
-    
     .hello-content {
       display: flex;
       flex-direction: column;
@@ -315,71 +133,190 @@ body{
         align-items: center;
         padding: 0px;
         width: 100%;
-        max-width: 817px;
+        max-width: 1200px;
         min-height: 350px;
-        margin: 0 auto;
+        margin: 0 auto 30px;
         position: relative;
         flex: none;
         order: 0;
         flex-grow: 0;
         
+        // 修改为左右布局
         .header-content {
           display: flex;
           flex-direction: row;
           align-items: center;
-          padding: 0px;
-          width: 50%;
+          width: 100%;
           position: relative;
-          left: 0;
-          top: 0;
-          margin: 0;
-          justify-content: center;
           
-          .logo-container {
-            width: 150px;
-            height: 113px;
-            filter: drop-shadow(0px 4px 4px rgba(0, 0, 0, 0.25));
-            border-radius: 85px;
+          .logo-section {
+            width: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-right: 20px;
             
-            img {
-              width: 150px;
-              height: 113px;
-              max-width: 100%;
-              height: auto;
+            .logo-container {
+              // 增大图片尺寸
+              width: 450px;
+              height: 388px;
+              filter: drop-shadow(0px 4px 4px rgba(0, 0, 0, 0.25));
+              border-radius: 85px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              margin-right: 20px;
+              
+              img {
+                // 调整图片大小以适应容器
+                width: 450px;
+                height: 388px;
+                max-width: 100%;
+                height: auto;
+              }
             }
           }
           
-          .welcome-title {
-            width: 100%;
-            max-width: 360px;
-            min-height: 94px;
-            font-family: 'Source Han Sans SC';
-            font-style: normal;
-            font-weight: 700;
-            font-size: clamp(24px, 4vw, 36px);
-            line-height: 1.3;
+          .hero-image {
+            width: 50%;
+            height: auto;
+            min-height: 350px;
             display: flex;
+            flex-direction: column;
             align-items: center;
-            text-align: center;
-            color: #202020;
-            margin: 0;
+            justify-content: center;
+            
+            .carousel-container {
+              position: relative;
+              width: 100%;
+              max-width: 817px;
+              min-height: 350px;
+              border: 1px solid rgba(0, 0, 0, 0.05);
+              border-radius: 8px;
+              box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+              overflow: hidden;
+              margin: 0 auto;
+
+              .carousel-slides-wrapper {
+                display: flex;
+                width: 100%;
+                height: 100%;
+                transition: transform 0.5s ease-in-out;
+              }
+
+              .carousel-slide {
+                display: none;
+                width: 100%;
+                height: 350px;
+                
+                &.active {
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                }
+                
+                .welcome-image,
+                .hero-image-slide {
+                  width: 100%;
+                  height: 100%;
+                  object-fit: contain;
+                  display: block;
+                  margin: 0 auto;
+                  max-width: 100%;
+                }
+              }
+              
+              .carousel-control {
+                position: absolute;
+                top: 50%;
+                transform: translateY(-50%);
+                background: rgba(0, 0, 0, 0.3);
+                color: white;
+                border: none;
+                font-size: 24px;
+                cursor: pointer;
+                padding: 16px;
+                border-radius: 50%;
+                z-index: 10;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+
+                &.prev {
+                  left: 10px;
+                }
+                
+                &.next {
+                  right: 10px;
+                }
+              }
+            }
+            
+            // 优化后的轮播图底部控制区域
+            .carousel-bottom-controls {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              width: 100%;
+              max-width: 817px;
+              margin: 20px auto 0;
+              padding: 0 5px;
+              box-sizing: border-box;
+              
+              .carousel-indicators {
+                display: flex;
+                justify-content: flex-start;
+                align-items: center;
+                gap: 12px;
+                margin: 0;
+                
+                .indicator {
+                  width: 12px;
+                  height: 12px;
+                  border-radius: 50%;
+                  background-color: #c9ccce;
+                  cursor: pointer;
+                  transition: all 0.3s ease;
+                  
+                  &.active {
+                    background-color: #f081a3;
+                    transform: scale(1.2);
+                  }
+                }
+              }
+              
+              .carousel-navigation {
+                display: flex;
+                gap: 12px;
+                
+                .carousel-control-bottom {
+                  background: rgba(142, 159, 161, 0.39);
+                  color: white;
+                  border: none;
+                  font-size: 16px;
+                  cursor: pointer;
+                  padding: 10px 15px;
+                  border-radius: 6px;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  transition: all 0.3s ease;
+                  
+                  &:hover {
+                    background: rgba(19, 19, 19, 0.925);
+                    transform: translateY(-2px);
+                  }
+                  
+                  .ant-space-item {
+                    display: flex;
+                    align-items: center;
+                  }
+                }
+              }
+            }
           }
         }
-        
-        .hero-image {
-          position: relative;
-          width: 50%;
-          height: auto;
-          min-height: 395px;
-          background-size: contain;
-          background-repeat: no-repeat;
-          background-position: center;
-        }
       }
+    
       
       .features-section {
         display: flex;
@@ -400,7 +337,7 @@ body{
           justify-content: center;
           align-items: flex-start;
           padding: 0px;
-          gap: 24px;
+          gap: 20px;
           width: 100%;
           flex: none;
           order: 0;
@@ -413,7 +350,7 @@ body{
             padding: 0px;
             gap: 0px;
             width: 100%;
-            max-width: 351px;
+            max-width: 300px;
             min-height: 320px;
             background: #FFFFFF;
             border: 1px solid #E5E5E5;
@@ -482,6 +419,21 @@ body{
                   height: 32px;
                   
                   .llm-icon {
+                    width: 32px;
+                    height: 32px;
+                  }
+                }
+
+                .subject-icon-container {
+                  display: flex;
+                  flex-direction: row;
+                  justify-content: center;
+                  align-items: center;
+                  padding: 0px;
+                  width: 32px;
+                  height: 32px;
+                  
+                  .subject-icon {
                     width: 32px;
                     height: 32px;
                   }
@@ -641,9 +593,14 @@ body{
             width: auto; /* 改为自动宽度 */
             min-width: 80px; /* 最小宽度 */
             min-height: 22px;
-            background: #22C55E;
+            background: #ff4d4f;
             border: 1px solid #E5E5E5;
             border-radius: 6px;
+
+            &:hover {
+              background: #ff7875;
+              transform: translateY(-2px);
+            }
             
             .log-text {
               display: flex;
@@ -661,6 +618,34 @@ body{
               font-size: clamp(10px, 2vw, 12px);
               line-height: 16px;
               color: #FFFFFF;
+            }
+          }
+
+          .get-help-button {
+            background: #52c41a; // 绿色背景
+            border: 1px solid #e5e5e5;
+            border-radius: 6px;
+            color: #ffffff;
+            font-family: 'Inter', sans-serif;
+            font-style: normal;
+            font-weight: 500;
+            font-size: clamp(10px, 2vw, 12px);
+            line-height: 16px;
+            cursor: pointer;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: row;
+            justify-content: center;
+            align-items: center;
+            padding: 2px 6px;
+            gap: 4px;
+            width: auto;
+            min-width: 90px;
+            min-height: 22px;
+            
+            &:hover {
+              background: #73d13d;
+              transform: translateY(-2px);
             }
           }
           
@@ -720,6 +705,23 @@ body{
   }
 }
 
+// 二维码模态框样式
+.qr-modal {
+  .qr-code-image {
+    width: 100%;
+    max-width: 300px;
+    display: block;
+    margin: 0 auto;
+  }
+  
+  .qr-description {
+    text-align: center;
+    margin-top: 16px;
+    font-size: 16px;
+    color: #333;
+  }
+}
+
 /* 响应式媒体查询 */
 @media screen and (max-width: 1200px) {
   .hello-root .hello-container .hello-content .features-section .features-container {
@@ -728,7 +730,7 @@ body{
   }
   
   .hello-root .hello-container .hello-content .features-section .features-container .feature-card {
-    max-width: 300px;
+    max-width: 240px;
     margin-bottom: 20px;
   }
 }
