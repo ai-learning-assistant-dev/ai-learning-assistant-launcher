@@ -68,14 +68,6 @@
       }
     ]
   },
-  "LLM": {
-    "port": [
-      {
-        "container": 7000,
-        "host": 7000
-      }
-    ]
-  },
   "PDF": {
     "port": [
       {
@@ -101,5 +93,17 @@
     },
     "privileged": true,
     "restart_policy": "no"
+  },
+  "TRAINING": {
+    "port": [
+      {
+        "container": 3000,
+        "host": 7100
+      }
+    ],
+    "command": {
+      "start": null,
+      "stop": null
+    }
   }
 }

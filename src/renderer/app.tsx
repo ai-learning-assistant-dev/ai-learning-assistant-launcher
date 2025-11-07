@@ -14,6 +14,7 @@ import ExamplePage from './pages/example-page';
 import PdfConvert from './pages/pdf-convert';
 import PdfConfig from './pages/pdf-config';
 import LLMConfig from './pages/llm-api-config';
+import TrainingService from './pages/training-service';
 
 export default function App() {
   return (
@@ -29,6 +30,7 @@ export default function App() {
           <Route path="/ASR-config" element={<ASRConfig />} />
           <Route path="/PDF-config" element={<PdfConfig />} />
           <Route path="/pdf-convert" element={<PdfConvert />} />
+          <Route path="/training-service" element={<TrainingService />} />
           <Route
             path="/obsidian-plugin/:vaultId"
             element={<ObsidianPlugin />}

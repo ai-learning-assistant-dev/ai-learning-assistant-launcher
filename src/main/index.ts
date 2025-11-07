@@ -11,6 +11,7 @@ import initExampleMain from './example-main';
 import initTerminalLog from './terminal-log';
 import initPdfConvert from './pdf-convert';
 import initLogService from './log-main';
+import initTrainingService from './training-service';
 import path from 'node:path';
 import { appPath, autoAdaptEncodingForWindows } from './exec';
 import { logDeviceInfo } from './logger/log-device-info';
@@ -52,6 +53,7 @@ initContainerLogs(ipcMain);
 initLMStudio(ipcMain);
 initExampleMain(ipcMain);
 initPdfConvert(ipcMain);
+initTrainingService(ipcMain);
 updateTemplate();
 
 const createWindow = (): void => {

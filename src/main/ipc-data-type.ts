@@ -12,7 +12,8 @@ export type Channels =
   | 'terminal-log'
   | 'pdf-convert'
   | 'pdf-convert-completed'
-  | 'pdf-config';
+  | 'pdf-config'
+  | 'training-service';
 
 export enum MESSAGE_TYPE {
   /** 阻断性错误，会把转圈中的按钮变成不转圈 */

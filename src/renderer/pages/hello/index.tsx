@@ -240,19 +240,15 @@ export default function Hello() {
                   </div>
                 </div>
                 <div className="feature-button-container">
-                  <Button 
-                    className="feature-button" 
-                    block 
-                    size="large"
-                    onClick={() => message.info('即将开放学科培训功能')}
-                  >
-                    <span>开始</span>
-                  </Button>
+                  <NavLink to="/training-service" style={{ width: '100%' }}>
+                    <Button className="feature-button" block size="large">
+                      开始
+                    </Button>
+                  </NavLink>
                 </div>
               </div>
             </div>
           </div>
-          
           {/* Footer with version info and log export */}
           <div className="hello-footer">
             <div className="version-info">

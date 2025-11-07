@@ -4,6 +4,7 @@ import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 import { AllAction, AllService, Channels, MESSAGE_TYPE, MessageData } from './ipc-data-type';
 import 'electron-log/preload';
 import { installExampleHandle, ServiceName as ServiceNameExample } from './example-main/type-info';
+import { startTrainingServiceHandle } from './training-service/type-info';
 
 const electronHandler = {
   ipcRenderer: {
@@ -55,13 +56,15 @@ async function ipcInvoke<T>(channel: string, ...args: unknown[]): Promise<T> {
 const mainHandle = {
   installExampleHandle: async (service: ServiceNameExample): Promise<boolean> => {
     return ipcInvoke(installExampleHandle, service);
+  },
+  startTrainingServiceHandle: async () => {
+    return ipcInvoke(startTrainingServiceHandle);
   }
 }
 
 export type MainHandle = typeof mainHandle;
 
 export function initExposure(): void {
-
   contextBridge.exposeInMainWorld(
     'mainHandle',
     mainHandle

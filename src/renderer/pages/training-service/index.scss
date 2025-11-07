@@ -1,0 +1,17 @@
+.ai-service{
+  display: flex;
+  width: 100%;
+  justify-content: center;
+  flex-direction: column;
+  .ai-service-list{
+    width: calc(100% - 20px);
+    flex: 0 0 auto;
+  }
+  height: 100%;
+  align-items: center;
+
+  .header-container{
+    display: flex;
+    justify-content: space-between;
+  }
+}

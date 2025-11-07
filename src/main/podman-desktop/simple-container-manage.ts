@@ -156,7 +156,7 @@ export default async function init(ipcMain: IpcMain) {
             if (action === 'start') {
               await improveStablebility(async () => {
                 try {
-                  // await container.start();
+                  await container.start();
                   event.reply(channel, MESSAGE_TYPE.INFO, '成功启动服务');
                   // 如果是TTS服务，同步配置到aloud插件
                   if (serviceName === 'TTS') {
