@@ -13,6 +13,7 @@ import { useEffect, useState } from 'react';
 import useDocker from '../../containers/use-docker';
 import {
   ActionName,
+  channel,
   containerNameDict,
   ServiceName,
 } from '../../../main/podman-desktop/type-info';
@@ -23,7 +24,7 @@ import {
 } from '../../../main/cmd/type-info';
 import useCmd from '../../containers/use-cmd';
 import { MESSAGE_TYPE, MessageData } from '../../../main/ipc-data-type';
-import { TerminalLogScreen } from '../../containers/terminal-log-screen';
+import ContainerLogs from '../../containers/container-logs';
 
 interface ContainerItem {
   name: string;
@@ -123,8 +124,28 @@ export default function TrainingService() {
       },
     );
 
+    const cancel2 = window.electron?.ipcRenderer.on(
+      channel,
+      async (messageType: MESSAGE_TYPE, data: any) => {
+        if (messageType === MESSAGE_TYPE.DATA) {
+          const {
+            action: actionName,
+            service,
+            data: success,
+          } = data as MessageData<ActionName, ServiceName, boolean>;
+          if (actionName === 'start' && service === 'TRAINING') {
+            if (success) {
+              //TODO 目前不能准确的获取程序运行成功的信息,需要改造容器
+              // window.mainHandle.startTrainingServiceHandle();
+            }
+          }
+        }
+      },
+    );
+
     return () => {
       cancel();
+      cancel2();
     };
   }, [setShowRebootModal]);
 
@@ -308,7 +329,7 @@ export default function TrainingService() {
               item.state === '已经停止' && (
                 <Popconfirm
                   title="删除容器"
-                  description="你确定要删除容器？删除后再次安装会需要较长时间！"
+                  description="未备份时,删除会导致学习进度丢失,你确定要删除吗?"
                   onConfirm={() => click('remove', item.serviceName)}
                   okText="确认删除"
                   cancelText="不删除"
@@ -353,6 +374,9 @@ export default function TrainingService() {
           </List.Item>
         )}
       />
+      <div className="container-log-box">
+        <ContainerLogs serviceName="TRAINING" />
+      </div>
     </div>
   );
 }
