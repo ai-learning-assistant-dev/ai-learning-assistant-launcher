@@ -57,12 +57,19 @@ updateTemplate();
 const createWindow = (): void => {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    height: 900,
-    width: 1400,
+    height: 720,
+    width: 1280,
     webPreferences: {
       preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
     },
+    show: false,
   });
+
+  // 最大化窗口
+  mainWindow.maximize();
+  
+  // 显示窗口
+  mainWindow.show();
 
   // and load the index.html of the app.
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
