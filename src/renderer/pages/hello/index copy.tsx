@@ -13,11 +13,11 @@ import qrCodeImage from './QR_code_image.png'; // 新增二维码图片导入
 import subjectIcon from './subject_icon.png'; // 新增学科培训图标导入
 import './index.scss';
 import { LeftOutlined, RightOutlined } from '@ant-design/icons';
-import { useLogContainer } from '../../containers/log-container';
+import { useLogContainer } from '../../containers/backup';
 
 export default function Hello() {
   // 使用新的日志容器
-  const { openLogsDirectory, setupLogListener } = useLogContainer();
+  const { exportLogs, setupBackupListener } = useLogContainer();
   
   // 添加二维码模态框的状态
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -28,7 +28,7 @@ export default function Hello() {
 
   // 设置监听器
   useEffect(() => {
-    const cancel = setupLogListener(
+    const cancel = setupBackupListener(
       () => {
         message.success('已打开日志目录，请在文件资源管理器中查看和复制launcher.log日志文件');
       },
@@ -40,7 +40,7 @@ export default function Hello() {
     return () => {
       if (cancel) cancel();
     };
-  }, [setupLogListener]);
+  }, [setupBackupListener]);
 
   // 轮播图状态
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -101,7 +101,7 @@ export default function Hello() {
   // 处理日志导出
   const handleExportLogs = () => {
     // 使用标准方式调用日志目录打开功能
-    openLogsDirectory();
+    exportLogs();
   };
 
   // 显示二维码模态框

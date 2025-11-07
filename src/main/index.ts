@@ -10,7 +10,7 @@ import initLMStudio from './lm-studio';
 import initExampleMain from './example-main';
 import initTerminalLog from './terminal-log';
 import initPdfConvert from './pdf-convert';
-import initLogService from './log-main';
+import initLogService from './backup';
 import path from 'node:path';
 import { appPath, autoAdaptEncodingForWindows } from './exec';
 import { logDeviceInfo } from './logger/log-device-info';

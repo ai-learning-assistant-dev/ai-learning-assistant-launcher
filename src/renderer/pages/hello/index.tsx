@@ -12,31 +12,22 @@ import qrCodeImage from './QR_code_image.png';
 import subjectIcon from './subject_icon.png';
 import './index.scss';
 import { LeftOutlined, RightOutlined } from '@ant-design/icons';
-import { useLogContainer } from '../../containers/log-container';
+import { useLogContainer } from '../../containers/backup';
 
 export default function Hello() {
-  const { openLogsDirectory, setupLogListener } = useLogContainer();
+  const { exportLogs, setupBackupListener } = useLogContainer();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [scale, setScale] = useState(1);
-  const [translateX, setTranslateX] = useState(0);
-  const [translateY, setTranslateY] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const cancel = setupLogListener(
-      () => {
-        message.success('已打开日志目录，请在文件资源管理器中查看和复制launcher.log日志文件');
-      },
-      (error) => {
-        message.error(`无法打开日志目录: ${error}`);
-      }
-    );
+    const cancel = setupBackupListener();
     
     return () => {
       if (cancel) cancel();
     };
-  }, [setupLogListener]);
+  }, [setupBackupListener]);
 
   const [currentSlide, setCurrentSlide] = useState(0);
   
@@ -84,7 +75,7 @@ export default function Hello() {
   };
 
   const handleExportLogs = () => {
-    openLogsDirectory();
+    exportLogs();
   };
 
   const showQrCodeModal = () => {
