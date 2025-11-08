@@ -205,6 +205,7 @@ export async function ttsConfig(
       let model = "";
       if (forceNvidia) {
         containerConfig.TTS.env.TTS_MODELS = 'index-tts';
+        containerConfig.TTS.env.USE_GPU = 'true';
         model = 'index-tts';
       } else if (forceCPU) {
         containerConfig.TTS.env.TTS_MODELS = 'kokoro';

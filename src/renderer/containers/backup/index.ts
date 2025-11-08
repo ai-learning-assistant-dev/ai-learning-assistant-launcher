@@ -1,13 +1,13 @@
 import { useCallback } from "react";
 import { message } from "antd";
 import { MESSAGE_TYPE } from "../../../main/ipc-data-type";
-import { ActionName, ServiceName } from "../../../main/backup/type-info";
+import { ActionName, ServiceName, logChannel } from "../../../main/backup/type-info";
 
 export function useLogContainer() {
   // 使用 backup 通道方式调用日志导出功能
   const exportLogs = useCallback(() => {
     window.electron.ipcRenderer.sendMessage(
-      'backup',
+      logChannel,
       'exportLogs',
       'log'
     );
@@ -19,7 +19,7 @@ export function useLogContainer() {
     onError?: (error: string) => void
   ) => {
     const cancel = window.electron?.ipcRenderer.on(
-      'backup',
+      logChannel,
       (messageType, data) => {
         if (messageType === MESSAGE_TYPE.ERROR) {
           const errorMessage = typeof data === 'string' ? data : '未知错误';
