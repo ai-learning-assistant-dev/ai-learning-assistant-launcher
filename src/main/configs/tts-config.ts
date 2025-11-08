@@ -209,9 +209,11 @@ export async function ttsConfig(
         model = 'index-tts';
       } else if (forceCPU) {
         containerConfig.TTS.env.TTS_MODELS = 'kokoro';
+        containerConfig.TTS.env.USE_GPU = 'false';
         model = 'kokoro';
       } else {
         delete containerConfig.TTS.env.TTS_MODELS;
+        containerConfig.TTS.env.USE_GPU = 'false';
         model = 'kokoro'; // 默认模型
       }
 
