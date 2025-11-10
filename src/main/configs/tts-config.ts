@@ -8,6 +8,7 @@ import {
   removeContainer,
   startContainer,
 } from '../podman-desktop/simple-container-manage';
+import { haveCDIGPU } from '../podman-desktop/ensure-podman-works';
 
 const containerConfigPath = path.join(
   appPath,
@@ -213,8 +214,13 @@ export async function ttsConfig(
         model = 'kokoro';
       } else {
         delete containerConfig.TTS.env.TTS_MODELS;
-        containerConfig.TTS.env.USE_GPU = 'false';
-        model = 'kokoro'; // 默认模型
+        delete containerConfig.TTS.env.USE_GPU;
+        // 猜测自动使用的显卡，准确率99%
+        if (await haveCDIGPU()) {
+          model = 'index-tts';
+        } else {
+          model = 'kokoro';
+        }
       }
 
       // 写回配置文件
