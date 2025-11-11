@@ -1,72 +1,38 @@
 import type { Channels } from '../ipc-data-type';
-import { ContainerCreateMountOption } from '../podman-desktop/libpod-dockerode';
+import { ContainerCreateHealthConfigOption, ContainerCreateMountOption } from '../podman-desktop/libpod-dockerode';
 
 export type ServiceName = 'obsidianApp' | 'obsidianVault' | 'container' | 'TTS' | 'PDF' | 'LLM' | 'copilot';
 export type ActionName = 'query' | 'update' | 'selectVoiceFile' | 'initVoiceFileList' | 'deleteVoiceFile' | 'get' | 'set' | 'testConnection' | 'syncAllApiKeys';
 
 export const channel: Channels = 'configs';
 
-export interface ContainerConfig {
-  ASR: {
-    port: {
-      container: number;
-      host: number;
-    }[];
-    command: {
-      start: string[];
-      stop: string[];
-    };
-    env?: Record<string, string>;
-    mounts?: Array<ContainerCreateMountOption>;
-    privileged?: boolean;
-    restart_policy?: string;
+export interface BaseContainerConfig {
+  port: {
+    container: number;
+    host: number;
+  }[];
+  command: {
+    start: string[];
+    stop: string[];
   };
-  TTS: {
-    port: {
-      container: number;
-      host: number;
-    }[];
-    command: {
-      start: string[];
-      stop: string[];
-    };
-    env?: Record<string, string>;
-    mounts?: Array<ContainerCreateMountOption>;
+  env?: Record<string, string>;
+  mounts?: Array<ContainerCreateMountOption>;
+  healthconfig?: ContainerCreateHealthConfigOption;
+  privileged?: boolean;
+  restart_policy?: string;
+}
+
+export interface ContainerConfig {
+  ASR: BaseContainerConfig;
+  TTS: BaseContainerConfig & {
     gpuConfig?: {
       forceNvidia: boolean;
       forceCPU: boolean;
     };
-    privileged?: boolean;
-    restart_policy?: string;
   };
-  LLM: {
-    port: {
-      container: number;
-      host: number;
-    }[];
-    command: {
-      start: string[];
-      stop: string[];
-    };
-    env?: Record<string, string>;
-    mounts?: Array<ContainerCreateMountOption>;
-    privileged?: boolean;
-    restart_policy?: string;
-  };
-  PDF: {
-    port: {
-      container: number;
-      host: number;
-    }[];
-    command: {
-      start: string[];
-      stop: string[];
-    };
-    env?: Record<string, string>;
-    mounts?: Array<ContainerCreateMountOption>;
-    privileged?: boolean;
-    restart_policy?: string;
-  };
+  LLM: BaseContainerConfig;
+  PDF: BaseContainerConfig;
+  TRAINING: BaseContainerConfig;
 }
 
 export interface ObsidianConfig {

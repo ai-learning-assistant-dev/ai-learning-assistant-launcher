@@ -29,14 +29,18 @@ import ContainerLogs from '../../containers/container-logs';
 interface ContainerItem {
   name: string;
   serviceName: ServiceName;
-  state: '还未安装' | '已经停止' | '正在运行';
+  state: '还未安装' | '已经停止' | '正在运行' | '正在启动';
   port: number;
 }
 
 function getState(container?: ContainerInfo): ContainerItem['state'] {
   if (container) {
     if (container.State === 'running') {
-      return '正在运行';
+      if (container.Status === 'healthy') {
+        return '正在运行';
+      } else if (container.Status === 'starting') {
+        return '正在启动';
+      }
     }
     return '已经停止';
   }
@@ -44,8 +48,8 @@ function getState(container?: ContainerInfo): ContainerItem['state'] {
 }
 
 export default function TrainingService() {
-
-  const { containers, action, loading, initing } = useDocker();
+  const [dockerDatatrigger, setDockerDataTrigger]= useState(1);
+  const { containers, action, loading, initing } = useDocker(dockerDatatrigger);
   const {
     isInstallWSL,
     wslVersion,
@@ -80,6 +84,10 @@ export default function TrainingService() {
       port: 7100,
     },
   ];
+
+  if (containerInfos.filter((item) => item.state === '正在启动').length > 0) {
+    setTimeout(() => setDockerDataTrigger(dockerDatatrigger + 1), 1000);
+  }
 
   function click(actionName: ActionName, serviceName: ServiceName) {
     if (loading || checkingWsl) {
@@ -124,28 +132,8 @@ export default function TrainingService() {
       },
     );
 
-    const cancel2 = window.electron?.ipcRenderer.on(
-      channel,
-      async (messageType: MESSAGE_TYPE, data: any) => {
-        if (messageType === MESSAGE_TYPE.DATA) {
-          const {
-            action: actionName,
-            service,
-            data: success,
-          } = data as MessageData<ActionName, ServiceName, boolean>;
-          if (actionName === 'start' && service === 'TRAINING') {
-            if (success) {
-              //TODO 目前不能准确的获取程序运行成功的信息,需要改造容器
-              // window.mainHandle.startTrainingServiceHandle();
-            }
-          }
-        }
-      },
-    );
-
     return () => {
       cancel();
-      cancel2();
     };
   }, [setShowRebootModal]);
 
@@ -309,16 +297,17 @@ export default function TrainingService() {
                   停止
                 </Button>
               ),
-              item.state === '已经停止' && (
+              (item.state === '已经停止' || item.state === '正在启动') && (
                 // (item.serviceName === 'TTS' || item.state === '已经停止') && (
                 <Button
                   shape="round"
                   size="small"
                   disabled={!isInstallWSL || checkingWsl || cmdLoading}
                   loading={
-                    loading &&
-                    operating.serviceName === item.serviceName &&
-                    operating.actionName === 'start'
+                    (loading &&
+                      operating.serviceName === item.serviceName &&
+                      operating.actionName === 'start') ||
+                    item.state === '正在启动'
                   }
                   type="primary"
                   onClick={() => click('start', item.serviceName)}

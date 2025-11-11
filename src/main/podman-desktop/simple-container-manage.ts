@@ -360,6 +360,7 @@ export async function createContainer(serviceName: ServiceName) {
       host_port: p.host,
     })),
     command: config.command.start,
+    healthconfig: config.healthconfig,
     env: config.env,
     mounts: config.mounts
       ? config.mounts.map((mount) => {
