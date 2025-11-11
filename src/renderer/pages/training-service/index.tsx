@@ -8,7 +8,6 @@ import {
 } from 'antd';
 import { Link, NavLink } from 'react-router-dom';
 import './index.scss';
-import type { ContainerInfo } from 'dockerode';
 import { useEffect, useState } from 'react';
 import useDocker from '../../containers/use-docker';
 import {
@@ -25,30 +24,13 @@ import {
 import useCmd from '../../containers/use-cmd';
 import { MESSAGE_TYPE, MessageData } from '../../../main/ipc-data-type';
 import ContainerLogs from '../../containers/container-logs';
-
-interface ContainerItem {
-  name: string;
-  serviceName: ServiceName;
-  state: '还未安装' | '已经停止' | '正在运行' | '正在启动';
-  port: number;
-}
-
-function getState(container?: ContainerInfo): ContainerItem['state'] {
-  if (container) {
-    if (container.State === 'running') {
-      if (container.Status === 'healthy') {
-        return '正在运行';
-      } else if (container.Status === 'starting') {
-        return '正在启动';
-      }
-    }
-    return '已经停止';
-  }
-  return '还未安装';
-}
+import {
+  ContainerItem,
+  getState,
+} from '../../containers/use-training-service-shortcut';
 
 export default function TrainingService() {
-  const [dockerDatatrigger, setDockerDataTrigger]= useState(1);
+  const [dockerDatatrigger, setDockerDataTrigger] = useState(1);
   const { containers, action, loading, initing } = useDocker(dockerDatatrigger);
   const {
     isInstallWSL,
@@ -369,3 +351,4 @@ export default function TrainingService() {
     </div>
   );
 }
+

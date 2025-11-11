@@ -2,6 +2,11 @@ import { BrowserWindow, IpcMain } from 'electron';
 import { startTrainingServiceHandle, trainingWebURL } from './type-info';
 import { wait } from '../util';
 import { ipcHandle } from '../ipc-util';
+import {
+  getServiceInfo,
+  startService,
+} from '../podman-desktop/simple-container-manage';
+import { ServiceName } from '../podman-desktop/type-info';
 
 export default async function init(ipcMain: IpcMain) {
   ipcHandle(ipcMain, startTrainingServiceHandle, async (_event) =>
@@ -9,8 +14,31 @@ export default async function init(ipcMain: IpcMain) {
   );
 }
 
+async function monitorStatusIsHealthy(service: ServiceName) {
+  return new Promise<void>((resolve, reject) => {
+    const interval = setInterval(async () => {
+      const newInfo = await getServiceInfo(service);
+      if (newInfo.Status !== 'starting') {
+        if (newInfo.Status === 'healthy') {
+          clearInterval(interval);
+          resolve();
+        } else {
+          reject();
+        }
+      }
+    });
+  });
+}
+
 export async function startTrainingService() {
-  createWindow();
+  const info = await startService('TRAINING');
+  if (info.Status === 'healthy') {
+    createWindow();
+  } else {
+    await monitorStatusIsHealthy('TRAINING');
+    createWindow();
+  }
+
   return { someData: 'data1' };
 }
 

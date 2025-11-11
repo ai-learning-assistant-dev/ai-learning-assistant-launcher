@@ -1,5 +1,5 @@
 import { Button, message, Space, Modal } from 'antd';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useEffect, useState, useRef } from 'react'; // 添加 useRef 导入
 import obsidianLogo from './2023_Obsidian_logo.png';
 import toolsIcon from './Tools_Icon.png';
@@ -14,8 +14,10 @@ import subjectIcon from './subject_icon.png'; // 新增学科培训图标导入
 import './index.scss';
 import { LeftOutlined, RightOutlined } from '@ant-design/icons';
 import { useLogContainer } from '../../containers/log-container';
+import { useTrainingServiceShortcut } from '../../containers/use-training-service-shortcut';
 
 export default function Hello() {
+  const trainingServiceShortcut = useTrainingServiceShortcut();
   // 使用新的日志容器
   const { openLogsDirectory, setupLogListener } = useLogContainer();
   
@@ -120,6 +122,14 @@ export default function Hello() {
       clearSlideInterval();
     };
   }, []);
+
+  const [trainingServiceStarting, setTrainingServiceStarting] = useState(false);
+
+  const openTrainingService = async () => {
+    setTrainingServiceStarting(true);
+    await trainingServiceShortcut.start();
+    setTrainingServiceStarting(false);
+  };
 
   return (
     <div className="hello-root">
@@ -240,11 +250,17 @@ export default function Hello() {
                   </div>
                 </div>
                 <div className="feature-button-container">
-                  <NavLink to="/training-service" style={{ width: '100%' }}>
-                    <Button className="feature-button" block size="large">
-                      开始
-                    </Button>
-                  </NavLink>
+                  <Button
+                    className="feature-button "
+                    block
+                    size="large"
+                    onClick={openTrainingService}
+                    loading={trainingServiceStarting}
+                  >
+                    {trainingServiceShortcut.state === '还未安装'
+                      ? '安装'
+                      : '开始'}
+                  </Button>
                 </div>
               </div>
             </div>

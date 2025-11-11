@@ -1,5 +1,5 @@
 import { dialog, IpcMain } from 'electron';
-import Dockerode from 'dockerode';
+import Dockerode, { ContainerInfo } from 'dockerode';
 import { connect } from './connector';
 import { LibPod, PodmanContainerInfo } from './libpod-dockerode';
 import {
@@ -499,5 +499,55 @@ async function reCreateContainerAndStart(
     }
   } else {
     event.reply(channel, MESSAGE_TYPE.ERROR, '重新创建服务失败');
+  }
+}
+
+export async function getServiceInfo(serviceName: ServiceName) {
+  const containerName = containerNameDict[serviceName];
+
+  let containerInfos: ContainerInfo[] = [];
+  containerInfos = (await improveStablebility(async () => {
+    return connectionGlobal.listPodmanContainers({
+      all: true,
+    });
+  })) as unknown as ContainerInfo[];
+  const containerInfo = containerInfos.filter(
+    (item) => item.Names.indexOf(containerName) >= 0,
+  )[0];
+  return containerInfo;
+}
+
+export async function startService(serviceName: ServiceName) {
+  console.debug('正在启动服务', serviceName);
+  const containerInfo = await getServiceInfo(serviceName);
+  const container =
+    containerInfo && connectionGlobal.getContainer(containerInfo.Id);
+  if (container) {
+    if (containerInfo.State === 'running') {
+      return containerInfo;
+    }
+    try {
+      await container.start();
+      return await getServiceInfo(serviceName);;
+    } catch (e) {
+      console.error(e);
+      if (
+        e &&
+        e.message &&
+        e.message.indexOf('unresolvable CDI devices nvidia.com/gpu=all') >= 0
+      ) {
+        throw new Error('无法识别NVIDIA显卡，请修改设置后重试');
+      } else if (
+        e &&
+        e.message &&
+        e.message.indexOf('No such file or directory') >= 0
+      ) {
+        throw new Error(
+          '启动器安装目录缺少语音转文字配置文件，请重新下载安装启动器',
+        );
+      }
+    }
+  } else {
+    throw new Error('重新创建服务失败');
   }
 }
