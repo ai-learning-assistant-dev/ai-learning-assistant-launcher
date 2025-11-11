@@ -251,7 +251,7 @@ export default function Hello() {
                 </div>
                 <div className="feature-button-container">
                   <Button
-                    className="feature-button "
+                    className="feature-button"
                     block
                     size="large"
                     onClick={openTrainingService}
