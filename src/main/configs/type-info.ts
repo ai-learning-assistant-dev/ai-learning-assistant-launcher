@@ -12,8 +12,8 @@ export interface BaseContainerConfig {
     host: number;
   }[];
   command: {
-    start: string[];
-    stop: string[];
+    start?: string[];
+    stop?: string[];
   };
   env?: Record<string, string>;
   mounts?: Array<ContainerCreateMountOption>;

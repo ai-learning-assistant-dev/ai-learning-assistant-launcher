@@ -1,7 +1,7 @@
 import { dialog, IpcMain } from 'electron';
 import { ActionName, channel, ServiceName } from './type-info';
 import { appPath, Exec } from '../exec';
-import { isMac, isWindows } from '../exec/util';
+import { isMac, isWindows, replaceVarInPath } from '../exec/util';
 import {
   getObsidianConfig,
   setVaultDefaultOpen,
@@ -54,10 +54,7 @@ export default async function init(ipcMain: IpcMain) {
               }
             }
             try {
-              obsidianPath = obsidianPath.replace(
-                '%localappdata%',
-                process.env.LOCALAPPDATA,
-              );
+              obsidianPath = replaceVarInPath(obsidianPath);
               // 如果有仓库路径，则传递给Obsidian作为参数
               const args = vaultName ? [`obsidian://open/?vault=${encodeURIComponent(vaultName)}`] : [];
               const result = commandLine.exec(obsidianPath, args, {});
@@ -435,10 +432,7 @@ export async function isObsidianInstall() {
   let obsidianPath = getObsidianConfig().obsidianApp.bin;
 
   try {
-    obsidianPath = obsidianPath.replace(
-      '%localappdata%',
-      process.env.LOCALAPPDATA,
-    );
+    obsidianPath = replaceVarInPath(obsidianPath);
     console.debug('getObsidianConfig', obsidianPath);
     const stat = statSync(obsidianPath);
     if (stat.isFile()) {

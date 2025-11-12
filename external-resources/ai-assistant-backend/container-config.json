@@ -114,6 +114,18 @@
       "Timeout": 1000000000,
       "StartPeriod": 10000000000,
       "Retries": 10
-    }
+    },
+    "mounts": [
+      {
+        "Destination": "/var/lib/postgresql/ala-backup",
+        "Source": "%USERDATA%/ala-training/database/ala-backup",
+        "Propagation": "rprivate",
+        "Type": "bind",
+        "RW": true,
+        "Options": [
+          "rbind"
+        ]
+      }
+    ]
   }
 }

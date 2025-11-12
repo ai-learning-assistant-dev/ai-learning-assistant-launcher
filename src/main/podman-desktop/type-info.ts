@@ -24,7 +24,7 @@ export const imageNameDict: Record<ServiceName, string> = {
   TTS: 'ai-voice-backend:latest',
   LLM: 'LLM',
   PDF: 'mineru-pipeline:latest',
-  TRAINING: 'training:latest',
+  TRAINING: 'ala-training:latest',
 };
 
 export const imagePathDict: Record<ServiceName, string> = {
@@ -32,7 +32,7 @@ export const imagePathDict: Record<ServiceName, string> = {
   TTS: 'ai-voice.tar',
   LLM: 'LLM',
   PDF: 'pdf-service.tar',
-  TRAINING: 'training.tar',
+  TRAINING: 'ala-training.tar',
 };
 
 export const podMachineName = 'podman-machine-default';

@@ -21,12 +21,12 @@ import {
 import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 import { getContainerConfig } from '../configs';
 import { wait } from '../util';
-import path from 'node:path';
-import { appPath } from '../exec';
-import { convertWindowsPathToPodmanMachinePath, isWindows } from '../exec/util';
-import convertPath from '@stdlib/utils-convert-path';
-import { ContainerConfig } from '../configs/type-info';
 import { syncTtsConfigToAloud } from '../configs/tts-config';
+import {
+  convertWindowsPathToPodmanMachinePath,
+  replaceVarInPath,
+} from '../exec/util';
+import { existsSync, mkdirSync } from 'fs';
 
 let connectionGlobal: LibPod & Dockerode;
 
@@ -364,9 +364,11 @@ export async function createContainer(serviceName: ServiceName) {
     env: config.env,
     mounts: config.mounts
       ? config.mounts.map((mount) => {
-          mount.Source = convertWindowsPathToPodmanMachinePath(
-            path.join(appPath, mount.Source),
-          );
+          const source = replaceVarInPath(mount.Source);
+          if (!existsSync(source)) {
+            mkdirSync(source, { recursive: true });
+          }
+          mount.Source = convertWindowsPathToPodmanMachinePath(source);
           return mount;
         })
       : [],
@@ -528,7 +530,7 @@ export async function startService(serviceName: ServiceName) {
     }
     try {
       await container.start();
-      return await getServiceInfo(serviceName);;
+      return await getServiceInfo(serviceName);
     } catch (e) {
       console.error(e);
       if (

@@ -18,13 +18,21 @@ async function monitorStatusIsHealthy(service: ServiceName) {
   return new Promise<void>((resolve, reject) => {
     const interval = setInterval(async () => {
       const newInfo = await getServiceInfo(service);
-      if (newInfo.Status !== 'starting') {
-        if (newInfo.Status === 'healthy') {
-          clearInterval(interval);
-          resolve();
+      if (newInfo) {
+        if (newInfo.Status !== 'starting') {
+          if (newInfo.Status === 'healthy') {
+            clearInterval(interval);
+            resolve();
+          } else {
+            clearInterval(interval);
+            reject();
+          }
         } else {
-          reject();
+          // do nothing
         }
+      } else {
+        clearInterval(interval);
+        reject();
       }
     });
   });
@@ -32,13 +40,12 @@ async function monitorStatusIsHealthy(service: ServiceName) {
 
 export async function startTrainingService() {
   const info = await startService('TRAINING');
-  if (info.Status === 'healthy') {
+  if (info && info.Status === 'healthy') {
     createWindow();
   } else {
     await monitorStatusIsHealthy('TRAINING');
     createWindow();
   }
-
   return { someData: 'data1' };
 }
 
