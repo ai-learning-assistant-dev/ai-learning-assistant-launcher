@@ -272,25 +272,25 @@ export default function Hello() {
                 </div>
               </div>
             </div>
-          </div>
-          <div className="hello-footer">
-            <div className="version-info">
-              版本号：{__NPM_PACKAGE_VERSION__}  源码版本：{__COMMIT_HASH__}
-            </div>
-            <div className="log-export">
-              <Button 
-                className="status-indicator" 
-                onClick={handleExportLogs}
-                type="primary"
-              >
-                <span className="log-text">日志导出</span>
-              </Button>
-              <Button 
-                className="get-help-button" 
-                onClick={showQrCodeModal}
-              >
-                获取帮助
-              </Button>
+            <div className="hello-footer">
+              <div className="version-info">
+                版本号：{__NPM_PACKAGE_VERSION__}  源码版本：{__COMMIT_HASH__}
+              </div>
+              <div className="log-export">
+                <Button 
+                  className="status-indicator" 
+                  onClick={handleExportLogs}
+                  type="primary"
+                >
+                  <span className="log-text">日志导出</span>
+                </Button>
+                <Button 
+                  className="get-help-button" 
+                  onClick={showQrCodeModal}
+                >
+                  获取帮助
+                </Button>
+              </div>
             </div>
           </div>
         </div>
