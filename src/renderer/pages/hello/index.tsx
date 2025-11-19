@@ -257,28 +257,18 @@ export default function Hello() {
                     </div>
                   </div>
                   <div className="feature-button-container">
-                    <Button 
-                      className="feature-button" 
-                      block 
+                    <Button
+                      className="feature-button"
+                      block
                       size="large"
-                      onClick={() => message.info('即将开放学科培训功能')}
+                      onClick={openTrainingService}
+                      loading={trainingServiceStarting}
                     >
-                      <span>开始</span>
+                      {trainingServiceShortcut.state === '还未安装'
+                        ? '安装'
+                        : '开始'}
                     </Button>
                   </div>
-                </div>
-                <div className="feature-button-container">
-                  <Button
-                    className="feature-button"
-                    block
-                    size="large"
-                    onClick={openTrainingService}
-                    loading={trainingServiceStarting}
-                  >
-                    {trainingServiceShortcut.state === '还未安装'
-                      ? '安装'
-                      : '开始'}
-                  </Button>
                 </div>
               </div>
             </div>
