@@ -891,7 +891,7 @@ body{
 
               /* Auto layout */
               display: flex;
-              flex-direction: column;
+              flex-direction: row;
               justify-content: center;
               align-items: center;
               padding: 6px 12px; // 减小按钮内边距 从8px 16px改为6px 12px
