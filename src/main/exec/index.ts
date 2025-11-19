@@ -21,7 +21,7 @@ import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { spawn } from 'cross-spawn';
 
 import type { RunError, RunOptions, RunResult } from '@podman-desktop/api';
-import * as sudo from '@vscode/sudo-prompt';
+import * as sudo from 'sudo-prompt';
 
 import { app } from 'electron';
 import path from 'path';
