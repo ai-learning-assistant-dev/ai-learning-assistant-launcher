@@ -10,10 +10,9 @@ body{
 #root{
   width: 100vw;
   height: 100vh;
-  overflow: auto;
+  overflow: hidden;
 }
 
-/* 添加响应式设计基础样式 */
 .responsive-container {
   width: 100%;
   height: 100%;
@@ -64,15 +63,24 @@ body{
   position: relative;
   color: #202020;
   height: 100vh;
+  width: 100vw;
   font-family: 'Source Han Sans SC', sans-serif;
-  overflow-y: auto;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  overflow: hidden;
+  display: block; // 改为block布局
   background: #F5F5F5;
   
+  .scale-wrapper {
+    transform-origin: center center; // 改为中心点作为变换原点
+    transition: transform 0.3s ease;
+    width: 1300px;
+    min-width: 100px;
+    position: absolute; // 使用绝对定位
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(1); // 初始居中
+  }
+  
   .hello-container {
-    // 将这些属性移到嵌套规则之前
     display: flex;
     flex-direction: column;
     padding: 20px;
@@ -83,7 +91,6 @@ body{
     border-radius: 12px;
     position: relative;
 
-    // 轮播图指示器
     .carousel-indicators {
       display: flex;
       justify-content: center;
@@ -95,12 +102,12 @@ body{
         width: 12px;
         height: 12px;
         border-radius: 50%;
-        background-color: #c9ccce; // 默认灰色
+        background-color: #c9ccce;
         cursor: pointer;
         transition: background-color 0.3s ease;
         
         &.active {
-          background-color: #f081a3; // 活跃状态的紫色
+          background-color: #f081a3;
           transform: scale(1.2);
         }
       }
@@ -141,7 +148,6 @@ body{
         order: 0;
         flex-grow: 0;
         
-        // 修改为左右布局
         .header-content {
           display: flex;
           flex-direction: row;
@@ -156,7 +162,6 @@ body{
             justify-content: center;
             
             .logo-container {
-              // 增大图片尺寸
               width: 450px;
               height: 388px;
               filter: drop-shadow(0px 4px 4px rgba(0, 0, 0, 0.25));
@@ -167,7 +172,6 @@ body{
               margin-right: 20px;
               
               img {
-                // 调整图片大小以适应容器
                 width: 450px;
                 height: 388px;
                 max-width: 100%;
@@ -251,7 +255,6 @@ body{
               }
             }
             
-            // 优化后的轮播图底部控制区域
             .carousel-bottom-controls {
               display: flex;
               justify-content: space-between;
@@ -576,7 +579,7 @@ body{
           padding: 8px 0;
           gap: 10px;
           width: auto;
-          max-width: 300px; /* 增加最大宽度以容纳两个按钮 */
+          max-width: 300px;
           min-height: 53px;
           flex: none;
           order: 1;
@@ -589,8 +592,8 @@ body{
             align-items: center;
             padding: 2px 6px;
             gap: 4px;
-            width: auto; /* 改为自动宽度 */
-            min-width: 80px; /* 最小宽度 */
+            width: auto;
+            min-width: 80px;
             min-height: 22px;
             background: #ff4d4f;
             border: 1px solid #E5E5E5;
@@ -609,7 +612,7 @@ body{
               padding: 0px;
               gap: 10px;
               width: 100%;
-              min-width: 48px; /* 最小宽度 */
+              min-width: 48px;
               min-height: 16px;
               font-family: 'Inter', sans-serif;
               font-style: normal;
@@ -621,7 +624,7 @@ body{
           }
 
           .get-help-button {
-            background: #52c41a; // 绿色背景
+            background: #52c41a;
             border: 1px solid #e5e5e5;
             border-radius: 6px;
             color: #ffffff;
@@ -661,8 +664,8 @@ body{
               align-items: center;
               padding: 2px 6px;
               gap: 4px;
-              width: auto; /* 改为自动宽度 */
-              min-width: 90px; /* 最小宽度 */
+              width: auto;
+              min-width: 90px;
               min-height: 22px;
               background: #171717;
               border: 1px solid #E5E5E5;
@@ -704,7 +707,6 @@ body{
   }
 }
 
-// 二维码模态框样式
 .qr-modal {
   .qr-code-image {
     width: 100%;
@@ -721,7 +723,6 @@ body{
   }
 }
 
-/* 响应式媒体查询 */
 @media screen and (max-width: 1200px) {
   .hello-root .hello-container .hello-content .features-section .features-container {
     flex-wrap: wrap;
@@ -761,7 +762,6 @@ body{
   }
 }
 
-/* 在小屏幕设备上，改为垂直排列 */
 @media screen and (max-width: 768px) {
   .hello-root .hello-container .hello-content .hello-footer {
     flex-direction: column;
@@ -807,7 +807,6 @@ body{
   }
 }
 
-/* 响应式媒体查询 */
 @media screen and (max-width: 1200px) {
   .hello-root .hello-container .hello-content .features-section .features-container {
     flex-wrap: wrap;

@@ -13,7 +13,8 @@ export type Channels =
   | 'pdf-convert'
   | 'pdf-convert-completed'
   | 'pdf-config'
-  | 'training-service';
+  | 'training-service'
+  | 'backup';
 
 export enum MESSAGE_TYPE {
   /** 阻断性错误，会把转圈中的按钮变成不转圈 */
@@ -65,7 +66,7 @@ import {
 import {
   ActionName as LogActionName,
   ServiceName as LogServiceName,
-} from './log-main/type-info';
+} from './backup/type-info';
 
 export type AllAction =
   | ActionNamePodman

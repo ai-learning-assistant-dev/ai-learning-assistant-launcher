@@ -1,30 +1,32 @@
 import { useCallback } from "react";
+import { message } from "antd";
 import { MESSAGE_TYPE } from "../../../main/ipc-data-type";
-import { ActionName, ServiceName } from "../../../main/log-main/type-info";
+import { ActionName, ServiceName, logChannel } from "../../../main/backup/type-info";
 
 export function useLogContainer() {
-  // 使用标准的 configs 通道方式调用日志目录打开功能
-  const openLogsDirectory = useCallback(() => {
+  // 使用 backup 通道方式调用日志导出功能
+  const exportLogs = useCallback(() => {
     window.electron.ipcRenderer.sendMessage(
-      'configs',
-      'openLogsDirectory',
+      logChannel,
+      'exportLogs',
       'log'
     );
   }, []);
 
-  // 监听日志服务消息
-  const setupLogListener = useCallback((
-    onSuccess?: () => void, 
+  // 监听备份服务消息
+  const setupBackupListener = useCallback((
+    onSuccess?: (message: string) => void, 
     onError?: (error: string) => void
   ) => {
     const cancel = window.electron?.ipcRenderer.on(
-      'configs',
+      logChannel,
       (messageType, data) => {
         if (messageType === MESSAGE_TYPE.ERROR) {
           const errorMessage = typeof data === 'string' ? data : '未知错误';
-          onError?.(errorMessage);
+          message.error(errorMessage);
         } else if (messageType === MESSAGE_TYPE.INFO) {
-          onSuccess?.();
+          const infoMessage = typeof data === 'string' ? data : '操作成功完成';
+          message.success(infoMessage);
         }
       }
     );
@@ -33,7 +35,7 @@ export function useLogContainer() {
   }, []);
 
   return {
-    openLogsDirectory,
-    setupLogListener
+    exportLogs,
+    setupBackupListener
   };
 }
