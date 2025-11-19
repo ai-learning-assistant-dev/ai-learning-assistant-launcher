@@ -96,6 +96,7 @@ export default function AiService() {
       name: '文字转语音',
       serviceName: 'TTS',
       state: getState(ttsContainer),
+      // state: getState(ttsContainer) === '正在运行' ? '正在运行' : '已经停止', // 修改此行
       port: 8000,
     },
     {
@@ -276,6 +277,7 @@ export default function AiService() {
                   shape="round"
                   size="small"
                   disabled={
+                    // (item.serviceName !== 'TTS' && (!isInstallWSL || checkingWsl)) ||
                     !isInstallWSL ||
                     checkingWsl ||
                     loading ||
@@ -337,6 +339,7 @@ export default function AiService() {
                 </Button>
               ),
               item.state === '已经停止' && (
+              // (item.serviceName === 'TTS' || item.state === '已经停止') && (
                 <Button
                   shape="round"
                   size="small"

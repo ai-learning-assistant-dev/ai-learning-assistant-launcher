@@ -1,0 +1,55 @@
+{
+  "models": [
+    {
+      "name": "deepseek-chat",
+      "displayName": "deepseek-chat",
+      "provider": "deepseek",
+      "baseUrl": "https://api.deepseek.com/",
+      "apiKey": "sk-d8f3107c5cad44788b29f26a7740ab08",
+      "isEmbeddingModel": false,
+      "id": "deepseek-deepseek-chat"
+    },
+    {
+      "name": "Qwen/Qwen3-8B",
+      "displayName": "Qwen/Qwen3-8B",
+      "provider": "3rd party (openai-format)",
+      "baseUrl": "https://api.siliconflow.cn/v1",
+      "apiKey": "sk-xwmhqofvmjhahryjonwwzhnypyyalctlgnpxbrzifjtjcnrv",
+      "id": "3rd party (openai-format)-Qwen/Qwen3-8B"
+    },
+    {
+      "name": "deepseek-r1:1.5b",
+      "displayName": "deepseek-r1:1.5b",
+      "provider": "ollama",
+      "baseUrl": "http://localhost:11434/",
+      "id": "ollama-deepseek-r1:1.5b"
+    },
+    {
+      "name": "qwen3-4b",
+      "displayName": "qwen3-4b",
+      "provider": "lm-studio",
+      "baseUrl": "http://localhost:1234/v1",
+      "apiKey": "",
+      "isEmbeddingModel": false,
+      "id": "lm-studio-qwen3-4b"
+    },
+    {
+      "name": "BAAI/bge-m3",
+      "displayName": "BAAI/bge-m3",
+      "provider": "3rd party (openai-format)",
+      "baseUrl": "https://api.siliconflow.cn/v1",
+      "apiKey": "sk-xwmhqofvmjhahryjonwwzhnypyyalctlgnpxbrzifjtjcnrv",
+      "isEmbeddingModel": true,
+      "id": "3rd party (openai-format)-BAAI/bge-m3"
+    },
+    {
+      "name": "text-embedding-nomic-embed-text-v1.5",
+      "displayName": "BAAI/bge-m3",
+      "provider": "lm-studio",
+      "baseUrl": "http://localhost:1234/v1",
+      "apiKey": "",
+      "isEmbeddingModel": true,
+      "id": "lm-studio-text-embedding-nomic-embed-text-v1.5"
+    }
+  ]
+}

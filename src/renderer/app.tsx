@@ -13,6 +13,7 @@ import LMService from './pages/lm-service';
 import ExamplePage from './pages/example-page';
 import PdfConvert from './pages/pdf-convert';
 import PdfConfig from './pages/pdf-config';
+import LLMConfig from './pages/llm-api-config';
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
         <Routes>
           <Route path="/ai-service" element={<AiService />} />
           <Route path="/lm-service" element={<LMService />} />
+          <Route path="/llm-api-config" element={<LLMConfig />} />
           <Route path="/hello" element={<Hello />} />
           <Route path="/obsidian-app" element={<ObsidianApp />} />
           <Route path="/TTS-config" element={<TTSConfig />} />
