@@ -10,6 +10,7 @@ import aiLearningAssistant1 from './AILearningAssistant1.png';
 import aiLearningAssistant2 from './AILearningAssistant2.png';
 import qrCodeImage from './QR_code_image.png';
 import subjectIcon from './subject_icon.png';
+import wslLogo from './wslLogo.png';
 import './index.scss';
 import { LeftOutlined, RightOutlined } from '@ant-design/icons';
 import { useTrainingServiceShortcut } from '../../containers/use-training-service-shortcut';
@@ -86,6 +87,22 @@ export default function Hello() {
 
   const handleCancel = () => {
     setIsModalVisible(false);
+  };
+
+  // WSL相关功能处理函数
+  const handleInstallWSL = () => {
+    message.info('正在安装WSL...');
+    // 这里应该调用实际的安装WSL逻辑
+  };
+
+  const handleChangeWSLPath = () => {
+    message.info('正在更改WSL安装位置...');
+    // 这里应该调用更改WSL安装路径的逻辑
+  };
+
+  const handleUpgradeWSL = () => {
+    message.info('正在升级WSL...');
+    // 这里应该调用升级WSL的逻辑
   };
   
   // 修改 calculateScaleAndPosition 函数
@@ -186,6 +203,35 @@ export default function Hello() {
                         <Space><RightOutlined /></Space>
                       </button>
                     </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* WSL功能区域 */}
+            <div className="wsl-section">
+              <div className="wsl-container">
+                <div className="wsl-wrapper">
+                  <div className="wsl-content-wrapper">
+                    <div className="wsl-header">
+                      <img className="wsl-logo" src={wslLogo} alt="WSL Logo" />
+                      <span className="wsl-title">WSL</span>
+                    </div>
+                    <p className="wsl-description">工具箱和学科培训的依赖项，请先准备就绪wsl，再启动工具箱和学科培训</p>
+                  </div>
+                  <div className="wsl-buttons-wrapper">
+                    <Button className="wsl-button install" onClick={handleInstallWSL}>
+                      <span className="button-text">安装</span>
+                    </Button>
+                    <Button className="wsl-button change-path" onClick={handleChangeWSLPath}>
+                      <span className="button-text">更改路径</span>
+                    </Button>
+                    <Button className="wsl-button upgrade" onClick={handleUpgradeWSL}>
+                      <span className="button-text">升级</span>
+                    </Button>
+                    <Button className="wsl-button uninstall" onClick={() => message.info('卸载WSL')}>
+                      <span className="button-text">卸载</span>
+                    </Button>
                   </div>
                 </div>
               </div>

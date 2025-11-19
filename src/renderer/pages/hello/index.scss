@@ -261,7 +261,7 @@ body{
               align-items: center;
               width: 100%;
               max-width: 817px;
-              margin: 20px auto 0;
+              margin: 10px auto 0;
               padding: 0 5px;
               box-sizing: border-box;
               
@@ -549,7 +549,7 @@ body{
         order: 1;
         align-self: stretch;
         flex-grow: 0;
-        margin-top: 20px;
+        margin-top: 1px;
         
         .version-info {
           display: flex;
@@ -677,6 +677,368 @@ body{
               font-size: clamp(10px, 2vw, 12px);
               line-height: 16px;
               cursor: pointer;
+            }
+          }
+        }
+      }
+    }
+
+    .wsl-section {
+      /* Frame 427321099 */
+
+      /* Auto layout */
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      padding: 0px;
+      gap: 8px; // 缩小间距 从16px改为8px
+      width: 100%;
+      max-width: 1338px;
+      min-height: 60px; // 减小最小高度 从96px改为60px
+        
+      // 恢复虚线边框样式
+      border: 2px dashed #E5E5E5;
+      border-radius: 12px;
+
+      /* Inside auto layout */
+      flex: none;
+      order: 0;
+      align-self: stretch;
+      flex-grow: 0;
+
+      .wsl-container {
+        box-sizing: border-box;
+
+        /* Auto layout */
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 0px;
+        gap: 8px;
+        width: 100%;
+        max-width: 1338px;
+        min-height: 60px; // 减小最小高度 从96px改为60px
+
+        /* Inside auto layout */
+        flex: none;
+        order: 0;
+        align-self: stretch;
+        flex-grow: 0;
+
+        .wsl-wrapper {
+          /* Wrapper */
+
+          /* Auto layout */
+          display: flex;
+          flex-direction: row;
+          justify-content: space-between;
+          align-items: center; // 更改对齐方式 从flex-start改为center
+          padding: 16px; // 减小内边距 从32px改为16px
+          gap: 16px; // 减小间距 从33px改为16px
+          width: 100%;
+          min-height: 50px; // 减小最小高度 从96px改为60px
+
+          /* Inside auto layout */
+          flex: none;
+          order: 0;
+          align-self: stretch;
+          flex-grow: 1;
+
+          .wsl-content-wrapper {
+            /* Wrapper */
+
+            /* Auto layout */
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0px 12px; // 减小左右内边距 从24px改为12px
+            gap: 8px;
+            margin: 0 auto;
+            width: auto; // 改为自动宽度 从481px改为auto
+            height: auto;
+
+            /* Inside auto layout */
+            flex: none;
+            order: 0;
+            align-self: stretch;
+            flex-grow: 0;
+
+            .wsl-header {
+              /* Frame 795 */
+
+              /* Auto layout */
+              display: flex;
+              flex-direction: row;
+              justify-content: center;
+              align-items: center;
+              padding: 0px;
+              gap: 8px;
+              margin: 0 auto;
+              width: auto;
+              height: auto;
+
+              /* Inside auto layout */
+              flex: none;
+              order: 0;
+              flex-grow: 0;
+
+              .wsl-logo {
+                /* Logo_WSL_Square44x44Logo.altform-lightunplated_targetsize-256.svg 1 */
+                width: 24px;
+                height: 32px;
+              }
+
+              .wsl-title {
+                /* Text */
+
+                /* Auto layout */
+                display: flex;
+                flex-direction: row;
+                justify-content: center;
+                align-items: center;
+                padding: 0px;
+                gap: 10px;
+                width: 54px;
+                height: 32px;
+
+                /* Inside auto layout */
+                flex: none;
+                order: 1;
+                flex-grow: 0;
+
+                /* WSL */
+
+                width: 54px;
+                height: 32px;
+
+                /* Text-2xl/Semi Bold */
+                font-family: 'Inter', sans-serif;
+                font-style: normal;
+                font-weight: 600;
+                font-size: 24px;
+                line-height: 32px;
+                /* identical to box height, or 133% */
+                color: #0A0A0A;
+
+                /* Inside auto layout */
+                flex: none;
+                order: 0;
+                flex-grow: 0;
+              }
+            }
+
+            .wsl-description {
+              /* Text */
+
+              /* Auto layout */
+              display: flex;
+              flex-direction: row;
+              align-items: center;
+              padding: 0px;
+              gap: 10px;
+              margin: 0 auto;
+              width: 300px;
+              height: auto; // 改为自动高度 从59px改为auto
+
+              /* Inside auto layout */
+              flex: none;
+              order: 1;
+              flex-grow: 0;
+
+              /* 工具箱和学科培训的依赖项，请先准备就绪wsl，再启动工具箱和学科培训 */
+
+              width: 300px;
+              height: auto; // 改为自动高度 从60px改为auto
+
+              /* Text-sm/Regular */
+              font-family: 'Inter', sans-serif;
+              font-style: normal;
+              font-weight: 400;
+              font-size: 14px;
+              line-height: 20px;
+              /* or 143% */
+              color: #737373;
+
+              /* Inside auto layout */
+              flex: none;
+              order: 0;
+              flex-grow: 0;
+            }
+          }
+
+          .wsl-buttons-wrapper {
+            /* Frame 427321117 */
+
+            /* Auto layout */
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            padding: 0px;
+            gap: 16px; // 减小按钮之间的间距 从45px改为16px
+            margin: 0 auto;
+            width: auto; // 改为自动宽度 从653px改为auto
+            height: auto;
+
+            /* Inside auto layout */
+            flex: none;
+            order: 1;
+            align-self: stretch;
+            flex-grow: 0;
+
+            .wsl-button {
+              /* Buttons */
+
+              /* Auto layout */
+              display: flex;
+              flex-direction: column;
+              justify-content: center;
+              align-items: center;
+              padding: 6px 12px; // 减小按钮内边距 从8px 16px改为6px 12px
+              gap: 8px; // 减小间距 从10px改为8px
+              width: 120px; // 改为自动宽度 从129.5px改为auto
+              height: 32px; // 减小高度 从36px改为32px
+              border-radius: 8px;
+
+              /* Inside auto layout */
+              flex: 1;
+              order: 0;
+              
+              &.install {
+                background: #171717;
+                /* Box Shadow/shadow-xs */
+                box-shadow: 0px 1px 2px rgba(0, 0, 0, 0.1);
+                border: none;
+                
+                .button-text {
+                  /* Text */
+
+                  /* Auto layout */
+                  display: flex;
+                  flex-direction: row;
+                  justify-content: center;
+                  align-items: center;
+                  padding: 0px;
+                  gap: 10px;
+                  width: auto; // 改为自动宽度 从28px改为auto
+                  height: 20px;
+
+                  /* Inside auto layout */
+                  flex: none;
+                  order: 0;
+                  flex-grow: 0;
+
+                  /* Button */
+
+                  width: auto; // 改为自动宽度 从28px改为auto
+                  height: 20px;
+
+                  /* Text-sm/Medium */
+                  font-family: 'Inter', sans-serif;
+                  font-style: normal;
+                  font-weight: 500;
+                  font-size: 14px;
+                  line-height: 20px;
+                  /* identical to box height, or 143% */
+                  color: #FAFAFA;
+
+                  /* Inside auto layout */
+                  flex: none;
+                  order: 0;
+                  flex-grow: 0;
+                }
+              }
+              
+              &.change-path, &.upgrade {
+                box-sizing: border-box;
+                background: #FFFFFF;
+                border: 1px solid #E5E5E5;
+                /* Box Shadow/shadow-xs */
+                box-shadow: 0px 1px 2px rgba(0, 0, 0, 0.1);
+                
+                .button-text {
+                  /* Text */
+
+                  /* Auto layout */
+                  display: flex;
+                  flex-direction: row;
+                  justify-content: center;
+                  align-items: center;
+                  padding: 0px;
+                  gap: 10px;
+                  width: auto; // 改为自动宽度 从84px改为auto
+                  height: 20px;
+
+                  /* Inside auto layout */
+                  flex: none;
+                  order: 0;
+                  flex-grow: 0;
+
+                  /* Outline */
+
+                  width: auto; // 改为自动宽度 从84px改为auto
+                  height: 20px;
+
+                  /* Text-sm/Medium */
+                  font-family: 'Inter', sans-serif;
+                  font-style: normal;
+                  font-weight: 500;
+                  font-size: 14px;
+                  line-height: 20px;
+                  /* identical to box height, or 143% */
+                  color: #0A0A0A;
+
+                  /* Inside auto layout */
+                  flex: none;
+                  order: 0;
+                  flex-grow: 0;
+                }
+              }
+              
+              &.uninstall {
+                background: #DC2626;
+                /* Box Shadow/shadow-xs */
+                box-shadow: 0px 1px 2px rgba(0, 0, 0, 0.1);
+                border: none;
+                
+                .button-text {
+                  /* Text */
+
+                  /* Auto layout */
+                  display: flex;
+                  flex-direction: row;
+                  justify-content: center;
+                  align-items: center;
+                  padding: 0px;
+                  gap: 10px;
+                  width: auto; // 改为自动宽度 从80px改为auto
+                  height: 20px;
+
+                  /* Inside auto layout */
+                  flex: none;
+                  order: 0;
+                  flex-grow: 0;
+
+                  /* Destructive */
+
+                  width: auto; // 改为自动宽度 从80px改为auto
+                  height: 20px;
+
+                  /* Text-sm/Medium */
+                  font-family: 'Inter', sans-serif;
+                  font-style: normal;
+                  font-weight: 500;
+                  font-size: 14px;
+                  line-height: 20px;
+                  /* identical to box height, or 143% */
+                  color: rgba(255, 255, 255, 0.95);
+
+                  /* Inside auto layout */
+                  flex: none;
+                  order: 0;
+                  flex-grow: 0;
+                }
+              }
             }
           }
         }
