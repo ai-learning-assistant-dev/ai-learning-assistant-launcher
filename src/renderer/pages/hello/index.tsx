@@ -334,7 +334,7 @@ export default function Hello() {
                       <span className="wsl-title">WSL</span>
                     </div>
                     <p className="wsl-description">
-                      工具箱和学科培训的依赖项，请先准备就绪wsl，再启动工具箱和学科培训
+                      工具箱和学科培训的依赖项，请先启动wsl，安装podman，再使用工具箱和学科培训
                     </p>
                     <div className="wsl-status-container">
                       {wslChecking ? (
@@ -357,10 +357,10 @@ export default function Hello() {
                   </div>
                   <div className="wsl-buttons-wrapper">
                     <Popconfirm
-                      title="安装WSL"
-                      description="确认安装WSL吗？安装完成后需要重启计算机才能生效。"
+                      title="启动WSL"
+                      description="确认启动WSL吗？启动完成后可能需要重启计算机才能生效。"
                       onConfirm={() => handleWSLAction('install', 'WSL')}
-                      okText="安装"
+                      okText="启动"
                       cancelText="取消"
                       disabled={wslChecking || isWSLInstalled || (wslLoading && !(wslOperation.action === 'install' && wslOperation.service === 'WSL'))}
                     >
@@ -370,32 +370,7 @@ export default function Hello() {
                         disabled={wslChecking || isWSLInstalled || (wslLoading && !(wslOperation.action === 'install' && wslOperation.service === 'WSL'))}
                       >
                         <span className="button-text">
-                          安装
-                        </span>
-                      </Button>
-                    </Popconfirm>
-                    <Popconfirm
-                      title="修改安装位置"
-                      description={
-                        <div>
-                          <div>修改安装位置可能需要5分钟时间，实际用时和你的磁盘读写速度有关。</div>
-                          <div style={{ color: 'red' }}>
-                            提示Docker用户：如果您的电脑上还有Docker软件，请您先手动关闭Docker软件前台和后台程序以避免Docker文件被损坏。搬迁完成后如果出现无法正常运行Docker的情况，请您重启电脑后再打开Docker。
-                          </div>
-                        </div>
-                      }
-                      onConfirm={() => handleWSLAction('move', 'podman')}
-                      okText="修改"
-                      cancelText="取消"
-                      disabled={!isWSLInstalled || wslChecking || (wslLoading && !(wslOperation.action === 'move' && wslOperation.service === 'podman'))}
-                    >
-                      <Button 
-                        className="wsl-button change-path" 
-                        loading={wslLoading && wslOperation.action === 'move' && wslOperation.service === 'podman'}
-                        disabled={!isWSLInstalled || wslChecking || (wslLoading && !(wslOperation.action === 'move' && wslOperation.service === 'podman'))}
-                      >
-                        <span className="button-text">
-                          修改安装位置
+                          启动WSL
                         </span>
                       </Button>
                     </Popconfirm>
@@ -418,15 +393,40 @@ export default function Hello() {
                         disabled={!isWSLInstalled || wslChecking || (wslLoading && !(wslOperation.action === 'update' && wslOperation.service === 'WSL'))}
                       >
                         <span className="button-text">
-                          升级
+                          升级WSL
                         </span>
                       </Button>
                     </Popconfirm>
                     <Popconfirm
-                      title="删除所有服务和缓存"
-                      description="你确定要删除所有服务和缓存吗？删除后再次安装会需要很长时间！"
+                      title="安装Podman"
+                      description={
+                        <div>
+                          <div>安装Podman可能需要5分钟时间，实际用时和你的磁盘读写速度有关。</div>
+                          <div style={{ color: 'red' }}>
+                            提示Docker用户：如果您的电脑上还有Docker软件，请您先手动关闭Docker软件前台和后台程序以避免Docker文件被损坏。安装完成后如果出现无法正常运行Docker的情况，请您重启电脑后再打开Docker。
+                          </div>
+                        </div>
+                      }
+                      onConfirm={() => handleWSLAction('move', 'podman')}
+                      okText="安装"
+                      cancelText="取消"
+                      disabled={!isWSLInstalled || wslChecking || (wslLoading && !(wslOperation.action === 'move' && wslOperation.service === 'podman'))}
+                    >
+                      <Button 
+                        className="wsl-button change-path" 
+                        loading={wslLoading && wslOperation.action === 'move' && wslOperation.service === 'podman'}
+                        disabled={!isWSLInstalled || wslChecking || (wslLoading && !(wslOperation.action === 'move' && wslOperation.service === 'podman'))}
+                      >
+                        <span className="button-text">
+                          安装Podman
+                        </span>
+                      </Button>
+                    </Popconfirm>
+                    <Popconfirm
+                      title="卸载Podman"
+                      description="你确定要卸载Podman吗？卸载后再次安装会需要很长时间！"
                       onConfirm={() => handleWSLAction('remove', 'podman')}
-                      okText="确认删除"
+                      okText="确认卸载"
                       cancelText="取消"
                       disabled={!isWSLInstalled || wslChecking || (wslLoading && !(wslOperation.action === 'remove' && wslOperation.service === 'podman'))}
                     >
@@ -436,7 +436,7 @@ export default function Hello() {
                         disabled={!isWSLInstalled || wslChecking || (wslLoading && !(wslOperation.action === 'remove' && wslOperation.service === 'podman'))}
                       >
                         <span className="button-text">
-                          卸载
+                          卸载Podman
                         </span>
                       </Button>
                     </Popconfirm>
