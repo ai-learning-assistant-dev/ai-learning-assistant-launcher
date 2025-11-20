@@ -83,41 +83,6 @@ export default async function init(ipcMain: IpcMain) {
     channel,
     async (event, action: ActionName, serviceName: ServiceName) => {
       try {
-        let imagePath: boolean | string = false;
-        if (action === 'install') {
-          let imageReady = false;
-          try {
-            imageReady = await isImageReady(serviceName);
-          } catch (e) {
-            console.info(e);
-          }
-          if (!imageReady) {
-            imagePath = await selectImageFile(serviceName);
-            if (!imagePath) {
-              event.reply(
-                channel,
-                MESSAGE_TYPE.ERROR,
-                '没有选择到正确的镜像文件',
-              );
-              return;
-            }
-          }
-
-          try {
-            await ensurePodmanWorks(event, channel);
-            if (!connectionGlobal) {
-              connectionGlobal = await connect();
-            }
-          } catch (e) {
-            console.error(e);
-            console.debug('安装podman失败');
-            event.reply(channel, MESSAGE_TYPE.ERROR, '安装podman失败');
-            return;
-          }
-        }
-
-        // 即使一切准备正常，还有可能遇到 ECONNRESET 错误，所以还要掉一个真实的业务接口测试一下
-
         if (connectionGlobal) {
           console.debug('podman is ready');
           if (action === 'query') {
@@ -496,33 +461,32 @@ export async function installService(
 ) {
   const event = getEventProxy(originEvent);
   let imagePath: boolean | string = false;
-  if (!originEvent) {
-    // 不通过init中的监听方法调用时，需要自行选择镜像和安装podman
-    let imageReady = false;
-    try {
-      imageReady = await isImageReady(serviceName);
-    } catch (e) {
-      console.info(e);
-    }
-    if (!imageReady) {
-      imagePath = await selectImageFile(serviceName);
-      if (!imagePath) {
-        event.reply(channel, MESSAGE_TYPE.ERROR, '没有选择到正确的镜像文件');
-        return;
-      }
-    }
 
-    try {
-      await ensurePodmanWorks(event, channel);
-      if (!connectionGlobal) {
-        connectionGlobal = await connect();
-      }
-    } catch (e) {
-      console.error(e);
-      console.debug('安装podman失败');
-      event.reply(channel, MESSAGE_TYPE.ERROR, '安装podman失败');
+  // 不通过init中的监听方法调用时，需要自行选择镜像和安装podman
+  let imageReady = false;
+  try {
+    imageReady = await isImageReady(serviceName);
+  } catch (e) {
+    console.info(e);
+  }
+  if (!imageReady) {
+    imagePath = await selectImageFile(serviceName);
+    if (!imagePath) {
+      event.reply(channel, MESSAGE_TYPE.ERROR, '没有选择到正确的镜像文件');
       return;
     }
+  }
+
+  try {
+    await ensurePodmanWorks(event, channel);
+    if (!connectionGlobal) {
+      connectionGlobal = await connect();
+    }
+  } catch (e) {
+    console.error(e);
+    console.debug('安装podman失败');
+    event.reply(channel, MESSAGE_TYPE.ERROR, '安装podman失败');
+    return;
   }
 
   const imageName = imageNameDict[serviceName];

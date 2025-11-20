@@ -185,6 +185,15 @@ export default async function init(ipcMain: IpcMain) {
             event.reply(channel, MESSAGE_TYPE.ERROR, '未选择正确的安装位置');
             return;
           }
+          const specialChars = /[\s<>"|?*/\0]/;
+          if (specialChars.test(path)) {
+            event.reply(
+              channel,
+              MESSAGE_TYPE.ERROR,
+              `您选择的路径是${path}，路径中包含空格等特殊字符，请删除特殊字符后重试`,
+            );
+            return;
+          }
           await ensurePodmanWorks(event, channel);
           const result = await movePodman(path);
           if (result.success) {
