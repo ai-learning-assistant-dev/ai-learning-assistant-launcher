@@ -334,7 +334,7 @@ export default function Hello() {
                       <span className="wsl-title">WSL</span>
                     </div>
                     <p className="wsl-description">
-                      工具箱和学科培训的依赖项，请先启动wsl，安装podman，再使用工具箱和学科培训
+                      工具箱和学科培训的依赖项，请先启用wsl，安装podman，再使用工具箱和学科培训
                     </p>
                     <div className="wsl-status-container">
                       {wslChecking ? (
@@ -358,9 +358,9 @@ export default function Hello() {
                   <div className="wsl-buttons-wrapper">
                     <Popconfirm
                       title="启动WSL"
-                      description="确认启动WSL吗？启动完成后可能需要重启计算机才能生效。"
+                      description="确认启用WSL吗？启用完成后可能需要重启计算机才能生效。"
                       onConfirm={() => handleWSLAction('install', 'WSL')}
-                      okText="启动"
+                      okText="启用"
                       cancelText="取消"
                       disabled={wslChecking || isWSLInstalled || (wslLoading && !(wslOperation.action === 'install' && wslOperation.service === 'WSL'))}
                     >
@@ -370,7 +370,7 @@ export default function Hello() {
                         disabled={wslChecking || isWSLInstalled || (wslLoading && !(wslOperation.action === 'install' && wslOperation.service === 'WSL'))}
                       >
                         <span className="button-text">
-                          启动WSL
+                          启用WSL
                         </span>
                       </Button>
                     </Popconfirm>
