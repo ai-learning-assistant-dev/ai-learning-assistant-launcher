@@ -1,4 +1,4 @@
-import { dialog, IpcMain } from 'electron';
+import { dialog, IpcMain, IpcMainEvent } from 'electron';
 import Dockerode, { ContainerInfo } from 'dockerode';
 import { connect } from './connector';
 import { LibPod, PodmanContainerInfo } from './libpod-dockerode';
@@ -18,7 +18,7 @@ import {
   startPodman,
   stopPodman,
 } from './ensure-podman-works';
-import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
+import { Channels, MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 import { getContainerConfig } from '../configs';
 import { wait } from '../util';
 import { syncTtsConfigToAloud } from '../configs/tts-config';
@@ -120,21 +120,20 @@ export default async function init(ipcMain: IpcMain) {
 
         if (connectionGlobal) {
           console.debug('podman is ready');
-          let containerInfos: PodmanContainerInfo[] = [];
-          try {
-            containerInfos = await improveStablebility(async () => {
-              const result = await connectionGlobal.listPodmanContainers({
-                all: true,
-              });
-              return result;
-            });
-          } catch (e) {
-            console.debug('无法获取容器列表');
-            console.error(e);
-          }
-          console.debug('containerInfos', containerInfos);
-
           if (action === 'query') {
+            let containerInfos: PodmanContainerInfo[] = [];
+            try {
+              containerInfos = await improveStablebility(async () => {
+                const result = await connectionGlobal.listPodmanContainers({
+                  all: true,
+                });
+                return result;
+              });
+            } catch (e) {
+              console.debug('无法获取容器列表');
+              console.error(e);
+            }
+            console.debug('containerInfos', containerInfos);
             event.reply(
               channel,
               MESSAGE_TYPE.DATA,
@@ -143,14 +142,7 @@ export default async function init(ipcMain: IpcMain) {
             return;
           }
           console.debug(action, serviceName);
-          const imageName = imageNameDict[serviceName];
-          const containerName = containerNameDict[serviceName];
-
-          const containerInfo = containerInfos.filter(
-            (item) => item.Names.indexOf(containerName) >= 0,
-          )[0];
-          const container =
-            containerInfo && connectionGlobal.getContainer(containerInfo.Id);
+          const container = await getServiceContainer(serviceName);
           console.debug('container', container);
           if (container) {
             if (action === 'start') {
@@ -204,37 +196,7 @@ export default async function init(ipcMain: IpcMain) {
                 event.reply(channel, MESSAGE_TYPE.INFO, '成功停止服务');
               });
             } else if (action === 'remove') {
-              await improveStablebility(async () => {
-                await container.remove();
-                const imageName = imageNameDict[serviceName];
-                const containerName = containerNameDict[serviceName];
-                let containersHaveSameImage = [];
-                containerInfos.forEach((item) => {
-                  containersHaveSameImage = containersHaveSameImage.concat(
-                    item.Names,
-                  );
-                });
-
-                containersHaveSameImage = containersHaveSameImage.filter(
-                  (item) => {
-                    return (
-                      item !== containerName &&
-                      imageNameDict[item] === imageName
-                    );
-                  },
-                );
-
-                console.debug(
-                  'containersHaveSameImage',
-                  containersHaveSameImage,
-                );
-
-                if (containersHaveSameImage.length === 0) {
-                  await removeImage(serviceName);
-                }
-
-                event.reply(channel, MESSAGE_TYPE.INFO, '成功删除服务');
-              });
+              await removeService(serviceName);
             } else if (action === 'update') {
               const result = await improveStablebility(async () => {
                 const imagePathForUpdate = await selectImageFile(serviceName);
@@ -270,56 +232,7 @@ export default async function init(ipcMain: IpcMain) {
               }
             }
           } else if (action === 'install') {
-            console.debug('install', imageName);
-            if (!(await isImageReady(serviceName))) {
-              event.reply(
-                channel,
-                MESSAGE_TYPE.PROGRESS,
-                '正在导入镜像，这可能需要5分钟时间',
-              );
-              if (
-                !(await improveStablebility(async () => {
-                  return loadImageFromPath(serviceName, imagePath as string);
-                }))
-              ) {
-                event.reply(channel, MESSAGE_TYPE.ERROR, '未选择正确的镜像');
-                return;
-              }
-            }
-            event.reply(channel, MESSAGE_TYPE.PROGRESS, '正在创建容器');
-            const newContainerInfo:
-              | {
-                  Id: string;
-                  Warnings: string[];
-                }
-              | undefined = await improveStablebility(async () => {
-              try {
-                // 这里不要简化成return createContainer(serviceName);会导致无法捕获错误
-                const result = await createContainer(serviceName);
-                return result;
-              } catch (e) {
-                console.debug('安装服务失败', e);
-                if (e && e.message && e.message.indexOf('ENOENT') >= 0) {
-                  event.reply(
-                    channel,
-                    MESSAGE_TYPE.ERROR,
-                    '启动器安装目录缺少语音转文字配置文件，请重新下载安装启动器',
-                  );
-                } else {
-                  throw e;
-                }
-                return;
-              }
-            });
-
-            console.debug('newContainerInfo', newContainerInfo);
-            if (newContainerInfo) {
-              console.debug('安装服务成功');
-              event.reply(channel, MESSAGE_TYPE.INFO, '安装服务成功');
-            } else {
-              console.debug('安装服务失败');
-              event.reply(channel, MESSAGE_TYPE.ERROR, '安装服务失败');
-            }
+            await installService(serviceName, event);
           } else {
             console.debug('没找到容器');
             event.reply(channel, MESSAGE_TYPE.WARNING, '没找到容器');
@@ -504,6 +417,39 @@ async function reCreateContainerAndStart(
   }
 }
 
+export async function cleanImage(
+  serviceName: ServiceName,
+  originEvent?: IpcMainEvent,
+) {
+  const event = getEventProxy(originEvent);
+  let containerInfos: ContainerInfo[] = [];
+  containerInfos = (await improveStablebility(async () => {
+    return connectionGlobal.listPodmanContainers({
+      all: true,
+    });
+  })) as unknown as ContainerInfo[];
+  await improveStablebility(async () => {
+    const imageName = imageNameDict[serviceName];
+    const containerName = containerNameDict[serviceName];
+    let containersHaveSameImage = [];
+    containerInfos.forEach((item) => {
+      containersHaveSameImage = containersHaveSameImage.concat(item.Names);
+    });
+
+    containersHaveSameImage = containersHaveSameImage.filter((item) => {
+      return item !== containerName && imageNameDict[item] === imageName;
+    });
+
+    console.debug('containersHaveSameImage', containersHaveSameImage);
+
+    if (containersHaveSameImage.length === 0) {
+      await removeImage(serviceName);
+    }
+
+    event.reply(channel, MESSAGE_TYPE.INFO, '成功删除服务');
+  });
+}
+
 export async function getServiceInfo(serviceName: ServiceName) {
   const containerName = containerNameDict[serviceName];
 
@@ -513,10 +459,132 @@ export async function getServiceInfo(serviceName: ServiceName) {
       all: true,
     });
   })) as unknown as ContainerInfo[];
+  console.debug('containerInfos', containerInfos);
   const containerInfo = containerInfos.filter(
     (item) => item.Names.indexOf(containerName) >= 0,
   )[0];
   return containerInfo;
+}
+
+export async function getServiceContainer(serviceName: ServiceName) {
+  const containerInfo = await getServiceInfo(serviceName);
+  const container =
+    containerInfo && connectionGlobal.getContainer(containerInfo.Id);
+  return container;
+}
+
+/** 伪装出一个 IpcMainEvent
+ * 让依赖 ipcRenderer.on 的代码能在 ipcRenderer.invoke 方式下运行 */
+function getEventProxy(originEvent?: IpcMainEvent) {
+  const event = {
+    reply: (channel: Channels, messageType: MESSAGE_TYPE, ...args) => {
+      if (originEvent) {
+        return originEvent.reply(channel, messageType, ...args);
+      } else {
+        if (messageType === MESSAGE_TYPE.ERROR) {
+          throw new Error(args[0]);
+        }
+      }
+    },
+  };
+  return event as IpcMainEvent;
+}
+
+export async function installService(
+  serviceName: ServiceName,
+  originEvent?: IpcMainEvent,
+) {
+  const event = getEventProxy(originEvent);
+  let imagePath: boolean | string = false;
+  if (!originEvent) {
+    // 不通过init中的监听方法调用时，需要自行选择镜像和安装podman
+    let imageReady = false;
+    try {
+      imageReady = await isImageReady(serviceName);
+    } catch (e) {
+      console.info(e);
+    }
+    if (!imageReady) {
+      imagePath = await selectImageFile(serviceName);
+      if (!imagePath) {
+        event.reply(channel, MESSAGE_TYPE.ERROR, '没有选择到正确的镜像文件');
+        return;
+      }
+    }
+
+    try {
+      await ensurePodmanWorks(event, channel);
+      if (!connectionGlobal) {
+        connectionGlobal = await connect();
+      }
+    } catch (e) {
+      console.error(e);
+      console.debug('安装podman失败');
+      event.reply(channel, MESSAGE_TYPE.ERROR, '安装podman失败');
+      return;
+    }
+  }
+
+  const imageName = imageNameDict[serviceName];
+  event && console.debug('install', imageName);
+  if (!(await isImageReady(serviceName))) {
+    event.reply(
+      channel,
+      MESSAGE_TYPE.PROGRESS,
+      '正在导入镜像，这可能需要5分钟时间',
+    );
+    if (
+      !(await improveStablebility(async () => {
+        return loadImageFromPath(serviceName, imagePath as string);
+      }))
+    ) {
+      event.reply(channel, MESSAGE_TYPE.ERROR, '未选择正确的镜像');
+      return;
+    }
+  }
+  event.reply(channel, MESSAGE_TYPE.PROGRESS, '正在创建容器');
+  const newContainerInfo:
+    | {
+        Id: string;
+        Warnings: string[];
+      }
+    | undefined = await improveStablebility(async () => {
+    try {
+      // 这里不要简化成return createContainer(serviceName);会导致无法捕获错误
+      const result = await createContainer(serviceName);
+      return result;
+    } catch (e) {
+      console.debug('安装服务失败', e);
+      if (e && e.message && e.message.indexOf('ENOENT') >= 0) {
+        event.reply(
+          channel,
+          MESSAGE_TYPE.ERROR,
+          '启动器安装目录缺少语音转文字配置文件，请重新下载安装启动器',
+        );
+      } else {
+        throw e;
+      }
+      return;
+    }
+  });
+
+  console.debug('newContainerInfo', newContainerInfo);
+  if (newContainerInfo) {
+    console.debug('安装服务成功');
+    event.reply(channel, MESSAGE_TYPE.INFO, '安装服务成功');
+  } else {
+    console.debug('安装服务失败');
+    event.reply(channel, MESSAGE_TYPE.ERROR, '安装服务失败');
+  }
+}
+
+export async function removeService(
+  serviceName: ServiceName,
+  originEvent?: IpcMainEvent,
+) {
+  const event = getEventProxy(originEvent);
+  await removeContainer(serviceName);
+  await cleanImage(serviceName);
 }
 
 export async function startService(serviceName: ServiceName) {

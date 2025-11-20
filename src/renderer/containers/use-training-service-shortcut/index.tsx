@@ -48,7 +48,9 @@ export function useTrainingServiceShortcut() {
 
   const start = async () => {
     if (containerInfos[0].state === '还未安装') {
-      navigate('/training-service');
+      await window.mainHandle.installTrainingServiceHandle();
+      await window.mainHandle.startTrainingServiceHandle();
+      setDockerDatatrigger(dockerDatatrigger + 1);
     } else if (containerInfos[0].state === '已经停止') {
       containerInfos[0].state = '正在启动';
       await window.mainHandle.startTrainingServiceHandle();
@@ -59,10 +61,18 @@ export function useTrainingServiceShortcut() {
     } else if (containerInfos[0].state === '正在运行') {
       await window.mainHandle.startTrainingServiceHandle();
     }
-  }
+  };
+
+  const remove = async () => {
+    if (containerInfos[0].state !== '还未安装') {
+      await window.mainHandle.removeTrainingServiceHandle();
+      setDockerDatatrigger(dockerDatatrigger + 1);
+    }
+  };
 
   return {
     state: containerInfos[0].state,
     start,
+    remove,
   };
 }

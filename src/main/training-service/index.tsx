@@ -1,16 +1,29 @@
 import { BrowserWindow, IpcMain } from 'electron';
-import { startTrainingServiceHandle, trainingWebURL } from './type-info';
+import {
+  installTrainingServiceHandle,
+  removeTrainingServiceHandle,
+  startTrainingServiceHandle,
+  trainingWebURL,
+} from './type-info';
 import { wait } from '../util';
 import { ipcHandle } from '../ipc-util';
 import {
   getServiceInfo,
+  installService,
+  removeService,
   startService,
 } from '../podman-desktop/simple-container-manage';
 import { ServiceName } from '../podman-desktop/type-info';
 
 export default async function init(ipcMain: IpcMain) {
+  ipcHandle(ipcMain, installTrainingServiceHandle, async (_event) =>
+    installTrainingService(),
+  );
   ipcHandle(ipcMain, startTrainingServiceHandle, async (_event) =>
     startTrainingService(),
+  );
+  ipcHandle(ipcMain, removeTrainingServiceHandle, async (_event) =>
+    removeTrainingService(),
   );
 }
 
@@ -38,17 +51,6 @@ async function monitorStatusIsHealthy(service: ServiceName) {
   });
 }
 
-export async function startTrainingService() {
-  const info = await startService('TRAINING');
-  if (info && info.Status === 'healthy') {
-    createWindow();
-  } else {
-    await monitorStatusIsHealthy('TRAINING');
-    createWindow();
-  }
-  return { someData: 'data1' };
-}
-
 const createWindow = (): void => {
   // Create the browser window.
   const trainingWindow = new BrowserWindow({
@@ -62,3 +64,22 @@ const createWindow = (): void => {
   // Open the DevTools.
   // mainWindow.webContents.openDevTools();
 };
+
+export async function installTrainingService() {
+  return installService('TRAINING');
+}
+
+export async function removeTrainingService() {
+  return removeService('TRAINING');
+}
+
+export async function startTrainingService() {
+  const info = await startService('TRAINING');
+  if (info && info.Status === 'healthy') {
+    createWindow();
+  } else {
+    await monitorStatusIsHealthy('TRAINING');
+    createWindow();
+  }
+  return { someData: 'data1' };
+}

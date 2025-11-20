@@ -284,8 +284,20 @@ export default function Hello() {
 
   const openTrainingService = async () => {
     setTrainingServiceStarting(true);
-    await trainingServiceShortcut.start();
+    try {
+      await trainingServiceShortcut.start();
+    } catch (e) {
+      message.error(e.message);
+    }
     setTrainingServiceStarting(false);
+  };
+
+  const [trainingServiceRemoving, setTrainingServiceRemoving] = useState(false);
+
+  const removeTrainingService = async () => {
+    setTrainingServiceRemoving(true);
+    await trainingServiceShortcut.remove();
+    setTrainingServiceRemoving(false);
   };
 
   return (
@@ -378,7 +390,7 @@ export default function Hello() {
                           className={`wsl-status-button ${isWSLInstalled ? 'installed' : 'not-installed'}`}
                         >
                           {isWSLInstalled
-                            ? `已安装 ${wslVersion ? `(v${wslVersion.split('\n')[0]})` : ''}`
+                            ? `已安装 ${wslVersion ? `(${wslVersion.split('\n')[0]})` : ''}`
                             : '未安装'}
                         </Button>
                       )}
@@ -656,6 +668,17 @@ export default function Hello() {
                         ? '安装'
                         : '开始'}
                     </Button>
+                    {trainingServiceShortcut.state !== '还未安装' && (
+                      <Button
+                        className="feature-button uninstall"
+                        block
+                        size="large"
+                        onClick={removeTrainingService}
+                        loading={trainingServiceRemoving}
+                      >
+                        卸载
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>
