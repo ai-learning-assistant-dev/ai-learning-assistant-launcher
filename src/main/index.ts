@@ -10,6 +10,7 @@ import initLMStudio from './lm-studio';
 import initExampleMain from './example-main';
 import initTerminalLog from './terminal-log';
 import initPdfConvert from './pdf-convert';
+import initTrainingService from './training-service';
 import initLogService from './backup';
 import path from 'node:path';
 import { appPath, autoAdaptEncodingForWindows } from './exec';
@@ -22,6 +23,28 @@ declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
 declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
 
 initLogger();
+
+// 防止应用多开 - 单实例锁
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  // 如果已经有实例在运行，则退出当前进程
+  console.log('应用已在运行中，退出当前实例');
+  app.quit();
+} else {
+  // 这是第一个实例，继续初始化
+  app.on('second-instance', (event, commandLine, workingDirectory) => {
+    // 当用户尝试运行第二个实例时，聚焦到已存在的窗口
+    const windows = BrowserWindow.getAllWindows();
+    if (windows.length > 0) {
+      const mainWindow = windows[0];
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+      }
+      mainWindow.focus();
+    }
+  });
+}
 
 // 在适当的位置初始化日志服务
 initLogService(ipcMain);
@@ -52,6 +75,7 @@ initContainerLogs(ipcMain);
 initLMStudio(ipcMain);
 initExampleMain(ipcMain);
 initPdfConvert(ipcMain);
+initTrainingService(ipcMain);
 updateTemplate();
 
 const createWindow = (): void => {
@@ -63,11 +87,12 @@ const createWindow = (): void => {
       preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
     },
     show: false,
+    autoHideMenuBar: true,
   });
 
   // 最大化窗口
   mainWindow.maximize();
-  
+
   // 显示窗口
   mainWindow.show();
 

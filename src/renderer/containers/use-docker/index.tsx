@@ -13,7 +13,7 @@ import {
 } from '../../../main/cmd/type-info';
 import { MESSAGE_TYPE, MessageData } from '../../../main/ipc-data-type';
 
-export default function useDocker() {
+export default function useDocker(refreshTrigger?: number) {
   const [containers, setContainers] = useState<Dockerode.ContainerInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [initing, setIniting] = useState(true);
@@ -97,7 +97,7 @@ export default function useDocker() {
 
   useEffect(() => {
     queryContainers();
-  }, []);
+  }, [refreshTrigger]);
 
   return {
     containers,

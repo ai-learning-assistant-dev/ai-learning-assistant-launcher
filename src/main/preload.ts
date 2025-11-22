@@ -1,25 +1,60 @@
 // Disable no-unused-vars, broken for spread args
 /* eslint no-unused-vars: off */
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
-import { AllAction, AllService, Channels, MESSAGE_TYPE, MessageData } from './ipc-data-type';
+import {
+  AllAction,
+  AllService,
+  Channels,
+  MESSAGE_TYPE,
+  MessageData,
+} from './ipc-data-type';
 import 'electron-log/preload';
-import { installExampleHandle, ServiceName as ServiceNameExample } from './example-main/type-info';
+import {
+  installExampleHandle,
+  ServiceName as ServiceNameExample,
+} from './example-main/type-info';
+import {
+  installTrainingServiceHandle,
+  removeTrainingServiceHandle,
+  startTrainingServiceHandle,
+} from './training-service/type-info';
 
 const electronHandler = {
   ipcRenderer: {
-    sendMessage<A extends AllAction,S extends AllService>(channel: Channels, action: A, serviceName?: S,...args: unknown[]) {
+    sendMessage<A extends AllAction, S extends AllService>(
+      channel: Channels,
+      action: A,
+      serviceName?: S,
+      ...args: unknown[]
+    ) {
       ipcRenderer.send(channel, action, serviceName, ...args);
     },
-    on<A extends AllAction,S extends AllService>(channel: Channels, func: (messageType: MESSAGE_TYPE, data: MessageData<A, S, any> | string, ...args: unknown[]) => void) {
-      const subscription = (_event: IpcRendererEvent,messageType: MESSAGE_TYPE, data: MessageData<A, S, any>, ...args: unknown[]) =>
-        func(messageType, data, ...args);
+    on<A extends AllAction, S extends AllService>(
+      channel: Channels,
+      func: (
+        messageType: MESSAGE_TYPE,
+        data: MessageData<A, S, any> | string,
+        ...args: unknown[]
+      ) => void,
+    ) {
+      const subscription = (
+        _event: IpcRendererEvent,
+        messageType: MESSAGE_TYPE,
+        data: MessageData<A, S, any>,
+        ...args: unknown[]
+      ) => func(messageType, data, ...args);
       ipcRenderer.on(channel, subscription);
       return () => {
         ipcRenderer.removeListener(channel, subscription);
       };
     },
-    once<A extends AllAction,S extends AllService>(channel: Channels, func: (action: A, serviceName: S,...args: unknown[]) => void) {
-      ipcRenderer.once(channel, (_event, action: A, serviceName: S,...args) => func(action, serviceName,...args));
+    once<A extends AllAction, S extends AllService>(
+      channel: Channels,
+      func: (action: A, serviceName: S, ...args: unknown[]) => void,
+    ) {
+      ipcRenderer.once(channel, (_event, action: A, serviceName: S, ...args) =>
+        func(action, serviceName, ...args),
+      );
     },
   },
 };
@@ -53,20 +88,26 @@ async function ipcInvoke<T>(channel: string, ...args: unknown[]): Promise<T> {
  * 适合于renderer代码要按照顺序调用很多个main中的函数的情况，也适合不需要吧操作结果广播到其他模块的场景
  */
 const mainHandle = {
-  installExampleHandle: async (service: ServiceNameExample): Promise<boolean> => {
+  installExampleHandle: async (
+    service: ServiceNameExample,
+  ): Promise<boolean> => {
     return ipcInvoke(installExampleHandle, service);
-  }
-}
+  },
+  installTrainingServiceHandle: async () => {
+    return ipcInvoke(installTrainingServiceHandle);
+  },
+  startTrainingServiceHandle: async () => {
+    return ipcInvoke(startTrainingServiceHandle);
+  },
+  removeTrainingServiceHandle: async () => {
+    return ipcInvoke(removeTrainingServiceHandle);
+  },
+};
 
 export type MainHandle = typeof mainHandle;
 
 export function initExposure(): void {
-
-  contextBridge.exposeInMainWorld(
-    'mainHandle',
-    mainHandle
-  );
-
+  contextBridge.exposeInMainWorld('mainHandle', mainHandle);
 }
 
 initExposure();

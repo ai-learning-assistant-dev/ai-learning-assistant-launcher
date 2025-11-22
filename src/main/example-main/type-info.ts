@@ -12,8 +12,8 @@ export type ActionName =
 export const channel: Channels = 'example';
 
 export interface ExampleData {
-  name: ServiceName,
-  status: 'good' | 'bad'
+  name: ServiceName;
+  status: 'good' | 'bad';
 }
 
 export const installExampleHandle = `${channel}installExample`;

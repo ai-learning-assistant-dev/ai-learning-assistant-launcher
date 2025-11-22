@@ -13,6 +13,7 @@ export type Channels =
   | 'pdf-convert'
   | 'pdf-convert-completed'
   | 'pdf-config'
+  | 'training-service'
   | 'backup';
 
 export enum MESSAGE_TYPE {
