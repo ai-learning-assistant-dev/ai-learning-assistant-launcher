@@ -87,6 +87,7 @@ const createWindow = (): void => {
       preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
     },
     show: false,
+    autoHideMenuBar: true,
   });
 
   // 最大化窗口
