@@ -12,8 +12,12 @@ import {
   installService,
   removeService,
   startService,
+  stopService,
 } from '../podman-desktop/simple-container-manage';
 import { ServiceName } from '../podman-desktop/type-info';
+
+// 全局变量存储trainingWindow实例
+let trainingWindow: BrowserWindow | null = null;
 
 export default async function init(ipcMain: IpcMain) {
   ipcHandle(ipcMain, installTrainingServiceHandle, async (_event) =>
@@ -52,17 +56,25 @@ async function monitorStatusIsHealthy(service: ServiceName) {
 }
 
 const createWindow = (): void => {
-  // Create the browser window.
-  const trainingWindow = new BrowserWindow({
+  if (trainingWindow && !trainingWindow.isDestroyed()) {
+    if (trainingWindow.isMinimized()) {
+      trainingWindow.restore();
+    }
+    trainingWindow.focus();
+    return;
+  }
+
+  trainingWindow = new BrowserWindow({
     height: 900,
     width: 1400,
   });
 
-  // and load the index.html of the app.
   trainingWindow.loadURL(trainingWebURL);
 
-  // Open the DevTools.
-  // mainWindow.webContents.openDevTools();
+  trainingWindow.on('closed', async () => {
+    trainingWindow = null;
+    await stopService('TRAINING');
+  });
 };
 
 export async function installTrainingService() {

@@ -585,3 +585,8 @@ export async function startService(serviceName: ServiceName) {
     throw new Error('重新创建服务失败');
   }
 }
+
+export async function stopService(serviceName: ServiceName) {
+  const container = await getServiceContainer(serviceName);
+  return container.stop();
+}
