@@ -11,6 +11,9 @@ import aiLearningAssistant2 from './AILearningAssistant2.png';
 import qrCodeImage from './QR_code_image.png';
 import subjectIcon from './subject_icon.png';
 import wslLogo from './wslLogo.png';
+// 新增导入Frame 3和Frame 8图片
+import frame3 from './Frame 3.png';
+import frame8 from './Frame 8.png';
 import './index.scss';
 import { LeftOutlined, RightOutlined } from '@ant-design/icons';
 import { useTrainingServiceShortcut } from '../../containers/use-training-service-shortcut';
@@ -153,13 +156,16 @@ export default function Hello() {
 
   const slides = [
     {
+      content: <img src={welcomeImage} alt="Welcome" className="hero-image-slide" />,
+    },
+    {
       content: <img src={heroImage} alt="Hero" className="hero-image-slide" />,
     },
     {
       content: (
         <img
-          src={aiLearningAssistant1}
-          alt="AILearningAssistant 1"
+          src={frame3}
+          alt="Frame 3"
           className="hero-image-slide"
         />
       ),
@@ -167,8 +173,8 @@ export default function Hello() {
     {
       content: (
         <img
-          src={aiLearningAssistant2}
-          alt="AILearningAssistant 2"
+          src={frame8}
+          alt="Frame 8"
           className="hero-image-slide"
         />
       ),
@@ -242,7 +248,7 @@ export default function Hello() {
       const containerHeight = containerRef.current.offsetHeight;
 
       // 基准尺寸（设计尺寸）
-      const baseWidth = 1300;
+      const baseWidth = 1280;
       const baseHeight = 900;
 
       // 计算缩放比例，取较小的值以确保内容完整显示
@@ -312,12 +318,6 @@ export default function Hello() {
           <div className="hello-content">
             <div className="hello-header">
               <div className="header-content">
-                <div className="logo-section">
-                  <div className="logo-container">
-                    <img src={welcomeImage} alt="Welcome" />
-                  </div>
-                </div>
-
                 <div className="hero-image">
                   <div className="carousel-container">
                     {slides.map((slide, index) => (
