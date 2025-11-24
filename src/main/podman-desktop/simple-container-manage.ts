@@ -6,6 +6,7 @@ import {
   ActionName,
   channel,
   containerNameDict,
+  HOST_DOMAIN,
   imageNameDict,
   ServiceName,
 } from './type-info';
@@ -252,6 +253,7 @@ export async function createContainer(serviceName: ServiceName) {
       : [],
     privileged: config.privileged,
     restart_policy: config.restart_policy,
+    hostadd: [`${HOST_DOMAIN}:192.168.127.254`],
   });
 }
 

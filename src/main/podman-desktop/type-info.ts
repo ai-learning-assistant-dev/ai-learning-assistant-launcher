@@ -102,3 +102,5 @@ export function getMergedContainerConfig(
   }
   return mergedConfig;
 }
+
+export const HOST_DOMAIN = 'host.ala.internal';

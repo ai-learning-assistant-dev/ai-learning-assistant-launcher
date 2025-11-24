@@ -125,6 +125,16 @@
         "Options": [
           "rbind"
         ]
+      },
+      {
+        "Destination": "/app/src/config/llm-config.json",
+        "Source": "external-resources/config/llm-config.json",
+        "Propagation": "rprivate",
+        "Type": "bind",
+        "RW": false,
+        "Options": [
+          "rbind"
+        ]
       }
     ]
   }

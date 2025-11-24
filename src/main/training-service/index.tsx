@@ -51,7 +51,7 @@ async function monitorStatusIsHealthy(service: ServiceName) {
         clearInterval(interval);
         reject();
       }
-    });
+    }, 1000);
   });
 }
 

@@ -170,7 +170,13 @@ export async function initPodman() {
     'ai-assistant-backend',
     'podman_machine.tar.zst',
   );
-  const imagePathArgs = isWindows() ? ['--image', podmanMachineImagePath] : [];
+  const imagePathArgs = isWindows()
+    ? [
+        '--image',
+        podmanMachineImagePath,
+        '--user-mode-networking'
+      ]
+    : ['--user-mode-networking'];
   const output = await commandLine.exec(
     getPodmanCli(),
     ['machine', 'init', ...imagePathArgs],
@@ -183,7 +189,29 @@ export async function initPodman() {
 }
 
 export async function startPodman() {
-  await commandLine.exec(getPodmanCli(), ['machine', 'start']);
+  try {
+    const output = await commandLine.exec(getPodmanCli(), ['machine', 'start']);
+    console.debug('startPodman', output);
+  } catch (e) {
+    if (e.message.indexOf('already running') >= 0) {
+      // 这种情况说明podman因为某种原因卡死在了starting状态
+      // 需要通过WSL才能关闭它
+      const output2 = await commandLine.exec(
+        'wsl.exe',
+        ['--shutdown', podMachineName],
+        {
+          encoding: 'utf16le',
+          shell: true,
+        },
+      );
+      console.debug('startPodman2', output2);
+      const output3 = await commandLine.exec(getPodmanCli(), [
+        'machine',
+        'start',
+      ]);
+      console.debug('startPodman3', output3);
+    }
+  }
   return true;
 }
 
@@ -503,5 +531,10 @@ export async function haveCDIGPU() {
 }
 
 export async function resetPodman() {
+  try {
+    await commandLine.exec(getPodmanCli(), ['machine', 'stop']);
+  } catch (e) {
+    console.warn(e);
+  }
   return commandLine.exec(getPodmanCli(), ['machine', 'reset', '--force']);
 }
