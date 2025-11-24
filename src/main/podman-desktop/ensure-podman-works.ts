@@ -171,11 +171,7 @@ export async function initPodman() {
     'podman_machine.tar.zst',
   );
   const imagePathArgs = isWindows()
-    ? [
-        '--image',
-        podmanMachineImagePath,
-        '--user-mode-networking'
-      ]
+    ? ['--image', podmanMachineImagePath, '--user-mode-networking']
     : ['--user-mode-networking'];
   const output = await commandLine.exec(
     getPodmanCli(),
@@ -536,5 +532,15 @@ export async function resetPodman() {
   } catch (e) {
     console.warn(e);
   }
-  return commandLine.exec(getPodmanCli(), ['machine', 'reset', '--force']);
+  try {
+    return commandLine.exec(getPodmanCli(), ['machine', 'reset', '--force']);
+  } catch (e) {
+    console.warn(e);
+    if (e.message.indexOf('podman-net-usermode') >= 0) {
+      // 用户网络模式惯有问题，重启后会自动解决
+      return true;
+    } else {
+      throw e;
+    }
+  }
 }
