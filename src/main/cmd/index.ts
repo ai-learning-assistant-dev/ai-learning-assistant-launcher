@@ -14,6 +14,7 @@ import {
   ensurePodmanWorks,
   getPodmanCli,
   resetPodman,
+  stopPodman,
 } from '../podman-desktop/ensure-podman-works';
 import { RunResult } from '@podman-desktop/api';
 import { podMachineName } from '../podman-desktop/type-info';
@@ -492,6 +493,11 @@ export async function movePodman(path: string) {
   if (!path || path === '') {
     errorMessage = '未选择正确的安装位置';
     return { success: false, errorMessage };
+  }
+  try {
+    await stopPodman();
+  } catch (e) {
+    console.warn(e);
   }
   try {
     const output1 = await commandLine.exec(

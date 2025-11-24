@@ -527,6 +527,47 @@ export async function haveCDIGPU() {
 }
 
 export async function resetPodman() {
-  await commandLine.exec('wsl.exe', ['--unregister', 'podman-machine-default']);
-  await commandLine.exec('wsl.exe', ['--unregister', 'podman-net-usermode']);
+  try {
+    await stopPodman();
+  } catch (e) {
+    console.warn(e);
+  }
+  try {
+    await commandLine.exec('wsl.exe', [
+      '--unregister',
+      'podman-machine-default',
+    ]);
+  } catch (e) {
+    console.warn(e);
+  }
+  try {
+    await commandLine.exec(getPodmanCli(), ['machine', 'reset', '--force']);
+  } catch (e) {
+    console.warn(e);
+  }
+  try {
+    await commandLine.exec('wsl.exe', ['--unregister', 'podman-net-usermode']);
+  } catch (e) {
+    console.warn(e);
+  }
+  try {
+    await commandLine.exec(getPodmanCli(), [
+      'system',
+      'connection',
+      'rm',
+      'podman-machine-default',
+    ]);
+  } catch (e) {
+    console.warn(e);
+  }
+  try {
+    await commandLine.exec(getPodmanCli(), [
+      'system',
+      'connection',
+      'rm',
+      'podman-machine-default-root',
+    ]);
+  } catch (e) {
+    console.warn(e);
+  }
 }
