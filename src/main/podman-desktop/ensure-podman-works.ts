@@ -533,7 +533,7 @@ export async function resetPodman() {
     console.warn(e);
   }
   try {
-    return commandLine.exec(getPodmanCli(), ['machine', 'reset', '--force']);
+    await commandLine.exec(getPodmanCli(), ['machine', 'reset', '--force']);
   } catch (e) {
     console.warn(e);
     if (e.message.indexOf('podman-net-usermode') >= 0) {
