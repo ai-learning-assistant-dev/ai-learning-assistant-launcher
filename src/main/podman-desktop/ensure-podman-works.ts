@@ -527,20 +527,6 @@ export async function haveCDIGPU() {
 }
 
 export async function resetPodman() {
-  try {
-    await commandLine.exec(getPodmanCli(), ['machine', 'stop']);
-  } catch (e) {
-    console.warn(e);
-  }
-  try {
-    await commandLine.exec(getPodmanCli(), ['machine', 'reset', '--force']);
-  } catch (e) {
-    console.warn(e);
-    if (e.message.indexOf('podman-net-usermode') >= 0) {
-      // 用户网络模式惯有问题，重启后会自动解决
-      return true;
-    } else {
-      throw e;
-    }
-  }
+  await commandLine.exec('wsl.exe', ['--unregister', 'podman-machine-default']);
+  await commandLine.exec('wsl.exe', ['--unregister', 'podman-net-usermode']);
 }
