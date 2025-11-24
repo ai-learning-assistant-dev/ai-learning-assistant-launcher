@@ -240,7 +240,10 @@ export async function createContainer(serviceName: ServiceName) {
     })),
     command: config.command.start,
     healthconfig: config.healthconfig,
-    env: config.env,
+    env: {
+      IN_ALA_DOCKER: 'true',
+      ...config.env,
+    },
     mounts: config.mounts
       ? config.mounts.map((mount) => {
           const source = replaceVarInPath(mount.Source);
