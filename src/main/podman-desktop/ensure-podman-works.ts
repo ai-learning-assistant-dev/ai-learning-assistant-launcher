@@ -212,7 +212,37 @@ export async function startPodman() {
 }
 
 export async function stopPodman() {
-  await commandLine.exec(getPodmanCli(), ['machine', 'stop']);
+  try {
+    await commandLine.exec(getPodmanCli(), ['machine', 'stop']);
+  } catch (e) {
+    console.warn('stopPodman1', e);
+  }
+  // 解决 socket hang up 问题
+  try {
+    await commandLine.exec('taskkill', ['/F', '/IM', 'win-sshproxy.exe']);
+  } catch (e) {
+    console.warn('stopPodman2', e);
+  }
+  // try {
+  //   await commandLine.exec(getPodmanCli(), [
+  //     'system',
+  //     'connection',
+  //     'rm',
+  //     'podman-machine-default',
+  //   ]);
+  // } catch (e) {
+  //   console.warn('stopPodman3', e);
+  // }
+  // try {
+  //   await commandLine.exec(getPodmanCli(), [
+  //     'system',
+  //     'connection',
+  //     'rm',
+  //     'podman-machine-default-root',
+  //   ]);
+  // } catch (e) {
+  //   console.warn('stopPodman4', e);
+  // }
   return true;
 }
 

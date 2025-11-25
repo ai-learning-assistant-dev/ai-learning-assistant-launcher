@@ -74,5 +74,6 @@ export function useTrainingServiceShortcut() {
     state: containerInfos[0].state,
     start,
     remove,
+    initing,
   };
 }

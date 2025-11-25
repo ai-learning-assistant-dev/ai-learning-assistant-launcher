@@ -662,7 +662,10 @@ export default function Hello() {
                       block
                       size="large"
                       onClick={openTrainingService}
-                      loading={trainingServiceStarting}
+                      loading={
+                        trainingServiceStarting ||
+                        trainingServiceShortcut.initing
+                      }
                     >
                       {trainingServiceShortcut.state === '还未安装'
                         ? '安装'

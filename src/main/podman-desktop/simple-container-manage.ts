@@ -45,7 +45,8 @@ async function improveStablebility<T>(func: () => Promise<T>) {
           e.message &&
           (e.message.indexOf('socket hang up') >= 0 ||
             e.message.indexOf('exitCode: 125') >= 0 ||
-            e.message.indexOf('connect ENOENT') >= 0)
+            e.message.indexOf('connect ENOENT') >= 0 ||
+            e.message.indexOf('unable to connect to Podman socket') >= 0)
         ) {
           await stopPodman();
           await wait(1000);
