@@ -17,9 +17,11 @@
  ********************************************************************** */
 
 import convertPath from '@stdlib/utils-convert-path';
+import { app } from 'electron';
 import { Buffer } from 'node:buffer';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
+import path from 'node:path';
 
 const windows = os.platform() === 'win32';
 export function isWindows(): boolean {
@@ -79,4 +81,25 @@ export function convertWindowsPathToPodmanMachinePath(path: string){
     return `/mnt${convertPath(path, 'posix')}`;
   }
   return path;
+}
+
+export const appPath = app.isPackaged
+  ? path.dirname(app.getPath('exe'))
+  : app.getAppPath();
+
+export function replaceVarInPath(originPath: string) {
+  let finalPath = '';
+  if (originPath.startsWith('%')) {
+    // 绝对路径
+    finalPath = originPath.replace('%USERDATA%', app.getPath('userData'));
+    finalPath = finalPath.replace('%localappdata%', process.env.LOCALAPPDATA);
+  } else {
+    // 相对路径
+    finalPath = path.join(appPath, originPath);
+  }
+
+  console.debug('原始路径', originPath);
+  console.debug('转换后路径', finalPath);
+
+  return finalPath;
 }

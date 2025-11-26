@@ -831,6 +831,20 @@ let containerConfigBuff: ContainerConfig = {
   },
   LLM: { port: [], command: { start: [], stop: [] } },
   PDF: { port: [], command: { start: [], stop: [] } },
+  TRAINING: {
+    port: [],
+    command: { start: [], stop: [] },
+    healthconfig: {
+      Test: [
+        'CMD-SHELL',
+        'pg_isready -U postgres && curl -f http://127.0.0.1:3000/health || exit 1',
+      ],
+      Interval: 30000000000,
+      Timeout: 10000000000,
+      StartPeriod: 5000000000,
+      Retries: 10,
+    },
+  },
 };
 export function getContainerConfig() {
   const containerConfigString = readFileSync(containerConfigPath, {

@@ -1,7 +1,7 @@
 import type { ContainerConfig } from '../configs/type-info';
 import { Channels } from '../ipc-data-type';
 
-export type ServiceName = 'TTS' | 'ASR' | 'LLM' | 'PDF';
+export type ServiceName = 'TTS' | 'ASR' | 'LLM' | 'PDF' | 'TRAINING';
 export type ActionName =
   | 'query'
   | 'install'
@@ -16,6 +16,7 @@ export const containerNameDict: Record<ServiceName, string> = {
   TTS: 'TTS',
   LLM: 'LLM',
   PDF: 'PDF',
+  TRAINING: 'TRAINING',
 };
 
 export const imageNameDict: Record<ServiceName, string> = {
@@ -23,6 +24,7 @@ export const imageNameDict: Record<ServiceName, string> = {
   TTS: 'ai-voice-backend:latest',
   LLM: 'LLM',
   PDF: 'mineru-pipeline:latest',
+  TRAINING: 'ala-training:latest',
 };
 
 export const imagePathDict: Record<ServiceName, string> = {
@@ -30,6 +32,7 @@ export const imagePathDict: Record<ServiceName, string> = {
   TTS: 'ai-voice.tar',
   LLM: 'LLM',
   PDF: 'pdf-service.tar',
+  TRAINING: 'ala-training.tar',
 };
 
 export const podMachineName = 'podman-machine-default';
@@ -99,3 +102,5 @@ export function getMergedContainerConfig(
   }
   return mergedConfig;
 }
+
+export const HOST_DOMAIN = 'host.ala.internal';

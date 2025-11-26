@@ -167,7 +167,7 @@ export default function AiService() {
             <Link to="/hello">
               <Button disabled={loading || cmdLoading}>返回</Button>
             </Link>
-            <div>
+            {/* <div>
               <Popconfirm
                 title="升级WSL"
                 description={
@@ -263,7 +263,7 @@ export default function AiService() {
                     ? '已启用Windows自带的WSL组件'
                     : '开启本地AI服务前请点我启用Windows自带的WSL组件'}
               </Button>
-            </div>
+            </div> */}
           </div>
         }
         bordered
