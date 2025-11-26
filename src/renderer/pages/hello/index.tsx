@@ -666,6 +666,7 @@ export default function Hello() {
                         trainingServiceStarting ||
                         trainingServiceShortcut.initing
                       }
+                      disabled={trainingServiceRemoving}
                     >
                       {trainingServiceShortcut.state === '还未安装'
                         ? '安装'
