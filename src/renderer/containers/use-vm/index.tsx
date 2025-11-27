@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { channel, ActionName, ServiceName } from '../../../main/cmd/type-info';
 import { MESSAGE_TYPE, MessageData } from '../../../main/ipc-data-type';
 
-export function useWSL() {
+export function useVM() {
   // WSL相关状态
   const [isWSLInstalled, setIsWSLInstalled] = useState<boolean>(false);
   const [wslVersion, setWSLVersion] = useState<string>('');
@@ -14,8 +14,11 @@ export function useWSL() {
     service: string;
   }>({ action: '', service: '' });
 
+  const [isPodmanInstalled, setIsPodmanInstalled] = useState<boolean>(false);
+  const [podmanChecking, setPodmanChecking] = useState<boolean>(true);
+
   // WSL操作函数
-  const handleWSLAction = (action: ActionName, service: ServiceName) => {
+  const handleCmdAction = (action: ActionName, service: ServiceName) => {
     if (wslLoading) {
       notification.warning({
         message: '请等待上一个操作完成后再操作',
@@ -50,6 +53,9 @@ export function useWSL() {
             setIsWSLInstalled(payload.installed);
             setWSLVersion(payload.version);
             setWSLChecking(false);
+          } else if (actionName === 'query' && service === 'podman') {
+            setIsPodmanInstalled(payload.installed);
+            setPodmanChecking(false);
           } else if (
             (actionName === 'install' || actionName === 'update') &&
             service === 'WSL'
@@ -87,6 +93,7 @@ export function useWSL() {
           });
           // 重新查询状态
           window.electron?.ipcRenderer.sendMessage(channel, 'query', 'WSL');
+          window.electron?.ipcRenderer.sendMessage(channel, 'query', 'podman');
           setWSLLoading(false);
           setWSLOperation({ action: 'query', service: 'WSL' });
         } else if (messageType === MESSAGE_TYPE.PROGRESS) {
@@ -113,17 +120,21 @@ export function useWSL() {
     // 初始查询WSL状态
     window.electron?.ipcRenderer.sendMessage(channel, 'query', 'WSL');
 
+    window.electron?.ipcRenderer.sendMessage(channel, 'query', 'podman');
+
     return () => {
       if (cancel) cancel();
     };
   }, []);
 
   return {
+    isPodmanInstalled,
+    podmanChecking,
     isWSLInstalled,
     wslVersion,
     wslChecking,
     wslLoading,
     wslOperation,
-    handleWSLAction,
+    handleCmdAction,
   };
 }

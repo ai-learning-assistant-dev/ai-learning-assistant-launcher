@@ -16,7 +16,7 @@ import './index.scss';
 import { LeftOutlined, RightOutlined } from '@ant-design/icons';
 import { useTrainingServiceShortcut } from '../../containers/use-training-service-shortcut';
 import { useLogContainer } from '../../containers/backup';
-import { useWSL } from '../../containers/use-wsl';
+import { useVM } from '../../containers/use-vm';
 // 引入WSL相关的类型和常量
 
 export default function Hello() {
@@ -29,12 +29,14 @@ export default function Hello() {
 
   const {
     isWSLInstalled,
+    podmanChecking,
     wslVersion,
     wslChecking,
     wslLoading,
     wslOperation,
-    handleWSLAction,
-  } = useWSL();
+    handleCmdAction,
+    isPodmanInstalled,
+  } = useVM();
 
   useEffect(() => {
     const cancel = setupBackupListener();
@@ -265,18 +267,9 @@ export default function Hello() {
                     <Popconfirm
                       title="启动WSL"
                       description="确认启用WSL吗？启用完成后可能需要重启计算机才能生效。"
-                      onConfirm={() => handleWSLAction('install', 'WSL')}
+                      onConfirm={() => handleCmdAction('install', 'WSL')}
                       okText="启用"
                       cancelText="取消"
-                      disabled={
-                        wslChecking ||
-                        isWSLInstalled ||
-                        (wslLoading &&
-                          !(
-                            wslOperation.action === 'install' &&
-                            wslOperation.service === 'WSL'
-                          ))
-                      }
                     >
                       <Button
                         className="wsl-button install"
@@ -306,18 +299,9 @@ export default function Hello() {
                           <div>确认升级WSL吗？</div>
                         </div>
                       }
-                      onConfirm={() => handleWSLAction('update', 'WSL')}
+                      onConfirm={() => handleCmdAction('update', 'WSL')}
                       okText="升级"
                       cancelText="取消"
-                      disabled={
-                        !isWSLInstalled ||
-                        wslChecking ||
-                        (wslLoading &&
-                          !(
-                            wslOperation.action === 'update' &&
-                            wslOperation.service === 'WSL'
-                          ))
-                      }
                     >
                       <Button
                         className="wsl-button upgrade"
@@ -344,32 +328,23 @@ export default function Hello() {
                       description={
                         <div>
                           <div>
-                            安装Podman可能需要5分钟时间，实际用时和你的磁盘读写速度有关。
+                            {isPodmanInstalled ? '修改Podman位置' : '安装Podman'}可能需要5分钟时间，实际用时和你的磁盘读写速度有关。
                           </div>
                           <div style={{ color: 'red' }}>
                             提示Docker用户：如果您的电脑上还有Docker软件，请您先手动关闭Docker软件前台和后台程序以避免Docker文件被损坏。安装完成后如果出现无法正常运行Docker的情况，请您重启电脑后再打开Docker。
                           </div>
                         </div>
                       }
-                      onConfirm={() => handleWSLAction('move', 'podman')}
+                      onConfirm={() => handleCmdAction('move', 'podman')}
                       okText="安装"
                       cancelText="取消"
-                      disabled={
-                        !isWSLInstalled ||
-                        wslChecking ||
-                        (wslLoading &&
-                          !(
-                            wslOperation.action === 'move' &&
-                            wslOperation.service === 'podman'
-                          ))
-                      }
                     >
                       <Button
                         className="wsl-button change-path"
                         loading={
-                          wslLoading &&
-                          wslOperation.action === 'move' &&
-                          wslOperation.service === 'podman'
+                          podmanChecking ||
+                          (wslOperation.action === 'move' &&
+                            wslOperation.service === 'podman')
                         }
                         disabled={
                           !isWSLInstalled ||
@@ -380,25 +355,19 @@ export default function Hello() {
                               wslOperation.service === 'podman'
                             ))
                         }
+                        
                       >
-                        <span className="button-text">安装Podman</span>
+                        <span className="button-text">
+                          {isPodmanInstalled ? '修改Podman位置' : '安装Podman'}
+                        </span>
                       </Button>
                     </Popconfirm>
                     <Popconfirm
                       title="卸载Podman"
                       description="你确定要卸载Podman吗？卸载后再次安装会需要很长时间！"
-                      onConfirm={() => handleWSLAction('remove', 'podman')}
+                      onConfirm={() => handleCmdAction('remove', 'podman')}
                       okText="确认卸载"
                       cancelText="取消"
-                      disabled={
-                        !isWSLInstalled ||
-                        wslChecking ||
-                        (wslLoading &&
-                          !(
-                            wslOperation.action === 'remove' &&
-                            wslOperation.service === 'podman'
-                          ))
-                      }
                     >
                       <Button
                         className="wsl-button uninstall"
@@ -470,7 +439,12 @@ export default function Hello() {
                   </div>
                   <div className="feature-button-container">
                     <NavLink to="/ai-service" style={{ width: '100%' }}>
-                      <Button className="feature-button" block size="large">
+                      <Button
+                        className="feature-button"
+                        block
+                        size="large"
+                        disabled={!isPodmanInstalled || wslLoading}
+                      >
                         开始
                       </Button>
                     </NavLink>
@@ -531,7 +505,11 @@ export default function Hello() {
                         trainingServiceStarting ||
                         trainingServiceShortcut.initing
                       }
-                      disabled={trainingServiceRemoving}
+                      disabled={
+                        trainingServiceRemoving ||
+                        !isPodmanInstalled ||
+                        wslLoading
+                      }
                     >
                       {trainingServiceShortcut.state === '还未安装'
                         ? '安装'
@@ -544,6 +522,7 @@ export default function Hello() {
                         size="large"
                         onClick={removeTrainingService}
                         loading={trainingServiceRemoving}
+                        disabled={!isPodmanInstalled || wslLoading}
                       >
                         卸载
                       </Button>

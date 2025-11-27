@@ -67,6 +67,7 @@ const createWindow = (): void => {
   trainingWindow = new BrowserWindow({
     height: 900,
     width: 1400,
+    autoHideMenuBar: true,
   });
 
   trainingWindow.loadURL(trainingWebURL);

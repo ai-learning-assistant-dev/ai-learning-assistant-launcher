@@ -37,7 +37,7 @@ export async function getPodmanSocketPath(
   return socketPath;
 }
 
-async function isPodmanInstall() {
+export async function isPodmanInstall() {
   const output = await commandLine.exec(getPodmanCli(), ['--version']);
   console.debug('isPodmanInstall', output);
   if (output.stdout.indexOf('podman version ') >= 0) {
@@ -46,7 +46,7 @@ async function isPodmanInstall() {
   return false;
 }
 
-async function isPodmanInit() {
+export async function isPodmanInit() {
   const output = await commandLine.exec(getPodmanCli(), ['machine', 'list']);
   console.debug('isPodmanInit', output);
   if (output.stdout.indexOf(podMachineName) >= 0) {
@@ -565,7 +565,7 @@ export async function resetPodman() {
   try {
     await commandLine.exec('wsl.exe', [
       '--unregister',
-      'podman-machine-default',
+      podMachineName,
     ]);
   } catch (e) {
     console.warn(e);
@@ -585,7 +585,7 @@ export async function resetPodman() {
       'system',
       'connection',
       'rm',
-      'podman-machine-default',
+      podMachineName,
     ]);
   } catch (e) {
     console.warn(e);
@@ -595,7 +595,7 @@ export async function resetPodman() {
       'system',
       'connection',
       'rm',
-      'podman-machine-default-root',
+      `${podMachineName}-root`,
     ]);
   } catch (e) {
     console.warn(e);
