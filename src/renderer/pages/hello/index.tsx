@@ -176,7 +176,7 @@ export default function Hello() {
   };
 
   const wslStatusText = () => {
-    if (vTReady) {
+    if (!vTReady) {
       return '请开启BIOS虚拟化';
     } else {
       if (isWSLInstalled) {
@@ -267,9 +267,7 @@ export default function Hello() {
                         </Button>
                       ) : (
                         <Button
-                          type={
-                            vTReady && isWSLInstalled ? 'primary' : 'default'
-                          }
+                          type="primary"
                           className={`wsl-status-button ${vTReady && isWSLInstalled ? 'installed' : 'not-installed'}`}
                         >
                           {wslStatusText()}
@@ -343,7 +341,10 @@ export default function Hello() {
                       description={
                         <div>
                           <div>
-                            {isPodmanInstalled ? '修改Podman位置' : '安装Podman'}可能需要5分钟时间，实际用时和你的磁盘读写速度有关。
+                            {isPodmanInstalled
+                              ? '修改Podman位置'
+                              : '安装Podman'}
+                            可能需要5分钟时间，实际用时和你的磁盘读写速度有关。
                           </div>
                           <div style={{ color: 'red' }}>
                             提示Docker用户：如果您的电脑上还有Docker软件，请您先手动关闭Docker软件前台和后台程序以避免Docker文件被损坏。安装完成后如果出现无法正常运行Docker的情况，请您重启电脑后再打开Docker。
@@ -370,7 +371,6 @@ export default function Hello() {
                               wslOperation.service === 'podman'
                             ))
                         }
-                        
                       >
                         <span className="button-text">
                           {isPodmanInstalled ? '修改Podman位置' : '安装Podman'}
