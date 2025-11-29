@@ -134,9 +134,9 @@ export function useVM() {
   }, []);
 
   return {
-    isPodmanInstalled,
+    isPodmanInstalled: vTReady && isPodmanInstalled,
     podmanChecking,
-    isWSLInstalled,
+    isWSLInstalled: vTReady && isWSLInstalled,
     wslVersion,
     wslChecking,
     wslLoading,
