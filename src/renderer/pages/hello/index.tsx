@@ -6,8 +6,6 @@ import toolsIcon from './Tools_Icon.png';
 import llmIcon from './LLM_Icon.png';
 import heroImage from './Frame 2.png';
 import welcomeImage from './Welcome.png';
-import aiLearningAssistant1 from './AILearningAssistant1.png';
-import aiLearningAssistant2 from './AILearningAssistant2.png';
 import qrCodeImage from './QR_code_image.png';
 import subjectIcon from './subject_icon.png';
 import wslLogo from './wslLogo.png';
@@ -21,6 +19,8 @@ import { useLogContainer } from '../../containers/backup';
 // 引入WSL相关的类型和常量
 import { channel, ActionName, ServiceName } from '../../../main/cmd/type-info';
 import { MESSAGE_TYPE, MessageData } from '../../../main/ipc-data-type';
+import { shell } from 'electron';
+
 
 export default function Hello() {
   const trainingServiceShortcut = useTrainingServiceShortcut();
@@ -223,6 +223,21 @@ export default function Hello() {
   const handleCancel = () => {
     setIsModalVisible(false);
   };
+
+  // 新增：打开使用文档
+  const openUserManual = () => {
+    window.electron?.ipcRenderer.sendMessage('open-external-url', 'open', 'browser', 'https://docs.qq.com/aio/DS1NnZkZkdkFiSVdP');
+  };
+  // 新增：打开使用文档
+  // const openUserManual = async () => {
+  //   try {
+  //     await window.electron.shell.openExternal('https://docs.qq.com/aio/DS1NnZkZkdkFiSVdP');
+  //   } catch (error) {
+  //     console.error('无法打开外部链接:', error);
+  //     // 可以降级使用 window.open()
+  //     window.open('https://docs.qq.com/aio/DS1NnZkZkdkFiSVdP', '_blank');
+  //   }
+  // };
 
   // WSL相关功能处理函数
   const handleInstallWSL = () => {
@@ -698,6 +713,9 @@ export default function Hello() {
                   type="primary"
                 >
                   <span className="log-text">日志导出</span>
+                </Button>
+                <Button className="manual-button" onClick={openUserManual}>
+                  使用文档
                 </Button>
                 <Button className="get-help-button" onClick={showQrCodeModal}>
                   获取帮助
