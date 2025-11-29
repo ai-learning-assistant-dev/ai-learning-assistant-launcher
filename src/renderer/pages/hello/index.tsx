@@ -177,7 +177,7 @@ export default function Hello() {
 
   const wslStatusText = () => {
     if (!vTReady) {
-      return '请开启BIOS虚拟化';
+      return '请在BIOS开启虚拟化';
     } else {
       if (isWSLInstalled) {
         return `已安装 ${wslVersion ? `(${wslVersion.split('\n')[0]})` : ''}`;
