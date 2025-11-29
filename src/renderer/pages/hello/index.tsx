@@ -36,6 +36,8 @@ export default function Hello() {
     wslOperation,
     handleCmdAction,
     isPodmanInstalled,
+    showRebootModal,
+    vTReady,
   } = useVM();
 
   useEffect(() => {
@@ -173,6 +175,18 @@ export default function Hello() {
     setTrainingServiceRemoving(false);
   };
 
+  const wslStatusText = () => {
+    if (vTReady) {
+      return '请开启BIOS虚拟化';
+    } else {
+      if (isWSLInstalled) {
+        return `已安装 ${wslVersion ? `(${wslVersion.split('\n')[0]})` : ''}`;
+      } else {
+        return '未安装';
+      }
+    }
+  };
+
   return (
     <div className="hello-root" ref={containerRef}>
       <div
@@ -253,12 +267,12 @@ export default function Hello() {
                         </Button>
                       ) : (
                         <Button
-                          type={isWSLInstalled ? 'primary' : 'default'}
-                          className={`wsl-status-button ${isWSLInstalled ? 'installed' : 'not-installed'}`}
+                          type={
+                            vTReady && isWSLInstalled ? 'primary' : 'default'
+                          }
+                          className={`wsl-status-button ${vTReady && isWSLInstalled ? 'installed' : 'not-installed'}`}
                         >
-                          {isWSLInstalled
-                            ? `已安装 ${wslVersion ? `(${wslVersion.split('\n')[0]})` : ''}`
-                            : '未安装'}
+                          {wslStatusText()}
                         </Button>
                       )}
                     </div>
@@ -279,6 +293,7 @@ export default function Hello() {
                           wslOperation.service === 'WSL'
                         }
                         disabled={
+                          !vTReady ||
                           wslChecking ||
                           isWSLInstalled ||
                           (wslLoading &&
@@ -562,6 +577,9 @@ export default function Hello() {
         <p className="qr-description">
           扫描二维码加入QQ群，关于AI学习助手，在群中提出你的任何疑问，会有专业人员解答
         </p>
+      </Modal>
+      <Modal open={showRebootModal} footer={false} closable={false}>
+        已经成功打开windows系统自带WSL组件，需要重启电脑才能进行后续操作，请确保你保存了所有的文件后手动重启电脑
       </Modal>
     </div>
   );

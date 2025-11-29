@@ -16,6 +16,8 @@ export function useVM() {
 
   const [isPodmanInstalled, setIsPodmanInstalled] = useState<boolean>(false);
   const [podmanChecking, setPodmanChecking] = useState<boolean>(true);
+  const [showRebootModal, setShowRebootModal] = useState(false);
+  const [vTReady, setVTReady] = useState(false);
 
   // WSL操作函数
   const handleCmdAction = (action: ActionName, service: ServiceName) => {
@@ -52,6 +54,7 @@ export function useVM() {
           if (actionName === 'query' && service === 'WSL') {
             setIsWSLInstalled(payload.installed);
             setWSLVersion(payload.version);
+            setVTReady(payload.vTReady);
             setWSLChecking(false);
           } else if (actionName === 'query' && service === 'podman') {
             setIsPodmanInstalled(payload.installed);
@@ -64,12 +67,15 @@ export function useVM() {
             setWSLVersion(payload.version);
             setWSLLoading(false);
             setWSLOperation({ action: 'query', service: 'WSL' });
-
-            if (actionName === 'install') {
-              notification.success({
-                message: 'WSL安装完成，需要重启计算机才能生效',
-                placement: 'topRight',
-              });
+            if (actionName === 'install' && service === 'WSL') {
+              const { data: success } = data as MessageData<
+                ActionName,
+                ServiceName,
+                boolean
+              >;
+              if (success) {
+                setShowRebootModal(true);
+              }
             }
           } else if (actionName === 'move' && service === 'podman') {
             setWSLLoading(false);
@@ -136,5 +142,7 @@ export function useVM() {
     wslLoading,
     wslOperation,
     handleCmdAction,
+    showRebootModal,
+    vTReady,
   };
 }

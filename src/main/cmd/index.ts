@@ -20,7 +20,7 @@ import {
 } from '../podman-desktop/ensure-podman-works';
 import { RunResult } from '@podman-desktop/api';
 import { podMachineName } from '../podman-desktop/type-info';
-import { isWSLInstall, wslVersion } from './is-wsl-install';
+import { isVTReady, isWSLInstall, wslVersion } from './is-wsl-install';
 import { loggerFactory } from '../terminal-log';
 
 const commandLine = new Exec();
@@ -153,12 +153,14 @@ export default async function init(ipcMain: IpcMain) {
           }
         } else if (action === 'query') {
           if (serviceName === 'WSL') {
+            const vTReady = await isVTReady();
             const version = await wslVersion();
             event.reply(
               channel,
               MESSAGE_TYPE.DATA,
               new MessageData(action, serviceName, {
                 version,
+                vTReady,
                 installed: await isWSLInstall(),
               }),
             );
