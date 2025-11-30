@@ -17,7 +17,6 @@ import { LeftOutlined, RightOutlined } from '@ant-design/icons';
 import { useTrainingServiceShortcut } from '../../containers/use-training-service-shortcut';
 import { useLogContainer } from '../../containers/backup';
 import { useVM } from '../../containers/use-vm';
-// 引入WSL相关的类型和常量
 
 export default function Hello() {
   const trainingServiceShortcut = useTrainingServiceShortcut();
@@ -109,6 +108,21 @@ export default function Hello() {
   const handleCancel = () => {
     setIsModalVisible(false);
   };
+
+  // 新增：打开使用文档
+  const openUserManual = () => {
+    window.electron?.ipcRenderer.sendMessage('open-external-url', 'open', 'browser', 'https://docs.qq.com/aio/DS1NnZkZkdkFiSVdP');
+  };
+  // 新增：打开使用文档
+  // const openUserManual = async () => {
+  //   try {
+  //     await window.electron.shell.openExternal('https://docs.qq.com/aio/DS1NnZkZkdkFiSVdP');
+  //   } catch (error) {
+  //     console.error('无法打开外部链接:', error);
+  //     // 可以降级使用 window.open()
+  //     window.open('https://docs.qq.com/aio/DS1NnZkZkdkFiSVdP', '_blank');
+  //   }
+  // };
 
   // 修改 calculateScaleAndPosition 函数
   const calculateScaleAndPosition = () => {
@@ -557,6 +571,9 @@ export default function Hello() {
                   type="primary"
                 >
                   <span className="log-text">日志导出</span>
+                </Button>
+                <Button className="manual-button" onClick={openUserManual}>
+                  使用文档
                 </Button>
                 <Button className="get-help-button" onClick={showQrCodeModal}>
                   获取帮助

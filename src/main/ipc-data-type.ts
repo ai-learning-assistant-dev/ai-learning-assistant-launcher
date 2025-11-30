@@ -14,7 +14,8 @@ export type Channels =
   | 'pdf-convert-completed'
   | 'pdf-config'
   | 'training-service'
-  | 'backup';
+  | 'backup'
+  | 'open-external-url';
 
 export enum MESSAGE_TYPE {
   /** 阻断性错误，会把转圈中的按钮变成不转圈 */
@@ -67,6 +68,11 @@ import {
   ActionName as LogActionName,
   ServiceName as LogServiceName,
 } from './backup/type-info';
+import { 
+  ActionName as ActionNameUrl,
+  ServiceName as ServiceNameUrl,
+} from './external-url/type-info';
+
 
 export type AllAction =
   | ActionNamePodman
@@ -77,7 +83,8 @@ export type AllAction =
   | ActionNameLMStudio
   | ActionNameExampleMain
   | ActionNameWorkspace // 添加 workspace 类型
-  | LogActionName;
+  | LogActionName
+  | ActionNameUrl;
 
 export type AllService =
   | ServiceNamePodman
@@ -88,7 +95,8 @@ export type AllService =
   | ServiceNameLMStudio
   | ServiceNameExampleMain
   | ServiceNameWorkspace
-  | LogServiceName;
+  | LogServiceName
+  | ServiceNameUrl;
 
 export class MessageData<
   A extends AllAction = AllAction,
