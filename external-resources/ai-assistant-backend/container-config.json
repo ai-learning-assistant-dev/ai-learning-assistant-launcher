@@ -18,6 +18,9 @@
     },
     "env": {
       "SERVICE_TYPE": "asr"
+    },
+    "netns": {
+      "nsmode": "host"
     }
   },
   "TTS": {
