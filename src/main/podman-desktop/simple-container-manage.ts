@@ -163,7 +163,7 @@ export default async function init(ipcMain: IpcMain) {
                 event.reply(channel, MESSAGE_TYPE.INFO, '成功停止服务');
               });
             } else if (action === 'remove') {
-              await removeService(serviceName);
+              await removeService(serviceName, event);
             } else if (action === 'update') {
               const result = await improveStablebility(async () => {
                 const imagePathForUpdate = await selectImageFile(serviceName);
