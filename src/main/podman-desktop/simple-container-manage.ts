@@ -553,9 +553,8 @@ export async function removeService(
   serviceName: ServiceName,
   originEvent?: IpcMainEvent,
 ) {
-  const event = getEventProxy(originEvent);
   await removeContainer(serviceName);
-  await cleanImage(serviceName);
+  await cleanImage(serviceName, originEvent);
 }
 
 export async function startService(serviceName: ServiceName) {
