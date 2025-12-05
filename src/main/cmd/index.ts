@@ -17,6 +17,7 @@ import {
   stopPodman,
   isPodmanInstall,
   isPodmanInit,
+  getPodmanInfo,
 } from '../podman-desktop/ensure-podman-works';
 import { RunResult } from '@podman-desktop/api';
 import { podMachineName } from '../podman-desktop/type-info';
@@ -180,10 +181,12 @@ export default async function init(ipcMain: IpcMain) {
             try {
               const podmanInstalled = await isPodmanInstall();
               const podmanInited = await isPodmanInit();
+              const podmanInfo = await getPodmanInfo();
               event.reply(
                 channel,
                 MESSAGE_TYPE.DATA,
                 new MessageData(action, serviceName, {
+                  podmanInfo,
                   installed: podmanInstalled && podmanInited,
                 }),
               );

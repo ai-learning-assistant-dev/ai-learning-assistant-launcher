@@ -15,6 +15,7 @@ export function useVM() {
   }>({ action: '', service: '' });
 
   const [isPodmanInstalled, setIsPodmanInstalled] = useState<boolean>(false);
+  const [podmanInfo, setPodmanInfo] = useState<string>('');
   const [podmanChecking, setPodmanChecking] = useState<boolean>(true);
   const [showRebootModal, setShowRebootModal] = useState(false);
   const [vTReady, setVTReady] = useState(false);
@@ -58,6 +59,7 @@ export function useVM() {
             setWSLChecking(false);
           } else if (actionName === 'query' && service === 'podman') {
             setIsPodmanInstalled(payload.installed);
+            setPodmanInfo(payload.podmanInfo);
             setPodmanChecking(false);
           } else if (
             (actionName === 'install' || actionName === 'update') &&
@@ -133,9 +135,14 @@ export function useVM() {
     };
   }, []);
 
+  const needResintallPodman =
+    podmanInfo && podmanInfo.includes('UserModeNetworking: false');
+
   return {
     isPodmanInstalled: vTReady && isPodmanInstalled,
     podmanChecking,
+    podmanInfo,
+    needResintallPodman,
     isWSLInstalled: vTReady && isWSLInstalled,
     wslVersion,
     wslChecking,

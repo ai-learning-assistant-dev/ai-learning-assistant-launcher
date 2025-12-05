@@ -80,6 +80,20 @@ async function isPodmanStart() {
   return false;
 }
 
+export async function getPodmanInfo() {
+  try {
+    const result = await commandLine.exec('podman', [
+      'machine',
+      'inspect',
+      '--format',
+      '"UserModeNetworking: {{.UserModeNetworking}}\\nRootful: {{.Rootful}}\\nState: {{.State}}\\nCreated: {{.Created}}"',
+    ]);
+    return result.stdout;
+  } catch (e) {
+    console.warn(e);
+  }
+}
+
 export async function isImageReady(serviceName: ServiceName) {
   console.debug('serviceName', serviceName);
   const [imageName, imageTag] = imageNameDict[serviceName].split(':');

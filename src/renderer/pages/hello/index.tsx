@@ -29,6 +29,7 @@ export default function Hello() {
   const {
     isWSLInstalled,
     podmanChecking,
+    needResintallPodman,
     wslVersion,
     wslChecking,
     wslLoading,
@@ -597,6 +598,30 @@ export default function Hello() {
       </Modal>
       <Modal open={showRebootModal} footer={false} closable={false}>
         已经成功打开windows系统自带WSL组件，需要重启电脑才能进行后续操作，请确保你保存了所有的文件后手动重启电脑
+      </Modal>
+      <Modal open={needResintallPodman} footer={false} closable={false}>
+        检测到您使用过启动器V1版，新版启动器需要卸载启动器V1版的Podman组件，然后重新安装Podman才能正常使用语音功能，请卸载Podman组件
+        <br />
+        <Button
+          className="wsl-button uninstall"
+          loading={
+            wslLoading &&
+            wslOperation.action === 'remove' &&
+            wslOperation.service === 'podman'
+          }
+          disabled={
+            !isWSLInstalled ||
+            wslChecking ||
+            (wslLoading &&
+              !(
+                wslOperation.action === 'remove' &&
+                wslOperation.service === 'podman'
+              ))
+          }
+          onClick={() => handleCmdAction('remove', 'podman')}
+        >
+          <span className="button-text">卸载Podman</span>
+        </Button>
       </Modal>
     </div>
   );
