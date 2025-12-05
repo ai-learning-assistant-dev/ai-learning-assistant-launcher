@@ -1,4 +1,27 @@
 {
+  "VOICE_RTC": {
+    "port": [],
+    "command": {
+      "start": [
+        "sh",
+        "./start.sh"
+      ],
+      "stop": [
+        "sh",
+        "./stop.sh"
+      ]
+    },
+    "healthconfig": {
+      "Test": [
+        "CMD-SHELL",
+        "curl -X POST -H 'Content-Type: application/json' http://127.0.0.1:8989/webrtc/metadata || exit 1"
+      ],
+      "Interval": 3000000000,
+      "Timeout": 1000000000,
+      "StartPeriod": 60000000000,
+      "Retries": 10
+    }
+  },
   "ASR": {
     "port": [
       {
@@ -113,7 +136,7 @@
         "CMD-SHELL",
         "pg_isready -U postgres && curl -f http://127.0.0.1:3000/health || exit 1"
       ],
-      "Interval": 3000000000,
+      "Interval": 1000000000,
       "Timeout": 1000000000,
       "StartPeriod": 10000000000,
       "Retries": 10

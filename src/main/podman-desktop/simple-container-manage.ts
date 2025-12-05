@@ -116,6 +116,9 @@ export default async function init(ipcMain: IpcMain) {
               await improveStablebility(async () => {
                 try {
                   await container.start();
+                  if (serviceName === 'VOICE_RTC') {
+                    await monitorStatusIsHealthy('VOICE_RTC');
+                  }
                   event.reply(channel, MESSAGE_TYPE.INFO, '成功启动服务');
                   // 如果是TTS服务，同步配置到aloud插件
                   if (serviceName === 'TTS') {
@@ -595,4 +598,29 @@ export async function startService(serviceName: ServiceName) {
 export async function stopService(serviceName: ServiceName) {
   const container = await getServiceContainer(serviceName);
   return container.stop();
+}
+
+export async function monitorStatusIsHealthy(service: ServiceName) {
+  console.debug('checking health', service);
+  return new Promise<void>((resolve, reject) => {
+    const interval = setInterval(async () => {
+      const newInfo = await getServiceInfo(service);
+      if (newInfo) {
+        if (newInfo.Status !== 'starting') {
+          if (newInfo.Status === 'healthy') {
+            clearInterval(interval);
+            resolve();
+          } else {
+            clearInterval(interval);
+            reject();
+          }
+        } else {
+          // do nothing
+        }
+      } else {
+        clearInterval(interval);
+        reject();
+      }
+    }, 1000);
+  });
 }
