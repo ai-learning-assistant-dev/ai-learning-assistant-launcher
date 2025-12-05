@@ -1,6 +1,9 @@
 {
   "VOICE_RTC": {
     "port": [],
+    "netns": {
+      "nsmode": "host"
+    },
     "command": {
       "start": [
         "sh",
@@ -41,9 +44,6 @@
     },
     "env": {
       "SERVICE_TYPE": "asr"
-    },
-    "netns": {
-      "nsmode": "host"
     }
   },
   "TTS": {
