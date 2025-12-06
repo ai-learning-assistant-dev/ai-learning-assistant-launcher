@@ -419,8 +419,8 @@ export async function ensurePodmanWorks(
   await checkAndSetup(isPodmanInstall, installPodman, {
     event,
     channel,
-    checkMessage: '检查Podman安装状态',
-    setupMessage: '安装Podman',
+    checkMessage: '检查Podman辅助程序状态',
+    setupMessage: '安装Podman辅助程序',
   });
   await checkAndSetup(isPodmanInit, initPodman, {
     event,

@@ -208,6 +208,7 @@ export default async function init(ipcMain: IpcMain) {
             event.reply(channel, MESSAGE_TYPE.WARNING, '没找到容器');
           }
         } else {
+          console.debug('还没连接到docker');
           if (action !== 'query') {
             event.reply(channel, MESSAGE_TYPE.WARNING, '还没连接到docker');
           } else if (action === 'query') {
@@ -218,7 +219,6 @@ export default async function init(ipcMain: IpcMain) {
             );
             return;
           }
-          console.debug('还没连接到docker');
         }
       } catch (e) {
         console.error(e);
