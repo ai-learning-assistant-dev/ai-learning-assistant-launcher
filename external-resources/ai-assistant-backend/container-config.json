@@ -17,7 +17,7 @@
     "healthconfig": {
       "Test": [
         "CMD-SHELL",
-        "curl -X POST -H 'Content-Type: application/json' http://127.0.0.1:8989/webrtc/metadata || exit 1"
+        "curl -f http://127.0.0.1:8989/webrtc/health || exit 1"
       ],
       "Interval": 3000000000,
       "Timeout": 1000000000,
