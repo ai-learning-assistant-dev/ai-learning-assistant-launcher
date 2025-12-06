@@ -1,5 +1,9 @@
 import type { Channels } from '../ipc-data-type';
-import { ContainerCreateHealthConfigOption, ContainerCreateMountOption } from '../podman-desktop/libpod-dockerode';
+import {
+  ContainerCreateHealthConfigOption,
+  ContainerCreateMountOption,
+  ContainerCreateNetNSOption,
+} from '../podman-desktop/libpod-dockerode';
 
 export type ServiceName = 'obsidianApp' | 'obsidianVault' | 'container' | 'TTS' | 'PDF' | 'LLM' | 'copilot';
 export type ActionName = 'query' | 'update' | 'selectVoiceFile' | 'initVoiceFileList' | 'deleteVoiceFile' | 'get' | 'set' | 'testConnection' | 'syncAllApiKeys';
@@ -20,6 +24,7 @@ export interface BaseContainerConfig {
   healthconfig?: ContainerCreateHealthConfigOption;
   privileged?: boolean;
   restart_policy?: string;
+  netns?: ContainerCreateNetNSOption;
 }
 
 export interface ContainerConfig {

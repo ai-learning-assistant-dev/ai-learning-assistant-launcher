@@ -34,4 +34,17 @@ export async function logDeviceInfo() {
   } catch (error) {
     console.warn(error);
   }
+  try {
+    const commandLine = new Exec();
+    const result = await commandLine.exec('podman', [
+      'machine',
+      'inspect',
+      '--format',
+      '"UserModeNetworking: {{.UserModeNetworking}}\\nRootful: {{.Rootful}}\\nState: {{.State}}\\nCreated: {{.Created}}"',
+    ]);
+    console.log('podman info');
+    console.log(result.stdout);
+  } catch (error) {
+    console.warn(error);
+  }
 }

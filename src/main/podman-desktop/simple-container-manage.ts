@@ -116,6 +116,9 @@ export default async function init(ipcMain: IpcMain) {
               await improveStablebility(async () => {
                 try {
                   await container.start();
+                  if (serviceName === 'VOICE_RTC') {
+                    await monitorStatusIsHealthy('VOICE_RTC');
+                  }
                   event.reply(channel, MESSAGE_TYPE.INFO, '成功启动服务');
                   // 如果是TTS服务，同步配置到aloud插件
                   if (serviceName === 'TTS') {
@@ -163,7 +166,7 @@ export default async function init(ipcMain: IpcMain) {
                 event.reply(channel, MESSAGE_TYPE.INFO, '成功停止服务');
               });
             } else if (action === 'remove') {
-              await removeService(serviceName);
+              await removeService(serviceName, event);
             } else if (action === 'update') {
               const result = await improveStablebility(async () => {
                 const imagePathForUpdate = await selectImageFile(serviceName);
@@ -205,6 +208,7 @@ export default async function init(ipcMain: IpcMain) {
             event.reply(channel, MESSAGE_TYPE.WARNING, '没找到容器');
           }
         } else {
+          console.debug('还没连接到docker');
           if (action !== 'query') {
             event.reply(channel, MESSAGE_TYPE.WARNING, '还没连接到docker');
           } else if (action === 'query') {
@@ -215,7 +219,6 @@ export default async function init(ipcMain: IpcMain) {
             );
             return;
           }
-          console.debug('还没连接到docker');
         }
       } catch (e) {
         console.error(e);
@@ -258,6 +261,7 @@ export async function createContainer(serviceName: ServiceName) {
     privileged: config.privileged,
     restart_policy: config.restart_policy,
     hostadd: [`${HOST_DOMAIN}:192.168.127.254`],
+    netns: config.netns,
   });
 }
 
@@ -552,9 +556,8 @@ export async function removeService(
   serviceName: ServiceName,
   originEvent?: IpcMainEvent,
 ) {
-  const event = getEventProxy(originEvent);
   await removeContainer(serviceName);
-  await cleanImage(serviceName);
+  await cleanImage(serviceName, originEvent);
 }
 
 export async function startService(serviceName: ServiceName) {
@@ -595,4 +598,29 @@ export async function startService(serviceName: ServiceName) {
 export async function stopService(serviceName: ServiceName) {
   const container = await getServiceContainer(serviceName);
   return container.stop();
+}
+
+export async function monitorStatusIsHealthy(service: ServiceName) {
+  console.debug('checking health', service);
+  return new Promise<void>((resolve, reject) => {
+    const interval = setInterval(async () => {
+      const newInfo = await getServiceInfo(service);
+      if (newInfo) {
+        if (newInfo.Status !== 'starting') {
+          if (newInfo.Status === 'healthy') {
+            clearInterval(interval);
+            resolve();
+          } else {
+            clearInterval(interval);
+            reject();
+          }
+        } else {
+          // do nothing
+        }
+      } else {
+        clearInterval(interval);
+        reject();
+      }
+    }, 1000);
+  });
 }

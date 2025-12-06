@@ -37,7 +37,7 @@ export async function getPodmanSocketPath(
   return socketPath;
 }
 
-async function isPodmanInstall() {
+export async function isPodmanInstall() {
   const output = await commandLine.exec(getPodmanCli(), ['--version']);
   console.debug('isPodmanInstall', output);
   if (output.stdout.indexOf('podman version ') >= 0) {
@@ -46,7 +46,7 @@ async function isPodmanInstall() {
   return false;
 }
 
-async function isPodmanInit() {
+export async function isPodmanInit() {
   const output = await commandLine.exec(getPodmanCli(), ['machine', 'list']);
   console.debug('isPodmanInit', output);
   if (output.stdout.indexOf(podMachineName) >= 0) {
@@ -78,6 +78,20 @@ async function isPodmanStart() {
     }
   }
   return false;
+}
+
+export async function getPodmanInfo() {
+  try {
+    const result = await commandLine.exec('podman', [
+      'machine',
+      'inspect',
+      '--format',
+      '"UserModeNetworking: {{.UserModeNetworking}}\\nRootful: {{.Rootful}}\\nState: {{.State}}\\nCreated: {{.Created}}"',
+    ]);
+    return result.stdout;
+  } catch (e) {
+    console.warn(e);
+  }
 }
 
 export async function isImageReady(serviceName: ServiceName) {
@@ -405,8 +419,8 @@ export async function ensurePodmanWorks(
   await checkAndSetup(isPodmanInstall, installPodman, {
     event,
     channel,
-    checkMessage: '检查Podman安装状态',
-    setupMessage: '安装Podman',
+    checkMessage: '检查Podman辅助程序状态',
+    setupMessage: '安装Podman辅助程序',
   });
   await checkAndSetup(isPodmanInit, initPodman, {
     event,
@@ -565,7 +579,7 @@ export async function resetPodman() {
   try {
     await commandLine.exec('wsl.exe', [
       '--unregister',
-      'podman-machine-default',
+      podMachineName,
     ]);
   } catch (e) {
     console.warn(e);
@@ -585,7 +599,7 @@ export async function resetPodman() {
       'system',
       'connection',
       'rm',
-      'podman-machine-default',
+      podMachineName,
     ]);
   } catch (e) {
     console.warn(e);
@@ -595,7 +609,7 @@ export async function resetPodman() {
       'system',
       'connection',
       'rm',
-      'podman-machine-default-root',
+      `${podMachineName}-root`,
     ]);
   } catch (e) {
     console.warn(e);

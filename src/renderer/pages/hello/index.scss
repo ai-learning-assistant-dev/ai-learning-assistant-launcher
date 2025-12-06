@@ -549,6 +549,9 @@ body{
                     flex-grow: 0;
                   }
                 }
+                &[disabled]{
+                  background-color: #d9d9d9;
+                }
               }
             }
           }
@@ -916,7 +919,7 @@ body{
               align-items: center;
               padding: 6px 12px; // 减小按钮内边距 从8px 16px改为6px 12px
               gap: 8px; // 减小间距 从10px改为8px
-              width: 110px; // 改为自动宽度 从129.5px改为auto
+              width: auto; // 改为自动宽度 从129.5px改为auto
               height: 32px; // 减小高度 从36px改为32px
               border-radius: 8px;
 
@@ -1058,6 +1061,13 @@ body{
                   order: 0;
                   flex-grow: 0;
                 }
+              }
+              &[disabled]{
+                color: white;
+                .button-text{
+                  color: white;
+                }
+                background-color: #d9d9d9;
               }
             }
           }

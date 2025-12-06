@@ -67,7 +67,6 @@ firstLog();
 app.commandLine.appendSwitch('--enable-logging', 'file');
 app.commandLine.appendSwitch('--log-file', path.join(appPath, 'chrome.log'));
 
-initPodman(ipcMain);
 initCmd(ipcMain);
 initConfigs(ipcMain);
 initObsidianPlugin(ipcMain);
@@ -80,7 +79,7 @@ initTrainingService(ipcMain);
 initExternalUrl(ipcMain);
 updateTemplate();
 
-const createWindow = (): void => {
+const createWindow = async () => {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
     height: 720,
@@ -97,6 +96,9 @@ const createWindow = (): void => {
 
   // 显示窗口
   mainWindow.show();
+
+  // 需要等待连接podman
+  await initPodman(ipcMain);
 
   // and load the index.html of the app.
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);

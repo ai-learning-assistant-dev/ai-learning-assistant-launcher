@@ -15,10 +15,13 @@ import {
   getPodmanCli,
   resetPodman,
   stopPodman,
+  isPodmanInstall,
+  isPodmanInit,
+  getPodmanInfo,
 } from '../podman-desktop/ensure-podman-works';
 import { RunResult } from '@podman-desktop/api';
 import { podMachineName } from '../podman-desktop/type-info';
-import { isWSLInstall, wslVersion } from './is-wsl-install';
+import { isVTReady, isWSLInstall, wslVersion } from './is-wsl-install';
 import { loggerFactory } from '../terminal-log';
 
 const commandLine = new Exec();
@@ -51,7 +54,7 @@ export default async function init(ipcMain: IpcMain) {
               const vault = vaults.find(v => v.id === vaultId);
               if (vault) {
                 // 获取路径中的最后一个文件夹名称
-                vaultName  = path.basename(vault.path);
+                vaultName = path.basename(vault.path);
               }
             }
             try {
@@ -151,12 +154,14 @@ export default async function init(ipcMain: IpcMain) {
           }
         } else if (action === 'query') {
           if (serviceName === 'WSL') {
+            const vTReady = await isVTReady();
             const version = await wslVersion();
             event.reply(
               channel,
               MESSAGE_TYPE.DATA,
               new MessageData(action, serviceName, {
                 version,
+                vTReady,
                 installed: await isWSLInstall(),
               }),
             );
@@ -172,6 +177,28 @@ export default async function init(ipcMain: IpcMain) {
               MESSAGE_TYPE.DATA,
               new MessageData(action, serviceName, await isLMStudioInstall()),
             );
+          } else if (serviceName === 'podman') {
+            try {
+              const podmanInstalled = await isPodmanInstall();
+              const podmanInited = await isPodmanInit();
+              const podmanInfo = await getPodmanInfo();
+              event.reply(
+                channel,
+                MESSAGE_TYPE.DATA,
+                new MessageData(action, serviceName, {
+                  podmanInfo,
+                  installed: podmanInstalled && podmanInited,
+                }),
+              );
+            } catch (e) {
+              event.reply(
+                channel,
+                MESSAGE_TYPE.DATA,
+                new MessageData(action, serviceName, {
+                  installed: false,
+                }),
+              );
+            }
           } else {
             const result = await commandLine.exec('echo %cd%');
             event.reply(channel, MESSAGE_TYPE.INFO, '成功查询');

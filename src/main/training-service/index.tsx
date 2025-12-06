@@ -8,8 +8,8 @@ import {
 import { wait } from '../util';
 import { ipcHandle } from '../ipc-util';
 import {
-  getServiceInfo,
   installService,
+  monitorStatusIsHealthy,
   removeService,
   startService,
   stopService,
@@ -31,30 +31,6 @@ export default async function init(ipcMain: IpcMain) {
   );
 }
 
-async function monitorStatusIsHealthy(service: ServiceName) {
-  return new Promise<void>((resolve, reject) => {
-    const interval = setInterval(async () => {
-      const newInfo = await getServiceInfo(service);
-      if (newInfo) {
-        if (newInfo.Status !== 'starting') {
-          if (newInfo.Status === 'healthy') {
-            clearInterval(interval);
-            resolve();
-          } else {
-            clearInterval(interval);
-            reject();
-          }
-        } else {
-          // do nothing
-        }
-      } else {
-        clearInterval(interval);
-        reject();
-      }
-    }, 1000);
-  });
-}
-
 const createWindow = (): void => {
   if (trainingWindow && !trainingWindow.isDestroyed()) {
     if (trainingWindow.isMinimized()) {
@@ -67,6 +43,7 @@ const createWindow = (): void => {
   trainingWindow = new BrowserWindow({
     height: 900,
     width: 1400,
+    autoHideMenuBar: true,
   });
 
   trainingWindow.loadURL(trainingWebURL);

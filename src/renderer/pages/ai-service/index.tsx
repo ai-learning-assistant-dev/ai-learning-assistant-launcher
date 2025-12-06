@@ -75,6 +75,9 @@ export default function AiService() {
   const asrContainer = containers.filter(
     (item) => item.Names.indexOf(containerNameDict.ASR) >= 0,
   )[0];
+  const voiceRTCContainer = containers.filter(
+    (item) => item.Names.indexOf(containerNameDict.VOICE_RTC) >= 0,
+  )[0];
   const pdfContainer = containers.filter(
     (item) => item.Names.indexOf(containerNameDict.PDF) >= 0,
   )[0];
@@ -104,6 +107,12 @@ export default function AiService() {
       serviceName: 'PDF',
       state: getState(pdfContainer),
       port: 5000,
+    },
+    {
+      name: '学科培训语音',
+      serviceName: 'VOICE_RTC',
+      state: getState(voiceRTCContainer),
+      port: 8989,
     },
   ];
 

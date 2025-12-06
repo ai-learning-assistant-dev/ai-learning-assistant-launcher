@@ -11,6 +11,7 @@ libPodDockerode.enhancePrototypeWithLibPod();
 export async function connect(
   machineName: string = podMachineName,
 ): Promise<LibPod & Dockerode> {
+  console.debug('start connect to podman', machineName);
   const socketPath = await getPodmanSocketPath(machineName);
   console.debug('Socket Path: ', socketPath);
   return new Dockerode({ socketPath }) as unknown as LibPod & Dockerode;
