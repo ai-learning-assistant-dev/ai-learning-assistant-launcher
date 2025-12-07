@@ -16,11 +16,7 @@ import './index.scss';
 import { LeftOutlined, RightOutlined } from '@ant-design/icons';
 import { useTrainingServiceShortcut } from '../../containers/use-training-service-shortcut';
 import { useLogContainer } from '../../containers/backup';
-// 引入WSL相关的类型和常量
-import { channel, ActionName, ServiceName } from '../../../main/cmd/type-info';
-import { MESSAGE_TYPE, MessageData } from '../../../main/ipc-data-type';
-import { shell } from 'electron';
-
+import { useVM } from '../../containers/use-vm';
 
 export default function Hello() {
   const trainingServiceShortcut = useTrainingServiceShortcut();
@@ -30,119 +26,19 @@ export default function Hello() {
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  // WSL相关状态
-  const [isWSLInstalled, setIsWSLInstalled] = useState<boolean>(false);
-  const [wslVersion, setWSLVersion] = useState<string>('');
-  const [wslChecking, setWSLChecking] = useState<boolean>(true);
-  const [wslLoading, setWSLLoading] = useState<boolean>(false);
-  const [wslOperation, setWSLOperation] = useState<{
-    action: string;
-    service: string;
-  }>({ action: '', service: '' });
-
-  // WSL操作函数
-  const handleWSLAction = (action: ActionName, service: ServiceName) => {
-    if (wslLoading) {
-      notification.warning({
-        message: '请等待上一个操作完成后再操作',
-        placement: 'topRight',
-      });
-      return;
-    }
-
-    setWSLLoading(true);
-    setWSLOperation({ action, service });
-
-    window.electron?.ipcRenderer.sendMessage(channel, action, service);
-  };
-
-  // 初始化时检查WSL状态
-  useEffect(() => {
-    const cancel = window.electron?.ipcRenderer.on(
-      channel,
-      (messageType: any, data: any) => {
-        if (messageType === MESSAGE_TYPE.ERROR) {
-          notification.error({
-            message: data,
-            placement: 'topRight',
-          });
-          setWSLLoading(false);
-          setWSLOperation({ action: 'query', service: 'WSL' });
-        } else if (messageType === MESSAGE_TYPE.DATA) {
-          const messageData: MessageData<ActionName, ServiceName, any> = data;
-          const { action: actionName, service, data: payload } = messageData;
-
-          if (actionName === 'query' && service === 'WSL') {
-            setIsWSLInstalled(payload.installed);
-            setWSLVersion(payload.version);
-            setWSLChecking(false);
-          } else if (
-            (actionName === 'install' || actionName === 'update') &&
-            service === 'WSL'
-          ) {
-            setIsWSLInstalled(payload.installed);
-            setWSLVersion(payload.version);
-            setWSLLoading(false);
-            setWSLOperation({ action: 'query', service: 'WSL' });
-
-            if (actionName === 'install') {
-              notification.success({
-                message: 'WSL安装完成，需要重启计算机才能生效',
-                placement: 'topRight',
-              });
-            }
-          } else if (actionName === 'move' && service === 'podman') {
-            setWSLLoading(false);
-            setWSLOperation({ action: 'query', service: 'WSL' });
-            notification.success({
-              message: '成功修改安装位置',
-              placement: 'topRight',
-            });
-          } else if (actionName === 'remove' && service === 'podman') {
-            setWSLLoading(false);
-            setWSLOperation({ action: 'query', service: 'WSL' });
-            notification.success({
-              message: '成功删除所有服务和缓存',
-              placement: 'topRight',
-            });
-          }
-        } else if (messageType === MESSAGE_TYPE.INFO) {
-          notification.success({
-            message: data,
-            placement: 'topRight',
-          });
-          // 重新查询状态
-          window.electron?.ipcRenderer.sendMessage(channel, 'query', 'WSL');
-          setWSLLoading(false);
-          setWSLOperation({ action: 'query', service: 'WSL' });
-        } else if (messageType === MESSAGE_TYPE.PROGRESS) {
-          notification.info({
-            message: data,
-            placement: 'topRight',
-          });
-        } else if (messageType === MESSAGE_TYPE.PROGRESS_ERROR) {
-          notification.error({
-            message: data,
-            placement: 'topRight',
-          });
-          setWSLLoading(false);
-          setWSLOperation({ action: 'query', service: 'WSL' });
-        } else if (messageType === MESSAGE_TYPE.WARNING) {
-          notification.warning({
-            message: data,
-            placement: 'topRight',
-          });
-        }
-      },
-    );
-
-    // 初始查询WSL状态
-    window.electron?.ipcRenderer.sendMessage(channel, 'query', 'WSL');
-
-    return () => {
-      if (cancel) cancel();
-    };
-  }, []);
+  const {
+    isWSLInstalled,
+    podmanChecking,
+    needResintallPodman,
+    wslVersion,
+    wslChecking,
+    wslLoading,
+    wslOperation,
+    handleCmdAction,
+    isPodmanInstalled,
+    showRebootModal,
+    vTReady,
+  } = useVM();
 
   useEffect(() => {
     const cancel = setupBackupListener();
@@ -156,28 +52,18 @@ export default function Hello() {
 
   const slides = [
     {
-      content: <img src={welcomeImage} alt="Welcome" className="hero-image-slide" />,
+      content: (
+        <img src={welcomeImage} alt="Welcome" className="hero-image-slide" />
+      ),
     },
     {
       content: <img src={heroImage} alt="Hero" className="hero-image-slide" />,
     },
     {
-      content: (
-        <img
-          src={frame3}
-          alt="Frame 3"
-          className="hero-image-slide"
-        />
-      ),
+      content: <img src={frame3} alt="Frame 3" className="hero-image-slide" />,
     },
     {
-      content: (
-        <img
-          src={frame8}
-          alt="Frame 8"
-          className="hero-image-slide"
-        />
-      ),
+      content: <img src={frame8} alt="Frame 8" className="hero-image-slide" />,
     },
   ];
 
@@ -238,23 +124,6 @@ export default function Hello() {
   //     window.open('https://docs.qq.com/aio/DS1NnZkZkdkFiSVdP', '_blank');
   //   }
   // };
-
-  // WSL相关功能处理函数
-  const handleInstallWSL = () => {
-    handleWSLAction('install', 'WSL');
-  };
-
-  const handleChangeWSLPath = () => {
-    handleWSLAction('move', 'podman');
-  };
-
-  const handleUpgradeWSL = () => {
-    handleWSLAction('update', 'WSL');
-  };
-
-  const handleUninstallWSL = () => {
-    handleWSLAction('remove', 'podman');
-  };
 
   // 修改 calculateScaleAndPosition 函数
   const calculateScaleAndPosition = () => {
@@ -319,6 +188,18 @@ export default function Hello() {
     setTrainingServiceRemoving(true);
     await trainingServiceShortcut.remove();
     setTrainingServiceRemoving(false);
+  };
+
+  const wslStatusText = () => {
+    if (!vTReady) {
+      return '请在BIOS开启虚拟化';
+    } else {
+      if (isWSLInstalled) {
+        return `已安装 ${wslVersion ? `(${wslVersion.split('\n')[0]})` : ''}`;
+      } else {
+        return '未安装';
+      }
+    }
   };
 
   return (
@@ -401,12 +282,10 @@ export default function Hello() {
                         </Button>
                       ) : (
                         <Button
-                          type={isWSLInstalled ? 'primary' : 'default'}
-                          className={`wsl-status-button ${isWSLInstalled ? 'installed' : 'not-installed'}`}
+                          type="primary"
+                          className={`wsl-status-button ${vTReady && isWSLInstalled ? 'installed' : 'not-installed'}`}
                         >
-                          {isWSLInstalled
-                            ? `已安装 ${wslVersion ? `(${wslVersion.split('\n')[0]})` : ''}`
-                            : '未安装'}
+                          {wslStatusText()}
                         </Button>
                       )}
                     </div>
@@ -415,18 +294,9 @@ export default function Hello() {
                     <Popconfirm
                       title="启动WSL"
                       description="确认启用WSL吗？启用完成后可能需要重启计算机才能生效。"
-                      onConfirm={() => handleWSLAction('install', 'WSL')}
+                      onConfirm={() => handleCmdAction('install', 'WSL')}
                       okText="启用"
                       cancelText="取消"
-                      disabled={
-                        wslChecking ||
-                        isWSLInstalled ||
-                        (wslLoading &&
-                          !(
-                            wslOperation.action === 'install' &&
-                            wslOperation.service === 'WSL'
-                          ))
-                      }
                     >
                       <Button
                         className="wsl-button install"
@@ -436,6 +306,7 @@ export default function Hello() {
                           wslOperation.service === 'WSL'
                         }
                         disabled={
+                          !vTReady ||
                           wslChecking ||
                           isWSLInstalled ||
                           (wslLoading &&
@@ -456,18 +327,9 @@ export default function Hello() {
                           <div>确认升级WSL吗？</div>
                         </div>
                       }
-                      onConfirm={() => handleWSLAction('update', 'WSL')}
+                      onConfirm={() => handleCmdAction('update', 'WSL')}
                       okText="升级"
                       cancelText="取消"
-                      disabled={
-                        !isWSLInstalled ||
-                        wslChecking ||
-                        (wslLoading &&
-                          !(
-                            wslOperation.action === 'update' &&
-                            wslOperation.service === 'WSL'
-                          ))
-                      }
                     >
                       <Button
                         className="wsl-button upgrade"
@@ -494,32 +356,26 @@ export default function Hello() {
                       description={
                         <div>
                           <div>
-                            安装Podman可能需要5分钟时间，实际用时和你的磁盘读写速度有关。
+                            {isPodmanInstalled
+                              ? '修改Podman位置'
+                              : '安装Podman'}
+                            可能需要5分钟时间，实际用时和你的磁盘读写速度有关。
                           </div>
                           <div style={{ color: 'red' }}>
                             提示Docker用户：如果您的电脑上还有Docker软件，请您先手动关闭Docker软件前台和后台程序以避免Docker文件被损坏。安装完成后如果出现无法正常运行Docker的情况，请您重启电脑后再打开Docker。
                           </div>
                         </div>
                       }
-                      onConfirm={() => handleWSLAction('move', 'podman')}
+                      onConfirm={() => handleCmdAction('move', 'podman')}
                       okText="安装"
                       cancelText="取消"
-                      disabled={
-                        !isWSLInstalled ||
-                        wslChecking ||
-                        (wslLoading &&
-                          !(
-                            wslOperation.action === 'move' &&
-                            wslOperation.service === 'podman'
-                          ))
-                      }
                     >
                       <Button
                         className="wsl-button change-path"
                         loading={
-                          wslLoading &&
-                          wslOperation.action === 'move' &&
-                          wslOperation.service === 'podman'
+                          podmanChecking ||
+                          (wslOperation.action === 'move' &&
+                            wslOperation.service === 'podman')
                         }
                         disabled={
                           !isWSLInstalled ||
@@ -531,24 +387,17 @@ export default function Hello() {
                             ))
                         }
                       >
-                        <span className="button-text">安装Podman</span>
+                        <span className="button-text">
+                          {isPodmanInstalled ? '修改Podman位置' : '安装Podman'}
+                        </span>
                       </Button>
                     </Popconfirm>
                     <Popconfirm
                       title="卸载Podman"
                       description="你确定要卸载Podman吗？卸载后再次安装会需要很长时间！"
-                      onConfirm={() => handleWSLAction('remove', 'podman')}
+                      onConfirm={() => handleCmdAction('remove', 'podman')}
                       okText="确认卸载"
                       cancelText="取消"
-                      disabled={
-                        !isWSLInstalled ||
-                        wslChecking ||
-                        (wslLoading &&
-                          !(
-                            wslOperation.action === 'remove' &&
-                            wslOperation.service === 'podman'
-                          ))
-                      }
                     >
                       <Button
                         className="wsl-button uninstall"
@@ -620,7 +469,12 @@ export default function Hello() {
                   </div>
                   <div className="feature-button-container">
                     <NavLink to="/ai-service" style={{ width: '100%' }}>
-                      <Button className="feature-button" block size="large">
+                      <Button
+                        className="feature-button"
+                        block
+                        size="large"
+                        disabled={!isPodmanInstalled || wslLoading}
+                      >
                         开始
                       </Button>
                     </NavLink>
@@ -681,7 +535,11 @@ export default function Hello() {
                         trainingServiceStarting ||
                         trainingServiceShortcut.initing
                       }
-                      disabled={trainingServiceRemoving}
+                      disabled={
+                        trainingServiceRemoving ||
+                        !isPodmanInstalled ||
+                        wslLoading
+                      }
                     >
                       {trainingServiceShortcut.state === '还未安装'
                         ? '安装'
@@ -694,6 +552,7 @@ export default function Hello() {
                         size="large"
                         onClick={removeTrainingService}
                         loading={trainingServiceRemoving}
+                        disabled={!isPodmanInstalled || wslLoading}
                       >
                         卸载
                       </Button>
@@ -736,6 +595,33 @@ export default function Hello() {
         <p className="qr-description">
           扫描二维码加入QQ群，关于AI学习助手，在群中提出你的任何疑问，会有专业人员解答
         </p>
+      </Modal>
+      <Modal open={showRebootModal} footer={false} closable={false}>
+        已经成功打开windows系统自带WSL组件，需要重启电脑才能进行后续操作，请确保你保存了所有的文件后手动重启电脑
+      </Modal>
+      <Modal open={needResintallPodman} footer={false} closable={false}>
+        检测到您使用过启动器V1版，新版启动器需要卸载启动器V1版的Podman组件，然后重新安装Podman才能正常使用语音功能，请卸载Podman组件
+        <br />
+        <Button
+          className="wsl-button uninstall"
+          loading={
+            wslLoading &&
+            wslOperation.action === 'remove' &&
+            wslOperation.service === 'podman'
+          }
+          disabled={
+            !isWSLInstalled ||
+            wslChecking ||
+            (wslLoading &&
+              !(
+                wslOperation.action === 'remove' &&
+                wslOperation.service === 'podman'
+              ))
+          }
+          onClick={() => handleCmdAction('remove', 'podman')}
+        >
+          <span className="button-text">卸载Podman</span>
+        </Button>
       </Modal>
     </div>
   );

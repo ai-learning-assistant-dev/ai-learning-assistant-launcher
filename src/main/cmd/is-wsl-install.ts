@@ -38,3 +38,22 @@ export async function wslVersion() {
   }
   return '';
 }
+
+/** Bios中是否开启虚拟化支持 */
+export async function isVTReady() {
+  try {
+    const output = await commandLine.exec('systeminfo');
+    const info = output.stdout;
+    if (
+      info.indexOf('Virtualization Enabled In Firmware: No') >= 0 ||
+      info.indexOf('固件中已启用虚拟化: 否') >= 0
+    ) {
+      return false;
+    } else {
+      return true;
+    }
+  } catch (e) {
+    console.warn(e);
+  }
+  return false;
+}
