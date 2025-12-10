@@ -14,6 +14,7 @@ import ExamplePage from './pages/example-page';
 import PdfConvert from './pages/pdf-convert';
 import PdfConfig from './pages/pdf-config';
 import LLMConfig from './pages/llm-api-config';
+import VoiceRTCConfig from './pages/voice-rtc';
 
 export default function App() {
   return (
@@ -27,6 +28,7 @@ export default function App() {
           <Route path="/obsidian-app" element={<ObsidianApp />} />
           <Route path="/TTS-config" element={<TTSConfig />} />
           <Route path="/ASR-config" element={<ASRConfig />} />
+          <Route path="/VOICE_RTC-config" element={<VoiceRTCConfig />} />
           <Route path="/PDF-config" element={<PdfConfig />} />
           <Route path="/pdf-convert" element={<PdfConvert />} />
           <Route

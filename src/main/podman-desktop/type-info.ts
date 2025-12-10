@@ -1,7 +1,14 @@
 import type { ContainerConfig } from '../configs/type-info';
 import { Channels } from '../ipc-data-type';
 
-export type ServiceName = 'TTS' | 'ASR' | 'LLM' | 'PDF' | 'TRAINING';
+export type ServiceName =
+  | 'TTS'
+  | 'ASR'
+  | 'LLM'
+  | 'PDF'
+  | 'TRAINING'
+  | 'VOICE_RTC';
+
 export type ActionName =
   | 'query'
   | 'install'
@@ -17,6 +24,7 @@ export const containerNameDict: Record<ServiceName, string> = {
   LLM: 'LLM',
   PDF: 'PDF',
   TRAINING: 'TRAINING',
+  VOICE_RTC: 'VOICE_RTC',
 };
 
 export const imageNameDict: Record<ServiceName, string> = {
@@ -25,6 +33,7 @@ export const imageNameDict: Record<ServiceName, string> = {
   LLM: 'LLM',
   PDF: 'mineru-pipeline:latest',
   TRAINING: 'ala-training:latest',
+  VOICE_RTC: 'ai-voice-rtc-backend:latest',
 };
 
 export const imagePathDict: Record<ServiceName, string> = {
@@ -33,6 +42,7 @@ export const imagePathDict: Record<ServiceName, string> = {
   LLM: 'LLM',
   PDF: 'pdf-service.tar',
   TRAINING: 'ala-training.tar',
+  VOICE_RTC: 'ai-voice-rtc-backend.tar',
 };
 
 export const podMachineName = 'podman-machine-default';
@@ -53,7 +63,7 @@ export function getMergedContainerConfig(
       start: [],
       stop: [],
     },
-    env: { }
+    env: {},
   };
 
   const containerName = containerNameDict[serviceName];

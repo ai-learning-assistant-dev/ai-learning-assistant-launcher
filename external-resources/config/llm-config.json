@@ -5,7 +5,7 @@
       "displayName": "deepseek-chat",
       "provider": "deepseek",
       "baseUrl": "https://api.deepseek.com/",
-      "apiKey": "sk-d8f3107c5cad44788b29f26a7740ab08",
+      "apiKey": "",
       "isEmbeddingModel": false,
       "id": "deepseek-deepseek-chat"
     },
@@ -14,7 +14,7 @@
       "displayName": "Qwen/Qwen3-8B",
       "provider": "3rd party (openai-format)",
       "baseUrl": "https://api.siliconflow.cn/v1",
-      "apiKey": "sk-xwmhqofvmjhahryjonwwzhnypyyalctlgnpxbrzifjtjcnrv",
+      "apiKey": "",
       "id": "3rd party (openai-format)-Qwen/Qwen3-8B"
     },
     {
@@ -38,7 +38,7 @@
       "displayName": "BAAI/bge-m3",
       "provider": "3rd party (openai-format)",
       "baseUrl": "https://api.siliconflow.cn/v1",
-      "apiKey": "sk-xwmhqofvmjhahryjonwwzhnypyyalctlgnpxbrzifjtjcnrv",
+      "apiKey": "",
       "isEmbeddingModel": true,
       "id": "3rd party (openai-format)-BAAI/bge-m3"
     },
