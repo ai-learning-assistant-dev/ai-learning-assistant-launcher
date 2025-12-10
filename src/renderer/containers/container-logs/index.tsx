@@ -10,13 +10,7 @@ import {
 } from '../../../main/ipc-data-type';
 import { Button, Card, Tag, message } from 'antd';
 import './index.scss';
-
-export interface LogEntry {
-  id: string;
-  level: 'info' | 'warning' | 'error' | 'success';
-  timestamp: string;
-  message: string;
-}
+import { downloadLogsAsText, LogEntry } from '../../web-utils';
 
 export default function ContainerLogs(props: { serviceName: ServiceName }) {
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -25,61 +19,6 @@ export default function ContainerLogs(props: { serviceName: ServiceName }) {
   const [loaded, setLoaded] = useState<boolean>(false);
   const [downloading, setDownloading] = useState<boolean>(false);
   const logDomRef = useRef<HTMLDivElement>(null);
-
-  const downloadLogsAsText = () => {
-    if (logs.length === 0) {
-      message.warning('没有日志可下载');
-      return;
-    }
-
-    setDownloading(true);
-    try {
-      // 将日志转换为文本格式
-      const logText = logs
-        .map(
-          (log) =>
-            `[${log.timestamp}] [${log.level.toUpperCase()}] ${log.message}`,
-        )
-        .join('\n');
-
-      // 添加文件头信息
-      const header =
-        `服务名称: ${props.serviceName}\n` +
-        `日志总数: ${logs.length}条\n` +
-        `导出时间: ${new Date().toLocaleString()}\n` +
-        `镜像ID: ${imageId || '未知'}\n` +
-        '='.repeat(50) +
-        '\n\n';
-
-      const fullText = header + logText;
-
-      // 创建Blob对象
-      const blob = new Blob([fullText], { type: 'text/plain;charset=utf-8' });
-
-      // 创建下载链接
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${props.serviceName}_logs_${new Date()
-        .toISOString()
-        .replace(/[:.]/g, '-')}.log`;
-
-      // 触发下载
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-
-      // 清理URL对象
-      URL.revokeObjectURL(url);
-
-      message.success(`日志下载成功，共${logs.length}条记录`);
-    } catch (error) {
-      console.error('下载日志失败:', error);
-      message.error('下载日志失败，请重试');
-    } finally {
-      setDownloading(false);
-    }
-  };
 
   useEffect(() => {
     const cancel = window.electron?.ipcRenderer.on(
@@ -141,6 +80,35 @@ export default function ContainerLogs(props: { serviceName: ServiceName }) {
       clearInterval(interval);
     };
   }, []);
+
+  const downloadHandle = () => {
+    if (logs.length === 0) {
+      message.warning('没有日志可下载');
+      return;
+    }
+    const logText = logs
+      .map(
+        (log) =>
+          `[${log.timestamp}] [${log.level.toUpperCase()}] ${log.message}`,
+      )
+      .join('\n');
+    // 添加文件头信息
+    const header =
+      `服务名称: ${props.serviceName}\n` +
+      `日志总数: ${logs.length}条\n` +
+      `导出时间: ${new Date().toLocaleString()}\n` +
+      `镜像ID: ${imageId || '未知'}\n` +
+      '='.repeat(50) +
+      '\n\n';
+
+    const fullText = header + logText;
+    const fileName = `${props.serviceName}_logs_${new Date()
+      .toISOString()
+      .replace(/[:.]/g, '-')}.log`;
+    downloadLogsAsText(fullText, fileName);
+    message.success(`日志下载成功，共${logs.length}条记录`);
+  };
+
   return (
     <Card
       className="logs-card"
@@ -151,7 +119,7 @@ export default function ContainerLogs(props: { serviceName: ServiceName }) {
       }
       extra={
         <Button
-          onClick={downloadLogsAsText}
+          onClick={downloadHandle}
           loading={downloading}
           disabled={logs.length === 0}
         >

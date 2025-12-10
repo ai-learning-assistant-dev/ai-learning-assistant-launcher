@@ -14,7 +14,7 @@ import ExamplePage from './pages/example-page';
 import PdfConvert from './pages/pdf-convert';
 import PdfConfig from './pages/pdf-config';
 import LLMConfig from './pages/llm-api-config';
-import VoiceRTCConfig from './pages/voice-rtc';
+import VoiceRTCConfig from './pages/voice-rtc-config';
 
 export default function App() {
   return (

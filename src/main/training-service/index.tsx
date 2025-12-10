@@ -1,20 +1,20 @@
 import { BrowserWindow, IpcMain } from 'electron';
 import {
   installTrainingServiceHandle,
+  logsTrainingServiceHandle,
   removeTrainingServiceHandle,
   startTrainingServiceHandle,
   trainingWebURL,
 } from './type-info';
-import { wait } from '../util';
 import { ipcHandle } from '../ipc-util';
 import {
+  getServiceLogs,
   installService,
   monitorStatusIsHealthy,
   removeService,
   startService,
   stopService,
 } from '../podman-desktop/simple-container-manage';
-import { ServiceName } from '../podman-desktop/type-info';
 
 // 全局变量存储trainingWindow实例
 let trainingWindow: BrowserWindow | null = null;
@@ -28,6 +28,9 @@ export default async function init(ipcMain: IpcMain) {
   );
   ipcHandle(ipcMain, removeTrainingServiceHandle, async (_event) =>
     removeTrainingService(),
+  );
+  ipcHandle(ipcMain, logsTrainingServiceHandle, async (_event) =>
+    logsTrainingService(),
   );
 }
 
@@ -60,6 +63,10 @@ export async function installTrainingService() {
 
 export async function removeTrainingService() {
   return removeService('TRAINING');
+}
+
+export async function logsTrainingService() {
+  return getServiceLogs('TRAINING');
 }
 
 export async function startTrainingService() {

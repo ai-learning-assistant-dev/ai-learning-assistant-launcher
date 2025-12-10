@@ -28,6 +28,7 @@ import {
   replaceVarInPath,
 } from '../exec/util';
 import { existsSync, mkdirSync } from 'fs';
+import { cleanMultiplexedLog } from './stream-utils';
 
 let connectionGlobal: LibPod & Dockerode;
 
@@ -623,4 +624,23 @@ export async function monitorStatusIsHealthy(service: ServiceName) {
       }
     }, 1000);
   });
+}
+
+export async function getServiceLogs(serviceName: ServiceName) {
+  const containerInfo = await getServiceInfo(serviceName);
+  const container =
+    containerInfo && connectionGlobal.getContainer(containerInfo.Id);
+  if (container) {
+    const logs = (
+      await container.logs({
+        stdout: true,
+        stderr: true,
+        timestamps: true,
+      })
+    ).toString('utf-8');
+    return {
+      imageId: containerInfo.ImageID,
+      logs: cleanMultiplexedLog(logs),
+    };
+  }
 }
