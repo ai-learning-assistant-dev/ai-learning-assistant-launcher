@@ -551,8 +551,11 @@ export default function Hello() {
                         block
                         size="large"
                         onClick={trainingServiceShortcut.downloadLogs}
-                        loading={trainingServiceRemoving}
-                        disabled={!isPodmanInstalled || wslLoading}
+                        disabled={
+                          !isPodmanInstalled ||
+                          wslLoading ||
+                          trainingServiceRemoving
+                        }
                       >
                         日志
                       </Button>
