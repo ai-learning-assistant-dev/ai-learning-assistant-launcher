@@ -89,7 +89,7 @@ export const appPath = app.isPackaged
 
 export function replaceVarInPath(originPath: string) {
   let finalPath = '';
-  if (originPath.startsWith('%')) {
+  if (originPath.startsWith('%') || path.isAbsolute(originPath)) {
     // 绝对路径
     finalPath = originPath.replace('%USERDATA%', app.getPath('userData'));
     finalPath = finalPath.replace('%localappdata%', process.env.LOCALAPPDATA);

@@ -6,6 +6,7 @@ import {
 import useDocker from '../use-docker';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { downloadLogsAsText } from '../../web-utils';
 
 export interface ContainerItem {
   name: string;
@@ -70,10 +71,30 @@ export function useTrainingServiceShortcut() {
     }
   };
 
+  const downloadLogs = async () => {
+    const serviceName = 'TRAINING';
+    const { logs, imageId } =
+      await window.mainHandle.logsTrainingServiceHandle();
+    // 添加文件头信息
+    const header =
+      `服务名称: ${serviceName}\n` +
+      `导出时间: ${new Date().toLocaleString()}\n` +
+      `镜像ID: ${imageId || '未知'}\n` +
+      '='.repeat(50) +
+      '\n\n';
+
+    const fullText = header + logs;
+    const fileName = `${serviceName}_logs_${new Date()
+      .toISOString()
+      .replace(/[:.]/g, '-')}.log`;
+    downloadLogsAsText(fullText, fileName);
+  };
+
   return {
     state: containerInfos[0].state,
     start,
     remove,
     initing,
+    downloadLogs,
   };
 }

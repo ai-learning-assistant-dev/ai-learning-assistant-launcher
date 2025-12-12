@@ -547,6 +547,21 @@ export default function Hello() {
                     </Button>
                     {trainingServiceShortcut.state !== '还未安装' && (
                       <Button
+                        className="feature-button"
+                        block
+                        size="large"
+                        onClick={trainingServiceShortcut.downloadLogs}
+                        disabled={
+                          !isPodmanInstalled ||
+                          wslLoading ||
+                          trainingServiceRemoving
+                        }
+                      >
+                        日志
+                      </Button>
+                    )}
+                    {trainingServiceShortcut.state !== '还未安装' && (
+                      <Button
                         className="feature-button uninstall"
                         block
                         size="large"

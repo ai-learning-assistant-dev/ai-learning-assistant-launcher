@@ -8,4 +8,6 @@ export const startTrainingServiceHandle = `${channel}start`;
 
 export const removeTrainingServiceHandle = `${channel}remove`;
 
+export const logsTrainingServiceHandle = `${channel}logs`;
+
 export const trainingWebURL = 'http://127.0.0.1:7100/';

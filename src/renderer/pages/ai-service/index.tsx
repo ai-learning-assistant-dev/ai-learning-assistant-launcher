@@ -176,6 +176,27 @@ export default function AiService() {
             <Link to="/hello">
               <Button disabled={loading || cmdLoading}>返回</Button>
             </Link>
+            <div>
+              <Link to="/hello">
+                <Button
+                  disabled={isInstallWSL}
+                  type="primary"
+                  shape="round"
+                  loading={
+                    checkingWsl ||
+                    (cmdLoading &&
+                      cmdOperating.serviceName === 'WSL' &&
+                      cmdOperating.actionName === 'install')
+                  }
+                >
+                  {checkingWsl
+                    ? '正在检查WSL安装状态'
+                    : isInstallWSL
+                      ? '已启用Windows自带的WSL组件'
+                      : '请到回主页启用Windows自带的WSL组件'}
+                </Button>
+              </Link>
+            </div>
             {/* <div>
               <Popconfirm
                 title="升级WSL"

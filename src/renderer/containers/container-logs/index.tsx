@@ -8,20 +8,16 @@ import {
   MESSAGE_TYPE,
   MessageData,
 } from '../../../main/ipc-data-type';
-import { Card, Tag } from 'antd';
+import { Button, Card, Tag, message } from 'antd';
 import './index.scss';
-
-export interface LogEntry {
-  id: string;
-  level: 'info' | 'warning' | 'error' | 'success';
-  timestamp: string;
-  message: string;
-}
+import { downloadLogsAsText, LogEntry } from '../../web-utils';
 
 export default function ContainerLogs(props: { serviceName: ServiceName }) {
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [visibleLogs, setVisibleLogs] = useState<LogEntry[]>([]);
   const [imageId, setImageId] = useState<string>('');
   const [loaded, setLoaded] = useState<boolean>(false);
+  const [downloading, setDownloading] = useState<boolean>(false);
   const logDomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -55,6 +51,7 @@ export default function ContainerLogs(props: { serviceName: ServiceName }) {
               };
             });
           setLogs(newLogs);
+          setVisibleLogs(newLogs.slice(newLogs.length - 1000, newLogs.length));
           setImageId(data.data.imageId);
           if (!loaded) {
             setLoaded(true);
@@ -70,7 +67,7 @@ export default function ContainerLogs(props: { serviceName: ServiceName }) {
       },
     );
     return cancel;
-  }, [logs, setLogs, logDomRef]);
+  }, [logs, setLogs, setVisibleLogs, logDomRef]);
   useEffect(() => {
     const interval = setInterval(() => {
       window.electron.ipcRenderer.sendMessage(
@@ -83,10 +80,52 @@ export default function ContainerLogs(props: { serviceName: ServiceName }) {
       clearInterval(interval);
     };
   }, []);
+
+  const downloadHandle = () => {
+    if (logs.length === 0) {
+      message.warning('没有日志可下载');
+      return;
+    }
+    const logText = logs
+      .map(
+        (log) =>
+          `[${log.timestamp}] [${log.level.toUpperCase()}] ${log.message}`,
+      )
+      .join('\n');
+    // 添加文件头信息
+    const header =
+      `服务名称: ${props.serviceName}\n` +
+      `日志总数: ${logs.length}条\n` +
+      `导出时间: ${new Date().toLocaleString()}\n` +
+      `镜像ID: ${imageId || '未知'}\n` +
+      '='.repeat(50) +
+      '\n\n';
+
+    const fullText = header + logText;
+    const fileName = `${props.serviceName}_logs_${new Date()
+      .toISOString()
+      .replace(/[:.]/g, '-')}.log`;
+    downloadLogsAsText(fullText, fileName);
+    message.success(`日志下载成功，共${logs.length}条记录`);
+  };
+
   return (
     <Card
       className="logs-card"
-      title={loaded ? `服务日志 (${logs.length}条)  版本ID ${imageId}` : `服务日志 加载中...`}
+      title={
+        loaded
+          ? `服务日志 (显示${visibleLogs.length}条，总共${logs.length}条)， 版本ID ${imageId}`
+          : `服务日志 加载中...`
+      }
+      extra={
+        <Button
+          onClick={downloadHandle}
+          loading={downloading}
+          disabled={logs.length === 0}
+        >
+          下载完整日志
+        </Button>
+      }
       size="small"
     >
       <div
@@ -95,10 +134,10 @@ export default function ContainerLogs(props: { serviceName: ServiceName }) {
           logDomRef.current = dom;
         }}
       >
-        {logs.length === 0 ? (
+        {visibleLogs.length === 0 ? (
           <div className="no-logs">暂无日志</div>
         ) : (
-          logs.map((log, index) => (
+          visibleLogs.map((log, index) => (
             <div key={index} className={`log-entry log-${log.level}`}>
               <span className="log-timestamp">{log.timestamp}</span>
               <Tag
