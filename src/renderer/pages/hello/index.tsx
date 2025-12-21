@@ -16,7 +16,8 @@ import './index.scss';
 import { LeftOutlined, RightOutlined } from '@ant-design/icons';
 import { useTrainingServiceShortcut } from '../../containers/use-training-service-shortcut';
 import { useLogContainer } from '../../containers/backup';
-import { useVM } from '../../containers/use-vm';
+// import { useVM } from '../../containers/use-vm';
+import { useVM } from '@use-vm';
 
 export default function Hello() {
   const trainingServiceShortcut = useTrainingServiceShortcut();

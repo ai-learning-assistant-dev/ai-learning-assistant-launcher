@@ -6,6 +6,7 @@
   "main": ".webpack/main",
   "scripts": {
     "start": "chcp 65001 && cross-env NODE_ENV=development electron-forge start",
+    "test": "cross-env NODE_ENV=development TEST_MODE=1 electron-forge start",
     "package": "cross-env NODE_ENV=production electron-forge package",
     "make": "cross-env NODE_ENV=production electron-forge make --target @electron-forge/maker-zip",
     "make-mini": "cross-env NODE_ENV=production MAKE_MINI=true electron-forge make --target @electron-forge/maker-zip",
