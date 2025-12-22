@@ -13,5 +13,6 @@ export const plugins = [
   new webpack.DefinePlugin({
     __COMMIT_HASH__: JSON.stringify(commitHash),
     __NPM_PACKAGE_VERSION__: JSON.stringify(process.env.npm_package_version),
+    __TEST_PAGE_NAME__: JSON.stringify(process.env.TEST_PAGE_NAME),
   }),
 ];

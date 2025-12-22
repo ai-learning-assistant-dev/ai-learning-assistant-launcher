@@ -22,6 +22,8 @@ import { logDeviceInfo } from './logger/log-device-info';
 // whether you're running in development or production).
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
 declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
+// 添加测试页面入口点声明
+declare const TEST_PAGES_WEBPACK_ENTRY: string;
 
 initLogger();
 
@@ -100,8 +102,12 @@ const createWindow = async () => {
   // 需要等待连接podman
   await initPodman(ipcMain);
 
-  // and load the index.html of the app.
-  mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
+  // 根据环境变量选择加载主页面还是测试页面
+  if (process.env.TEST_PAGE === 'true') {
+    mainWindow.loadURL(TEST_PAGES_WEBPACK_ENTRY);
+  } else {
+    mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
+  }
   initTerminalLog(mainWindow);
 
   // Open the DevTools.

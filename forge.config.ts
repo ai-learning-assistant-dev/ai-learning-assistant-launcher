@@ -40,6 +40,15 @@ const config: ForgeConfig = {
               js: './src/main/preload.ts',
             },
           },
+          // 添加测试页面入口点
+          {
+            html: './src/renderer/index.html',
+            js: './src/renderer/test-pages/index.tsx',
+            name: 'test_pages',
+            preload: {
+              js: './src/main/preload.ts',
+            },
+          },
         ],
       },
     }),

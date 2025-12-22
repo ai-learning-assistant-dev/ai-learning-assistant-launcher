@@ -7,6 +7,11 @@ import { plugins } from './webpack.plugins';
 rules.push();
 
 export const rendererConfig: Configuration = {
+  entry: {
+    main_window: './src/renderer/index.tsx',
+    // 添加测试页面入口点
+    test_pages: './src/renderer/test-pages/index.tsx'
+  },
   module: {
     rules,
   },

@@ -13,7 +13,11 @@
     "resolveJsonModule": true,
     "jsx": "react-jsx",
     "paths": {
-      "*": ["node_modules/*"]
+      "*": ["node_modules/*"],
+      "@use-vm": [
+        "src/renderer/containers/use-vm/index.tsx",
+        "src/renderer/containers/use-vm/index.mock.tsx"
+      ]
     }
   },
   "include": ["src/**/*"]
