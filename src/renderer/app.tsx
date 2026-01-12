@@ -15,6 +15,7 @@ import PdfConvert from './pages/pdf-convert';
 import PdfConfig from './pages/pdf-config';
 import LLMConfig from './pages/llm-api-config';
 import VoiceRTCConfig from './pages/voice-rtc-config';
+import LocalAiService from './pages/local-ai-service';
 
 export default function App() {
   return (
@@ -37,6 +38,7 @@ export default function App() {
           />
           <Route path="/example" element={<ExamplePage />} />
           <Route path="/workspace-manage/:vaultId" element={<WorkspaceManage />} />
+          <Route path="/local-ai-service" element={<LocalAiService />} />
           <Route index element={<Hello />} />
         </Routes>
       </Router>

@@ -461,6 +461,35 @@ export default function Hello() {
                           alt="Tools Icon"
                         />
                       </div>
+                      <span className="feature-title">工具箱(本地化)</span>
+                    </div>
+                    <p className="feature-description long-description">
+                      一站式管理多种实用AI工具，目前包含文字转语音、语音转文字、PDF转MarkDown三大功能，让技术操作变得简单快捷
+                    </p>
+                  </div>
+                  <div className="feature-button-container">
+                    <NavLink to="/local-ai-service" style={{ width: '100%' }}>
+                      <Button
+                        className="feature-button"
+                        block
+                        size="large"
+                      >
+                        开始
+                      </Button>
+                    </NavLink>
+                  </div>
+                </div>
+
+                <div className="feature-card">
+                  <div className="feature-wrapper">
+                    <div className="feature-icon-text">
+                      <div className="tools-icon-container">
+                        <img
+                          className="tools-icon"
+                          src={toolsIcon}
+                          alt="Tools Icon"
+                        />
+                      </div>
                       <span className="feature-title">工具箱</span>
                     </div>
                     <p className="feature-description long-description">

@@ -13,6 +13,7 @@ import initPdfConvert from './pdf-convert';
 import initTrainingService from './training-service';
 import initLogService from './backup';
 import initExternalUrl from './external-url';
+import initLocalService from './local-service/rts-service';
 import path from 'node:path';
 import { appPath, autoAdaptEncodingForWindows } from './exec';
 import { logDeviceInfo } from './logger/log-device-info';
@@ -77,6 +78,7 @@ initExampleMain(ipcMain);
 initPdfConvert(ipcMain);
 initTrainingService(ipcMain);
 initExternalUrl(ipcMain);
+initLocalService(ipcMain);
 updateTemplate();
 
 const createWindow = async () => {

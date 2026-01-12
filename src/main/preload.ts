@@ -108,6 +108,9 @@ const mainHandle = {
       logsTrainingServiceHandle,
     );
   },
+  getRTSServiceStatusHandle: async (): Promise<string> => {
+    return ipcInvoke('getRTSServiceStatus');   
+  },
 };
 
 export type MainHandle = typeof mainHandle;
