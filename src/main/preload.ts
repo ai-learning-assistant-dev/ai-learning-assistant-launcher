@@ -111,6 +111,15 @@ const mainHandle = {
   getRTSServiceStatusHandle: async (): Promise<string> => {
     return ipcInvoke('getRTSServiceStatus');   
   },
+  installRTSServiceHandle: async (): Promise<string> => {
+    return ipcInvoke('installRTSService') 
+  },
+  runRTSServiceHandle: async (): Promise<string> => {
+    return ipcInvoke('runRTSService') 
+  },
+  stopRTSServiceHandle: async (): Promise<string> => {
+    return ipcInvoke('stopRTSService') 
+  },
 };
 
 export type MainHandle = typeof mainHandle;

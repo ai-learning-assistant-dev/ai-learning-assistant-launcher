@@ -8,7 +8,6 @@
 #>
 
 $statusFile = "$PSScriptRoot\service-status.json"
-
 function Write-Status {
     param(
         [string]$Status = $null,

@@ -78,7 +78,7 @@ function Update-SpacyModelUrl {
 # 检查 uv 是否存在
 $uv = Get-Command -Name uv -ErrorAction SilentlyContinue
 if ($uv) {
-  Write-Output "uv installed, path: $($uv.Source)"
+  Write-Host "uv installed, path: $($uv.Source)"
 }
 else {
   Write-Warning "uv not found, ready to install..."
@@ -93,7 +93,7 @@ else {
   # 再次检查
   $uv = Get-Command -Name uv -ErrorAction SilentlyContinue
   if ($uv) {
-    Write-Output "uv installed, path: $($uv.Source)"
+    Write-Host "uv installed, path: $($uv.Source)"
   }
   else {
     Write-Warning "uv still not found after installation"
@@ -112,7 +112,7 @@ try {
 }
 catch {
   Write-Host "Download failed: $($_.Exception.Message)" -ForegroundColor Red
-  exit 1
+  # exit 1
 }
 
 try {
@@ -135,7 +135,13 @@ try {
     Update-SpacyModelUrl
     Sync-UvEnvironment 
   }
+  Write-Output "success"   
+  # exit 0                   
 }
 catch {
   Write-Host "zip the code failed" -ForegroundColor Red
+  Write-Output "error"
+  # exit 0               
 }
+Write-Output "success"
+# exit 0
