@@ -73,14 +73,13 @@ export function setupJointBuildHandlers(ipcMain: IpcMain): void {
     return getWindowsDiskInfo(diskPath);
   });
 
-  // 处理设置托盘启用状态
+  // 处理设置托盘启用状态（只更新状态，不销毁托盘）
   ipcHandle(ipcMain, setTrayEnabledHandle, async (_event, enabled: boolean) => {
     trayEnabled = enabled;
-    if (enabled) {
-      createTray();
-    } else {
-      destroyTray();
-    }
+    // 确保托盘始终存在
+    createTray();
+    // 更新托盘提示信息
+    updateTrayTooltip();
     return true;
   });
 }
@@ -126,12 +125,7 @@ function createTray(): void {
       },
     ]);
     
-    // todo: 信息识别
-    const version = app.getVersion();
-    const isJointBuilding = trayEnabled ? '正在共建中（ON）' : '共建已关闭（OFF）';
-    const currentUploadSpeed = '0KB/s';
-    const linkedTo = 0;
-    tray.setToolTip(`AI学习助手 ${version}\n${isJointBuilding}\n当前上传速度: ${currentUploadSpeed}\n已连接伙伴${linkedTo}人`);
+    updateTrayTooltip();
     tray.setContextMenu(contextMenu);
     
     // 双击托盘图标显示窗口
@@ -148,6 +142,22 @@ function createTray(): void {
   }
 }
 
+// 更新托盘提示信息
+function updateTrayTooltip(): void {
+  if (!tray) return;
+  
+  const version = app.getVersion();
+  const isJointBuilding = trayEnabled ? '正在共建中（ON）' : '共建已关闭（OFF）';
+  if (!trayEnabled) {
+    tray.setToolTip(`AI学习助手 ${version}\n共建已关闭（OFF）`);
+    return;
+  }
+  // todo:获取动态数据
+  const currentUploadSpeed = '0KB/s';
+  const linkedTo = 0;
+  tray.setToolTip(`AI学习助手 ${version}\n${isJointBuilding}\n当前上传速度: ${currentUploadSpeed}\n已连接伙伴${linkedTo}人`);
+}
+
 // 销毁托盘
 function destroyTray(): void {
   if (tray) {
@@ -158,8 +168,12 @@ function destroyTray(): void {
 
 // 设置窗口关闭行为
 export function setupWindowCloseHandler(mainWindow: BrowserWindow): void {
+  // 确保托盘已创建
+  createTray();
+  
   mainWindow.on('close', (event) => {
-    if (trayEnabled && !forceQuit) {
+    // 始终最小化到托盘，除非是强制退出
+    if (!forceQuit) {
       event.preventDefault();
       mainWindow.hide();
     }
@@ -176,7 +190,7 @@ export function setForceQuit(value: boolean): void {
   forceQuit = value;
 }
 
-// 获取托盘启用状态
+// 获取托盘启用状态（始终启用托盘最小化）
 export function isTrayEnabled(): boolean {
-  return trayEnabled;
+  return true;
 }
