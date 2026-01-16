@@ -16,6 +16,7 @@ import PdfConfig from './pages/pdf-config';
 import LLMConfig from './pages/llm-api-config';
 import VoiceRTCConfig from './pages/voice-rtc-config';
 import WelcomeModal from './pages/welcome/WelcomeModal';
+import JointBuild from './pages/joint-build';
 
 export default function App() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
       <WelcomeModal />
       <Router>
         <Routes>
+          <Route path="/joint-build" element={<JointBuild />} />
           <Route path="/ai-service" element={<AiService />} />
           <Route path="/lm-service" element={<LMService />} />
           <Route path="/llm-api-config" element={<LLMConfig />} />

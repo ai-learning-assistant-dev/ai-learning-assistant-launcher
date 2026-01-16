@@ -582,13 +582,12 @@ export default function Hello() {
                 版本号：{__NPM_PACKAGE_VERSION__} 源码版本：{__COMMIT_HASH__}
               </div>
               <div className="log-export">
-                <Button
-                  className="joint-build-button"
-                  onClick={() => window.open('https://ai-learning-assistant.com/joint-build', '_blank')}
-                >
-                  <img src={jointBuildIcon} alt="共建计划" className="joint-build-icon" />
-                  <span>共建计划</span>
-                </Button>
+                <NavLink to="/joint-build" className="joint-build-link">
+                  <Button className="joint-build-button">
+                    <img src={jointBuildIcon} alt="共建计划" className="joint-build-icon" />
+                    <span>共建计划</span>
+                  </Button>
+                </NavLink>
                 <Button
                   className="status-indicator"
                   onClick={handleExportLogs}
