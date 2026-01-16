@@ -17,6 +17,7 @@ interface ModuleItem {
 const STORAGE_KEY_MASTER = 'joint_build_master_switch';
 const STORAGE_KEY_MODULES = 'joint_build_modules';
 const STORAGE_KEY_DISK_PATH = 'joint_build_disk_path';
+const STORAGE_KEY_WELCOME = 'ai_learning_assistant_welcome_shown'; // 欢迎弹窗用户选择
 
 export default function JointBuild() {
   const [masterSwitch, setMasterSwitch] = useState(false);
@@ -52,9 +53,16 @@ export default function JointBuild() {
 
   // 从 localStorage 加载配置
   useEffect(() => {
+    // 优先读取共建开关的设置，如果没有则读取欢迎弹窗的用户选择
     const savedMasterSwitch = localStorage.getItem(STORAGE_KEY_MASTER);
     if (savedMasterSwitch !== null) {
       setMasterSwitch(savedMasterSwitch === 'true');
+    } else {
+      // 如果没有单独设置过共建开关，则读取欢迎弹窗的选择
+      const welcomeChoice = localStorage.getItem(STORAGE_KEY_WELCOME);
+      if (welcomeChoice === 'true') {
+        setMasterSwitch(true);
+      }
     }
 
     const savedModules = localStorage.getItem(STORAGE_KEY_MODULES);
