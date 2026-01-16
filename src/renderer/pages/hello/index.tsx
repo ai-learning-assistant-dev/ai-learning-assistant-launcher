@@ -49,6 +49,29 @@ export default function Hello() {
     };
   }, [setupBackupListener]);
 
+  // 初始化托盘状态（根据共建开关）
+  useEffect(() => {
+    const initTrayStatus = async () => {
+      const masterSwitch = localStorage.getItem('joint_build_master_switch');
+      const welcomeChoice = localStorage.getItem('ai_learning_assistant_welcome_shown');
+      
+      let trayEnabled = false;
+      if (masterSwitch !== null) {
+        trayEnabled = masterSwitch === 'true';
+      } else if (welcomeChoice === 'true') {
+        trayEnabled = true;
+      }
+      
+      try {
+        await window.mainHandle.setTrayEnabled(trayEnabled);
+      } catch (error) {
+        console.error('初始化托盘状态失败:', error);
+      }
+    };
+    
+    initTrayStatus();
+  }, []);
+
   const [currentSlide, setCurrentSlide] = useState(0);
 
   const slides = [

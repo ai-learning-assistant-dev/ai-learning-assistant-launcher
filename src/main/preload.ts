@@ -22,6 +22,7 @@ import {
 import {
   selectFolderHandle,
   getDiskInfoHandle,
+  setTrayEnabledHandle,
   DiskInfo,
 } from './joint-build/type-info';
 
@@ -119,6 +120,9 @@ const mainHandle = {
   },
   getJointBuildDiskInfo: async (diskPath: string): Promise<DiskInfo> => {
     return ipcInvoke(getDiskInfoHandle, diskPath);
+  },
+  setTrayEnabled: async (enabled: boolean): Promise<boolean> => {
+    return ipcInvoke(setTrayEnabledHandle, enabled);
   },
 };
 

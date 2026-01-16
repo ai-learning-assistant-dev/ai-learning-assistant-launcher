@@ -13,7 +13,7 @@ import initPdfConvert from './pdf-convert';
 import initTrainingService from './training-service';
 import initLogService from './backup';
 import initExternalUrl from './external-url';
-import { setupJointBuildHandlers } from './joint-build';
+import { setupJointBuildHandlers, setupWindowCloseHandler, isTrayEnabled } from './joint-build';
 import path from 'node:path';
 import { appPath, autoAdaptEncodingForWindows } from './exec';
 import { logDeviceInfo } from './logger/log-device-info';
@@ -93,6 +93,9 @@ const createWindow = async () => {
     autoHideMenuBar: true,
   });
 
+  // 设置窗口关闭行为（托盘最小化）
+  setupWindowCloseHandler(mainWindow);
+
   // 最大化窗口
   mainWindow.maximize();
 
@@ -119,6 +122,10 @@ app.on('ready', createWindow);
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
 app.on('window-all-closed', () => {
+  // 如果托盘启用，不退出应用
+  if (isTrayEnabled()) {
+    return;
+  }
   if (process.platform !== 'darwin') {
     app.quit();
   }

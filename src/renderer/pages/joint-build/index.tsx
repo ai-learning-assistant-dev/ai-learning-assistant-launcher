@@ -76,15 +76,21 @@ export default function JointBuild() {
   useEffect(() => {
     // 优先读取共建开关的设置，如果没有则读取欢迎弹窗的用户选择
     const savedMasterSwitch = localStorage.getItem(STORAGE_KEY_MASTER);
+    let initialMasterSwitch = false;
+    
     if (savedMasterSwitch !== null) {
-      setMasterSwitch(savedMasterSwitch === 'true');
+      initialMasterSwitch = savedMasterSwitch === 'true';
     } else {
       // 如果没有单独设置过共建开关，则读取欢迎弹窗的选择
       const welcomeChoice = localStorage.getItem(STORAGE_KEY_WELCOME);
       if (welcomeChoice === 'true') {
-        setMasterSwitch(true);
+        initialMasterSwitch = true;
       }
     }
+    
+    setMasterSwitch(initialMasterSwitch);
+    // 初始化时同步托盘状态到主进程
+    window.mainHandle.setTrayEnabled(initialMasterSwitch).catch(console.error);
 
     const savedModules = localStorage.getItem(STORAGE_KEY_MODULES);
     if (savedModules) {
@@ -118,11 +124,19 @@ export default function JointBuild() {
     );
   };
 
-  const handleMasterSwitchChange = (checked: boolean) => {
+  const handleMasterSwitchChange = async (checked: boolean) => {
     setMasterSwitch(checked);
     saveConfig(checked, modules);
+    
+    // 同步托盘状态到主进程
+    try {
+      await window.mainHandle.setTrayEnabled(checked);
+    } catch (error) {
+      console.error('设置托盘状态失败:', error);
+    }
+    
     if (checked) {
-      message.success('共建计划已开启');
+      message.success('共建计划已开启，关闭窗口后将最小化到托盘');
     } else {
       message.info('共建计划已关闭');
     }

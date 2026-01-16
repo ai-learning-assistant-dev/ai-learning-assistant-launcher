@@ -1,11 +1,18 @@
-import { dialog, IpcMain } from 'electron';
-import { selectFolderHandle, getDiskInfoHandle, DiskInfo } from './type-info';
+import { dialog, IpcMain, Tray, Menu, BrowserWindow, app, nativeImage } from 'electron';
+import { selectFolderHandle, getDiskInfoHandle, DiskInfo, setTrayEnabledHandle } from './type-info';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import { ipcHandle } from '../ipc-util';
 
 const execPromise = promisify(exec);
+
+// 托盘实例
+let tray: Tray | null = null;
+// 是否启用托盘（共建开关状态）
+let trayEnabled = false;
+// 是否正在强制退出
+let forceQuit = false;
 
 // 获取Windows磁盘信息
 async function getWindowsDiskInfo(diskPath: string): Promise<DiskInfo> {
@@ -65,4 +72,111 @@ export function setupJointBuildHandlers(ipcMain: IpcMain): void {
   ipcHandle(ipcMain, getDiskInfoHandle, async (_event, diskPath: string) => {
     return getWindowsDiskInfo(diskPath);
   });
+
+  // 处理设置托盘启用状态
+  ipcHandle(ipcMain, setTrayEnabledHandle, async (_event, enabled: boolean) => {
+    trayEnabled = enabled;
+    if (enabled) {
+      createTray();
+    } else {
+      destroyTray();
+    }
+    return true;
+  });
+}
+
+// 获取图标路径
+function getIconPath(): string {
+  // 开发环境和生产环境的路径不同
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'icons', 'icon.png');
+  } else {
+    return path.join(__dirname, '..', '..', 'icons', 'icon.png');
+  }
+}
+
+// 创建托盘
+function createTray(): void {
+  if (tray) return;
+  
+  try {
+    const iconPath = getIconPath();
+    const icon = nativeImage.createFromPath(iconPath);
+    tray = new Tray(icon.resize({ width: 16, height: 16 }));
+    
+    const contextMenu = Menu.buildFromTemplate([
+      {
+        label: '显示主窗口',
+        click: () => {
+          const windows = BrowserWindow.getAllWindows();
+          if (windows.length > 0) {
+            const mainWindow = windows[0];
+            mainWindow.show();
+            mainWindow.focus();
+          }
+        },
+      },
+      { type: 'separator' },
+      {
+        label: '退出',
+        click: () => {
+          forceQuit = true;
+          app.quit();
+        },
+      },
+    ]);
+    
+    // todo: 信息识别
+    const version = app.getVersion();
+    const isJointBuilding = trayEnabled ? '正在共建中（ON）' : '共建已关闭（OFF）';
+    const currentUploadSpeed = '0KB/s';
+    const linkedTo = 0;
+    tray.setToolTip(`AI学习助手 ${version}\n${isJointBuilding}\n当前上传速度: ${currentUploadSpeed}\n已连接伙伴${linkedTo}人`);
+    tray.setContextMenu(contextMenu);
+    
+    // 双击托盘图标显示窗口
+    tray.on('double-click', () => {
+      const windows = BrowserWindow.getAllWindows();
+      if (windows.length > 0) {
+        const mainWindow = windows[0];
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    });
+  } catch (error) {
+    console.error('创建托盘失败:', error);
+  }
+}
+
+// 销毁托盘
+function destroyTray(): void {
+  if (tray) {
+    tray.destroy();
+    tray = null;
+  }
+}
+
+// 设置窗口关闭行为
+export function setupWindowCloseHandler(mainWindow: BrowserWindow): void {
+  mainWindow.on('close', (event) => {
+    if (trayEnabled && !forceQuit) {
+      event.preventDefault();
+      mainWindow.hide();
+    }
+  });
+}
+
+// 检查是否强制退出
+export function isForceQuit(): boolean {
+  return forceQuit;
+}
+
+// 设置强制退出标志
+export function setForceQuit(value: boolean): void {
+  forceQuit = value;
+}
+
+// 获取托盘启用状态
+export function isTrayEnabled(): boolean {
+  return trayEnabled;
 }
