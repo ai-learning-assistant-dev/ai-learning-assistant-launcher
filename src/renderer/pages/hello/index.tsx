@@ -12,6 +12,7 @@ import wslLogo from './wslLogo.png';
 // 新增导入Frame 3和Frame 8图片
 import frame3 from './Frame 3.png';
 import frame8 from './Frame 8.png';
+import jointBuildIcon from '../../../../icons/joint_build.png';
 import './index.scss';
 import { LeftOutlined, RightOutlined } from '@ant-design/icons';
 import { useTrainingServiceShortcut } from '../../containers/use-training-service-shortcut';
@@ -581,6 +582,13 @@ export default function Hello() {
                 版本号：{__NPM_PACKAGE_VERSION__} 源码版本：{__COMMIT_HASH__}
               </div>
               <div className="log-export">
+                <Button
+                  className="joint-build-button"
+                  onClick={() => window.open('https://ai-learning-assistant.com/joint-build', '_blank')}
+                >
+                  <img src={jointBuildIcon} alt="共建计划" className="joint-build-icon" />
+                  <span>共建计划</span>
+                </Button>
                 <Button
                   className="status-indicator"
                   onClick={handleExportLogs}

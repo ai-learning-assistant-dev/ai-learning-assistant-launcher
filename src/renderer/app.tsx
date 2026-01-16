@@ -15,10 +15,12 @@ import PdfConvert from './pages/pdf-convert';
 import PdfConfig from './pages/pdf-config';
 import LLMConfig from './pages/llm-api-config';
 import VoiceRTCConfig from './pages/voice-rtc-config';
+import WelcomeModal from './pages/welcome/WelcomeModal';
 
 export default function App() {
   return (
     <AntdApp>
+      <WelcomeModal />
       <Router>
         <Routes>
           <Route path="/ai-service" element={<AiService />} />
