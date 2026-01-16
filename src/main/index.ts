@@ -13,6 +13,7 @@ import initPdfConvert from './pdf-convert';
 import initTrainingService from './training-service';
 import initLogService from './backup';
 import initExternalUrl from './external-url';
+import { setupJointBuildHandlers } from './joint-build';
 import path from 'node:path';
 import { appPath, autoAdaptEncodingForWindows } from './exec';
 import { logDeviceInfo } from './logger/log-device-info';
@@ -77,6 +78,7 @@ initExampleMain(ipcMain);
 initPdfConvert(ipcMain);
 initTrainingService(ipcMain);
 initExternalUrl(ipcMain);
+setupJointBuildHandlers(ipcMain);
 updateTemplate();
 
 const createWindow = async () => {

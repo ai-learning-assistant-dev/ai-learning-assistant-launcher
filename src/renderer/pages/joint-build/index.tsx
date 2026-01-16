@@ -1,6 +1,6 @@
 import { Switch, Button, Progress, message } from 'antd';
 import { NavLink } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { LeftOutlined } from '@ant-design/icons';
 import jointBuildIcon from '../../../../icons/joint_build.png';
 import './index.scss';
@@ -19,11 +19,18 @@ const STORAGE_KEY_MODULES = 'joint_build_modules';
 const STORAGE_KEY_DISK_PATH = 'joint_build_disk_path';
 const STORAGE_KEY_WELCOME = 'ai_learning_assistant_welcome_shown'; // 欢迎弹窗用户选择
 
+// 字节转GB
+const bytesToGB = (bytes: number): number => {
+  return Math.round((bytes / (1024 * 1024 * 1024)) * 10) / 10;
+};
+
 export default function JointBuild() {
   const [masterSwitch, setMasterSwitch] = useState(false);
   const [diskPath, setDiskPath] = useState('C:\\');
-  const [diskUsed, setDiskUsed] = useState(120); // GB
-  const [diskTotal, setDiskTotal] = useState(500); // GB
+  const [diskUsed, setDiskUsed] = useState(0);
+  const [diskTotal, setDiskTotal] = useState(0);
+  const [diskLoading, setDiskLoading] = useState(false);
+  // todo: 这些数据从哪获取？还是写死
   const [modules, setModules] = useState<ModuleItem[]>([
     {
       id: 'launcher',
@@ -50,6 +57,20 @@ export default function JointBuild() {
       enabled: false,
     },
   ]);
+
+  // 获取磁盘信息
+  const fetchDiskInfo = useCallback(async (path: string) => {
+    setDiskLoading(true);
+    try {
+      const diskInfo = await window.mainHandle.getJointBuildDiskInfo(path);
+      setDiskTotal(bytesToGB(diskInfo.total));
+      setDiskUsed(bytesToGB(diskInfo.used));
+    } catch (error) {
+      console.error('获取磁盘信息失败:', error);
+    } finally {
+      setDiskLoading(false);
+    }
+  }, []);
 
   // 从 localStorage 加载配置
   useEffect(() => {
@@ -81,10 +102,12 @@ export default function JointBuild() {
     }
 
     const savedDiskPath = localStorage.getItem(STORAGE_KEY_DISK_PATH);
-    if (savedDiskPath) {
-      setDiskPath(savedDiskPath);
-    }
-  }, []);
+    const initialPath = savedDiskPath || 'C:\\';
+    setDiskPath(initialPath);
+    
+    // 初始化时获取磁盘信息
+    fetchDiskInfo(initialPath);
+  }, [fetchDiskInfo]);
 
   // 保存配置到 localStorage
   const saveConfig = (master: boolean, mods: ModuleItem[]) => {
@@ -114,13 +137,18 @@ export default function JointBuild() {
   };
 
   const handleChangePath = async () => {
-    // 这里可以调用 electron 的对话框选择文件夹
-    // 暂时用 prompt 模拟
-    const newPath = window.prompt('请输入新的磁盘路径:', diskPath);
-    if (newPath) {
-      setDiskPath(newPath);
-      localStorage.setItem(STORAGE_KEY_DISK_PATH, newPath);
-      message.success('路径已更新');
+    try {
+      const newPath = await window.mainHandle.selectJointBuildFolder();
+      if (newPath) {
+        setDiskPath(newPath);
+        localStorage.setItem(STORAGE_KEY_DISK_PATH, newPath);
+        message.success('路径已更新');
+        // 获取新路径的磁盘信息
+        fetchDiskInfo(newPath);
+      }
+    } catch (error) {
+      console.error('选择文件夹失败:', error);
+      message.error('选择文件夹失败');
     }
   };
 

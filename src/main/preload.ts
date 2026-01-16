@@ -19,6 +19,11 @@ import {
   removeTrainingServiceHandle,
   startTrainingServiceHandle,
 } from './training-service/type-info';
+import {
+  selectFolderHandle,
+  getDiskInfoHandle,
+  DiskInfo,
+} from './joint-build/type-info';
 
 const electronHandler = {
   ipcRenderer: {
@@ -107,6 +112,13 @@ const mainHandle = {
     return ipcInvoke<{ imageId: string; logs: string }>(
       logsTrainingServiceHandle,
     );
+  },
+  // 共建计划相关
+  selectJointBuildFolder: async (): Promise<string | null> => {
+    return ipcInvoke(selectFolderHandle);
+  },
+  getJointBuildDiskInfo: async (diskPath: string): Promise<DiskInfo> => {
+    return ipcInvoke(getDiskInfoHandle, diskPath);
   },
 };
 
