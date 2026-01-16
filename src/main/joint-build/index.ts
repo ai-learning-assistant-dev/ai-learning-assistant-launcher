@@ -103,30 +103,8 @@ function createTray(): void {
     const icon = nativeImage.createFromPath(iconPath);
     tray = new Tray(icon.resize({ width: 16, height: 16 }));
     
-    const contextMenu = Menu.buildFromTemplate([
-      {
-        label: '显示主窗口',
-        click: () => {
-          const windows = BrowserWindow.getAllWindows();
-          if (windows.length > 0) {
-            const mainWindow = windows[0];
-            mainWindow.show();
-            mainWindow.focus();
-          }
-        },
-      },
-      { type: 'separator' },
-      {
-        label: '退出',
-        click: () => {
-          forceQuit = true;
-          app.quit();
-        },
-      },
-    ]);
-    
+    updateTrayMenu();
     updateTrayTooltip();
-    tray.setContextMenu(contextMenu);
     
     // 双击托盘图标显示窗口
     tray.on('double-click', () => {
@@ -140,6 +118,64 @@ function createTray(): void {
   } catch (error) {
     console.error('创建托盘失败:', error);
   }
+}
+
+// 更新托盘菜单
+function updateTrayMenu(): void {
+  if (!tray) return;
+  
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: '打开AI学习助手',
+      click: () => {
+        const windows = BrowserWindow.getAllWindows();
+        if (windows.length > 0) {
+          const mainWindow = windows[0];
+          mainWindow.show();
+          mainWindow.focus();
+          // 发送路由事件到渲染进程，导航到主界面
+          mainWindow.webContents.send('navigate-to', '/hello');
+        }
+      },
+    },
+    {
+      label: '打开共建设置',
+      click: () => {
+        const windows = BrowserWindow.getAllWindows();
+        if (windows.length > 0) {
+          const mainWindow = windows[0];
+          mainWindow.show();
+          mainWindow.focus();
+          // 发送路由事件到渲染进程，导航到共建设置界面
+          mainWindow.webContents.send('navigate-to', '/joint-build');
+        }
+      },
+    },
+    {
+      label: trayEnabled ? '停止共建计划' : '运行共建计划',
+      click: () => {
+        trayEnabled = !trayEnabled;
+        // 更新菜单显示
+        updateTrayMenu();
+        updateTrayTooltip();
+        // 通知渲染进程更新状态
+        const windows = BrowserWindow.getAllWindows();
+        if (windows.length > 0) {
+          windows[0].webContents.send('joint-build-status-changed', trayEnabled);
+        }
+      },
+    },
+    { type: 'separator' },
+    {
+      label: '退出AI学习助手',
+      click: () => {
+        forceQuit = true;
+        app.quit();
+      },
+    },
+  ]);
+  
+  tray.setContextMenu(contextMenu);
 }
 
 // 更新托盘提示信息

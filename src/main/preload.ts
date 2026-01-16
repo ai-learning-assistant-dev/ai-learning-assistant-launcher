@@ -124,6 +124,17 @@ const mainHandle = {
   setTrayEnabled: async (enabled: boolean): Promise<boolean> => {
     return ipcInvoke(setTrayEnabledHandle, enabled);
   },
+  // 托盘菜单事件监听
+  onNavigateTo: (callback: (route: string) => void) => {
+    const handler = (_event: IpcRendererEvent, route: string) => callback(route);
+    ipcRenderer.on('navigate-to', handler);
+    return () => ipcRenderer.removeListener('navigate-to', handler);
+  },
+  onJointBuildStatusChanged: (callback: (enabled: boolean) => void) => {
+    const handler = (_event: IpcRendererEvent, enabled: boolean) => callback(enabled);
+    ipcRenderer.on('joint-build-status-changed', handler);
+    return () => ipcRenderer.removeListener('joint-build-status-changed', handler);
+  },
 };
 
 export type MainHandle = typeof mainHandle;

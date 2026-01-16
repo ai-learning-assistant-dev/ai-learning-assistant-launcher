@@ -115,6 +115,19 @@ export default function JointBuild() {
     fetchDiskInfo(initialPath);
   }, [fetchDiskInfo]);
 
+  // 监听托盘菜单的状态变化
+  useEffect(() => {
+    const handleStatusChange = (event: CustomEvent<boolean>) => {
+      setMasterSwitch(event.detail);
+    };
+    
+    window.addEventListener('joint-build-status-changed', handleStatusChange as EventListener);
+    
+    return () => {
+      window.removeEventListener('joint-build-status-changed', handleStatusChange as EventListener);
+    };
+  }, []);
+
   // 保存配置到 localStorage
   const saveConfig = (master: boolean, mods: ModuleItem[]) => {
     localStorage.setItem(STORAGE_KEY_MASTER, String(master));
