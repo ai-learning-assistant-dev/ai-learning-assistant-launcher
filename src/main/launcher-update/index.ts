@@ -114,7 +114,6 @@ export async function downloadLauncherUpdate() {
 export async function installLauncherUpdate() {
   console.debug('[installLauncherUpdate] 开始执行安装更新');
 
-  // 如果是开发模式，不执行更新
   const isPackaged = app.isPackaged;
   if (!isPackaged) {
     console.warn('[installLauncherUpdate] 开发模式下不支持自动更新');
@@ -140,10 +139,14 @@ export async function installLauncherUpdate() {
       version,
     );
     console.debug('[installLauncherUpdate] 下载路径:', downloadPath);
-    console.debug(
-      '[installLauncherUpdate] 下载路径是否存在:',
-      existsSync(downloadPath),
-    );
+
+    // 销毁 WebTorrent 以释放文件句柄
+    console.debug('[installLauncherUpdate] 销毁 WebTorrent 释放文件句柄...');
+    await destroyWebtorrentForInstall(latestVersionInfo.dlcInfo.magnet);
+
+    // ✅ 增加等待时间，确保文件句柄完全释放
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    console.debug('[installLauncherUpdate] 文件句柄已释放');
 
     const files = readdirSync(downloadPath);
     console.debug('[installLauncherUpdate] 下载目录文件列表:', files);
@@ -153,62 +156,64 @@ export async function installLauncherUpdate() {
       throw new Error('未找到下载的更新包');
     }
 
-    // 销毁 WebTorrent 以释放文件句柄，避免后续读取 zip 文件时出现 EBUSY 错误
-    console.debug('[installLauncherUpdate] 销毁 WebTorrent 释放文件句柄...');
-    await destroyWebtorrentForInstall(latestVersionInfo.dlcInfo.magnet);
-    // 等待文件句柄完全释放
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    console.debug('[installLauncherUpdate] 文件句柄已释放');
-
     const zipPath = path.join(downloadPath, zipFile);
     console.debug('[installLauncherUpdate] zip文件路径:', zipPath);
-    console.debug(
-      '[installLauncherUpdate] zip文件是否存在:',
-      existsSync(zipPath),
-    );
 
+    // ✅ 创建临时目录
     const tempDir = path.join(appPath, 'update-temp');
     console.debug('[installLauncherUpdate] 临时目录:', tempDir);
     if (existsSync(tempDir)) {
       console.debug('[installLauncherUpdate] 清理已存在的临时目录...');
       rmSync(tempDir, { recursive: true, force: true });
-      console.debug('[installLauncherUpdate] 临时目录清理完成');
     }
     mkdirSync(tempDir, { recursive: true });
-    console.debug('[installLauncherUpdate] 临时目录已创建');
 
-    // 使用 adm-zip 解压 zip 文件
-    console.log('[installLauncherUpdate] 正在解压文件...');
-    console.log('[installLauncherUpdate] ZIP路径:', zipPath);
-    console.log('[installLauncherUpdate] 目标路径:', tempDir);
+    // ✅ 先将 ZIP 文件复制到临时目录（避免 ASAR 路径问题）
+    const tempZipPath = path.join(tempDir, zipFile);
+    console.debug('[installLauncherUpdate] 复制 ZIP 到临时目录:', tempZipPath);
 
     try {
-      const zip = new AdmZip(zipPath);
+      // 使用 original-fs 读取和写入
+      const zipBuffer = originalFs.readFileSync(zipPath);
+      originalFs.writeFileSync(tempZipPath, zipBuffer);
+      console.debug('[installLauncherUpdate] ZIP 文件复制完成');
+
+      // 再次等待，确保文件写入完成
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    } catch (copyError) {
+      console.error('[installLauncherUpdate] 复制 ZIP 文件失败:', copyError);
+      throw new Error('复制安装包失败: ' + (copyError as Error).message);
+    }
+
+    // ✅ 现在使用临时目录中的 ZIP 文件进行解压
+    console.log('[installLauncherUpdate] 正在解压文件...');
+    console.log('[installLauncherUpdate] ZIP路径:', tempZipPath);
+
+    const extractDir = path.join(tempDir, 'extracted');
+    mkdirSync(extractDir, { recursive: true });
+
+    try {
+      const zip = new AdmZip(tempZipPath);
       const zipEntries = zip.getEntries();
       console.log(
         '[installLauncherUpdate] ZIP包含的文件数量:',
         zipEntries.length,
       );
-      console.log(
-        '[installLauncherUpdate] ZIP包含的文件列表:',
-        zipEntries.slice(0, 5).map((e) => e.entryName),
-      );
 
-      // 手动解压每个文件，使用 original-fs 避免 asar 打包问题和 Windows 下的 chmod 问题
+      // 手动解压每个文件
       for (const entry of zipEntries) {
-        const entryPath = path.join(tempDir, entry.entryName);
+        const entryPath = path.join(extractDir, entry.entryName);
+
         if (entry.isDirectory) {
-          // 创建目录
           if (!originalFs.existsSync(entryPath)) {
             originalFs.mkdirSync(entryPath, { recursive: true });
           }
         } else {
-          // 确保父目录存在
           const parentDir = path.dirname(entryPath);
           if (!originalFs.existsSync(parentDir)) {
             originalFs.mkdirSync(parentDir, { recursive: true });
           }
-          // 写入文件
+
           const content = entry.getData();
           originalFs.writeFileSync(entryPath, content);
         }
@@ -216,41 +221,15 @@ export async function installLauncherUpdate() {
       console.log('[installLauncherUpdate] 解压完成');
     } catch (extractError) {
       console.error('[installLauncherUpdate] 解压失败:', extractError);
-      console.error(
-        '[installLauncherUpdate] 解压错误堆栈:',
-        extractError instanceof Error ? extractError.stack : '无堆栈信息',
-      );
       throw extractError;
     }
 
-    // 查找解压后的目录（通常会有一个子目录）
-    const extractedItems = readdirSync(tempDir);
-    console.log(
-      '[installLauncherUpdate] 解压后的文件数量:',
-      extractedItems.length,
-    );
-    console.log('[installLauncherUpdate] 解压后的文件列表:', extractedItems);
-
-    let sourceDir = tempDir;
-    if (extractedItems.length === 1) {
-      const subPath = path.join(tempDir, extractedItems[0]);
-      const subStat = statSync(subPath);
-      console.log('[installLauncherUpdate] 检查子路径:', subPath);
-      console.log('[installLauncherUpdate] 是否为目录:', subStat.isDirectory());
-      if (subStat.isDirectory()) {
-        sourceDir = subPath;
-        const subItems = readdirSync(sourceDir);
-        console.log('[installLauncherUpdate] 子目录文件列表:', subItems);
-      }
-    }
-
-    console.log('[installLauncherUpdate] 解压源目录:', sourceDir);
-
+    // 查找解压后的 exe 文件
     const findExe = (dir: string): string | null => {
-      const items = readdirSync(dir);
+      const items = originalFs.readdirSync(dir);
       for (const item of items) {
         const fullPath = path.join(dir, item);
-        const stat = statSync(fullPath);
+        const stat = originalFs.statSync(fullPath);
         if (stat.isDirectory()) {
           const result = findExe(fullPath);
           if (result) return result;
@@ -264,7 +243,7 @@ export async function installLauncherUpdate() {
       return null;
     };
 
-    const newExePath = findExe(tempDir);
+    const newExePath = findExe(extractDir);
 
     if (!newExePath) {
       throw new Error('未在更新包中找到启动器可执行文件');
@@ -275,35 +254,75 @@ export async function installLauncherUpdate() {
     const currentExePath = app.getPath('exe');
     const currentExeDir = path.dirname(currentExePath);
     const currentExeName = path.basename(currentExePath);
-
     const backupPath = path.join(currentExeDir, `${currentExeName}.old`);
 
+    // ✅ 修改更新脚本，添加更多错误处理和日志
     const updateScriptPath = path.join(appPath, 'update.bat');
     const updateScript = `@echo off
 chcp 65001
-echo 正在更新启动器...
+echo ====================================
+echo AI学习助手启动器更新程序
+echo ====================================
+echo.
+
+echo [1/5] 等待主程序退出...
+timeout /t 3 /nobreak >nul
+
+echo [2/5] 删除旧备份文件...
+if exist "${backupPath}" (
+    del /f /q "${backupPath}"
+    if errorlevel 1 (
+        echo 警告: 删除旧备份失败
+    ) else (
+        echo 旧备份已删除
+    )
+)
+
+echo [3/5] 备份当前版本...
+if exist "${currentExePath}" (
+    move /y "${currentExePath}" "${backupPath}"
+    if errorlevel 1 (
+        echo 错误: 备份失败，更新中止
+        pause
+        exit /b 1
+    )
+    echo 备份完成
+) else (
+    echo 警告: 未找到当前程序
+)
+
+echo [4/5] 安装新版本...
+copy /y "${newExePath}" "${currentExePath}"
+if errorlevel 1 (
+    echo 错误: 安装失败，尝试恢复...
+    if exist "${backupPath}" (
+        move /y "${backupPath}" "${currentExePath}"
+        echo 已恢复到旧版本
+    )
+    pause
+    exit /b 1
+)
+echo 安装完成
+
+echo [5/5] 清理临时文件...
+timeout /t 1 /nobreak >nul
+rmdir /s /q "${tempDir}"
+echo 清理完成
+
+echo.
+echo ====================================
+echo 更新成功！正在启动新版本...
+echo ====================================
 timeout /t 2 /nobreak >nul
 
-REM 删除旧备份
-if exist "${backupPath}" del /f /q "${backupPath}"
-
-REM 备份当前版本
-move /y "${currentExePath}" "${backupPath}"
-
-REM 复制新版本
-copy /y "${newExePath}" "${currentExePath}"
-
-REM 清理临时文件
-rmdir /s /q "${tempDir}"
-
-REM 启动新版本
 start "" "${currentExePath}"
 
-REM 删除更新脚本自身
 (goto) 2>nul & del "%~f0"
 `;
 
-    writeFileSync(updateScriptPath, updateScript, { encoding: 'utf8' });
+    originalFs.writeFileSync(updateScriptPath, updateScript, {
+      encoding: 'utf8',
+    });
 
     console.debug('更新脚本已创建:', updateScriptPath);
 
@@ -318,21 +337,34 @@ REM 删除更新脚本自身
     });
 
     if (result.response === 0) {
-      spawn('cmd.exe', ['/c', updateScriptPath], {
-        detached: true,
-        stdio: 'ignore',
-        windowsHide: true,
-      });
+      // ✅ 使用 detached 模式启动批处理文件
+      const child = spawn(
+        'cmd.exe',
+        ['/c', 'start', '/min', updateScriptPath],
+        {
+          detached: true,
+          stdio: 'ignore',
+          windowsHide: false, // 显示窗口以便用户看到进度
+          shell: true,
+        },
+      );
 
+      child.unref();
+
+      // 延迟退出，确保批处理脚本已启动
       setTimeout(() => {
         app.quit();
-      }, 1000);
+      }, 1500);
 
       return {
         success: true,
         message: '正在更新启动器...',
       };
     } else {
+      // 用户取消，清理临时文件
+      if (existsSync(tempDir)) {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
       return {
         success: false,
         message: '用户取消更新',
