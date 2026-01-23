@@ -17,7 +17,9 @@ import {
   installTrainingServiceHandle,
   logsTrainingServiceHandle,
   removeTrainingServiceHandle,
+  updateCourseTrainingServiceHandle,
   startTrainingServiceHandle,
+  courseHaveNewVersionTrainingServiceHandle,
 } from './training-service/type-info';
 import {
   selectFolderHandle,
@@ -25,6 +27,14 @@ import {
   setTrayEnabledHandle,
   DiskInfo,
 } from './joint-build/type-info';
+  DLCIndex,
+  logsWebtorrentHandle,
+  pauseWebtorrentHandle,
+  queryWebtorrentHandle,
+  removeWebtorrentHandle,
+  startWebtorrentHandle,
+  DLCId,
+} from './dlc/type-info';
 
 const electronHandler = {
   ipcRenderer: {
@@ -109,6 +119,16 @@ const mainHandle = {
   removeTrainingServiceHandle: async () => {
     return ipcInvoke(removeTrainingServiceHandle);
   },
+  updateCourseTrainingServiceHandle: async () => {
+    return ipcInvoke(updateCourseTrainingServiceHandle);
+  },
+  courseHaveNewVersionTrainingServiceHandle: async () => {
+    return ipcInvoke<{
+      currentVersion: string;
+      latestVersion: string;
+      haveNew: boolean;
+    }>(courseHaveNewVersionTrainingServiceHandle);
+  },
   logsTrainingServiceHandle: async () => {
     return ipcInvoke<{ imageId: string; logs: string }>(
       logsTrainingServiceHandle,
@@ -134,6 +154,20 @@ const mainHandle = {
     const handler = (_event: IpcRendererEvent, enabled: boolean) => callback(enabled);
     ipcRenderer.on('joint-build-status-changed', handler);
     return () => ipcRenderer.removeListener('joint-build-status-changed', handler);
+  startWebtorrentHandle: async (url: string) => {
+    return ipcInvoke(startWebtorrentHandle, url);
+  },
+  queryWebtorrentHandle: async () => {
+    return ipcInvoke<DLCIndex>(queryWebtorrentHandle);
+  },
+  pauseWebtorrentHandle: async (url: string) => {
+    return ipcInvoke(pauseWebtorrentHandle, url);
+  },
+  removeWebtorrentHandle: async (url: string) => {
+    return ipcInvoke(removeWebtorrentHandle, url);
+  },
+  logsWebtorrentHandle: async (url: string) => {
+    return ipcInvoke(logsWebtorrentHandle, url);
   },
 };
 

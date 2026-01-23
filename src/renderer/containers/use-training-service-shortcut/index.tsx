@@ -4,7 +4,7 @@ import {
   ServiceName,
 } from '../../../main/podman-desktop/type-info';
 import useDocker from '../use-docker';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { downloadLogsAsText } from '../../web-utils';
 
@@ -33,10 +33,29 @@ export function useTrainingServiceShortcut() {
   const navigate = useNavigate();
   const [dockerDatatrigger, setDockerDatatrigger] = useState(1);
   const { containers, action, loading, initing } = useDocker(dockerDatatrigger);
+  const [versionInfo, setVersionInfo] = useState<{
+    currentVersion: string;
+    latestVersion: string;
+    haveNew: boolean;
+  }>({
+    currentVersion: '0.0.0',
+    latestVersion: '0.0.0',
+    haveNew: false,
+  });
 
   const trainingContainer = containers.filter(
     (item) => item.Names.indexOf(containerNameDict.TRAINING) >= 0,
   )[0];
+
+  useEffect(() => {
+    window.mainHandle
+      .courseHaveNewVersionTrainingServiceHandle()
+      .then((info) => {
+        setVersionInfo(info);
+      });
+
+    return () => {};
+  }, [dockerDatatrigger]);
 
   const containerInfos: ContainerItem[] = [
     {
@@ -71,6 +90,13 @@ export function useTrainingServiceShortcut() {
     }
   };
 
+  const updateCourse = async () => {
+    if (containerInfos[0].state !== '还未安装') {
+      await window.mainHandle.updateCourseTrainingServiceHandle();
+      setDockerDatatrigger(dockerDatatrigger + 1);
+    }
+  };
+
   const downloadLogs = async () => {
     const serviceName = 'TRAINING';
     const { logs, imageId } =
@@ -95,6 +121,8 @@ export function useTrainingServiceShortcut() {
     start,
     remove,
     initing,
+    versionInfo,
+    updateCourse,
     downloadLogs,
   };
 }

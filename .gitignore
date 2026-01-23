@@ -103,3 +103,10 @@ external-resources/ai-assistant-backend/
 external-resources/config/obsidian-config.json
 # 忽略存储区配置文件
 external-resources/user-workspace/git-storage.json
+
+# 忽略DLC文件
+external-resources/dlc/**/*.mp4
+external-resources/dlc/**/*.tar
+external-resources/dlc/**/*.zip
+external-resources/dlc/**/*.sql
+external-resources/dlc/**/*.torrent

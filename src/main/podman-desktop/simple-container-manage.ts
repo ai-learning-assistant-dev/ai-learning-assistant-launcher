@@ -1,5 +1,6 @@
 import { dialog, IpcMain, IpcMainEvent } from 'electron';
 import Dockerode, { ContainerInfo } from 'dockerode';
+import path from 'node:path';
 import { connect } from './connector';
 import { LibPod, PodmanContainerInfo } from './libpod-dockerode';
 import {
@@ -29,6 +30,7 @@ import {
 } from '../exec/util';
 import { existsSync, mkdirSync } from 'fs';
 import { cleanMultiplexedLog } from './stream-utils';
+import semver from 'semver';
 
 let connectionGlobal: LibPod & Dockerode;
 
@@ -169,38 +171,7 @@ export default async function init(ipcMain: IpcMain) {
             } else if (action === 'remove') {
               await removeService(serviceName, event);
             } else if (action === 'update') {
-              const result = await improveStablebility(async () => {
-                const imagePathForUpdate = await selectImageFile(serviceName);
-                if (imagePathForUpdate) {
-                  event.reply(
-                    channel,
-                    MESSAGE_TYPE.PROGRESS,
-                    '正在导入镜像，这可能需要5分钟时间',
-                  );
-                  return loadImageFromPath(serviceName, imagePathForUpdate);
-                } else {
-                  return false;
-                }
-              });
-              if (result) {
-                event.reply(channel, MESSAGE_TYPE.PROGRESS, '正在删除旧版服务');
-                await removeContainer(serviceName);
-                event.reply(
-                  channel,
-                  MESSAGE_TYPE.PROGRESS,
-                  '正在重新创建新服务',
-                );
-                try {
-                  await createContainer(serviceName);
-                  event.reply(channel, MESSAGE_TYPE.INFO, '更新服务成功');
-                } catch (e) {
-                  console.error(e);
-                  event.reply(channel, MESSAGE_TYPE.ERROR, '更新服务失败');
-                }
-              } else {
-                event.reply(channel, MESSAGE_TYPE.ERROR, '未选择正确的镜像');
-                return;
-              }
+              await updateService(serviceName, event);
             }
           } else if (action === 'install') {
             await installService(serviceName, event);
@@ -229,7 +200,10 @@ export default async function init(ipcMain: IpcMain) {
   );
 }
 
-export async function createContainer(serviceName: ServiceName) {
+export async function createContainer(
+  serviceName: ServiceName,
+  version?: string,
+) {
   console.debug('创建容器', serviceName);
   const imageName = imageNameDict[serviceName];
   const containerName = containerNameDict[serviceName];
@@ -263,6 +237,11 @@ export async function createContainer(serviceName: ServiceName) {
     restart_policy: config.restart_policy,
     hostadd: [`${HOST_DOMAIN}:192.168.127.254`],
     netns: config.netns,
+    labels: version
+      ? {
+          version: version,
+        }
+      : undefined,
   });
 }
 
@@ -327,10 +306,23 @@ async function reCreateContainerAndStart(
   serviceName: ServiceName,
 ) {
   console.debug('正在重新创建服务', serviceName);
+  let containerInfos: PodmanContainerInfo[] = [];
+  containerInfos = await improveStablebility(async () => {
+    return connectionGlobal.listPodmanContainers({
+      all: true,
+    });
+  });
+  const oldContainerInfo = containerInfos.filter(
+    (item) => item.Names.indexOf(containerName) >= 0,
+  )[0];
+  const labels = oldContainerInfo.Labels;
   await container.remove();
   let newContainerInfo;
   try {
-    newContainerInfo = await createContainer(serviceName);
+    newContainerInfo = await createContainer(
+      serviceName,
+      labels && labels.version,
+    );
   } catch (e) {
     console.error(e);
     if (e && e.message && e.message.indexOf('ENOENT') >= 0) {
@@ -349,7 +341,7 @@ async function reCreateContainerAndStart(
 
   const containerName = containerNameDict[serviceName];
 
-  let containerInfos: PodmanContainerInfo[] = [];
+  // let containerInfos: PodmanContainerInfo[] = [];
   containerInfos = await improveStablebility(async () => {
     return connectionGlobal.listPodmanContainers({
       all: true,
@@ -419,7 +411,11 @@ export async function cleanImage(
     console.debug('containersHaveSameImage', containersHaveSameImage);
 
     if (containersHaveSameImage.length === 0) {
-      await removeImage(serviceName);
+      try {
+        await removeImage(serviceName);
+      } catch (e) {
+        console.warn(e);
+      }
     }
 
     event.reply(channel, MESSAGE_TYPE.INFO, '成功删除服务');
@@ -469,9 +465,11 @@ function getEventProxy(originEvent?: IpcMainEvent) {
 export async function installService(
   serviceName: ServiceName,
   originEvent?: IpcMainEvent,
+  tarPath?: string,
 ) {
   const event = getEventProxy(originEvent);
   let imagePath: boolean | string = false;
+  let version = '';
 
   // 不通过init中的监听方法调用时，需要自行选择镜像和安装podman
   let imageReady = false;
@@ -481,10 +479,12 @@ export async function installService(
     console.info(e);
   }
   if (!imageReady) {
-    imagePath = await selectImageFile(serviceName);
+    imagePath = tarPath ? tarPath : await selectImageFile(serviceName);
     if (!imagePath) {
       event.reply(channel, MESSAGE_TYPE.ERROR, '没有选择到正确的镜像文件');
       return;
+    } else {
+      version = extractVersionFromPath(imagePath);
     }
   }
 
@@ -526,7 +526,7 @@ export async function installService(
     | undefined = await improveStablebility(async () => {
     try {
       // 这里不要简化成return createContainer(serviceName);会导致无法捕获错误
-      const result = await createContainer(serviceName);
+      const result = await createContainer(serviceName, version);
       return result;
     } catch (e) {
       console.debug('安装服务失败', e);
@@ -601,6 +601,51 @@ export async function stopService(serviceName: ServiceName) {
   return container.stop();
 }
 
+export async function updateService(
+  serviceName: ServiceName,
+  originEvent?: IpcMainEvent,
+  tarPath?: string,
+) {
+  const event = getEventProxy(originEvent);
+  let version = '';
+  const result = await improveStablebility(async () => {
+    const imagePathForUpdate = tarPath
+      ? tarPath
+      : await selectImageFile(serviceName);
+    if (imagePathForUpdate) {
+      event.reply(
+        channel,
+        MESSAGE_TYPE.PROGRESS,
+        '正在导入镜像，这可能需要5分钟时间',
+      );
+      version = extractVersionFromPath(imagePathForUpdate);
+      return loadImageFromPath(serviceName, imagePathForUpdate);
+    } else {
+      return false;
+    }
+  });
+  if (result) {
+    event.reply(channel, MESSAGE_TYPE.PROGRESS, '正在删除旧版服务');
+    try {
+      await removeContainer(serviceName);
+    } catch (e) {
+      console.warn(e);
+    }
+
+    event.reply(channel, MESSAGE_TYPE.PROGRESS, '正在重新创建新服务');
+    try {
+      await createContainer(serviceName, version);
+      event.reply(channel, MESSAGE_TYPE.INFO, '更新服务成功');
+    } catch (e) {
+      console.error(e);
+      event.reply(channel, MESSAGE_TYPE.ERROR, '更新服务失败');
+    }
+  } else {
+    event.reply(channel, MESSAGE_TYPE.ERROR, '未选择正确的镜像');
+    return;
+  }
+}
+
 export async function monitorStatusIsHealthy(service: ServiceName) {
   console.debug('checking health', service);
   return new Promise<void>((resolve, reject) => {
@@ -643,4 +688,52 @@ export async function getServiceLogs(serviceName: ServiceName) {
       logs: cleanMultiplexedLog(logs),
     };
   }
+}
+
+/**
+ * 从路径中提取版本信息
+ */
+export function extractVersionFromPath(filePath: string) {
+  if (!filePath) return undefined;
+  const normalizedPath = path.normalize(filePath);
+
+  const parts = normalizedPath.split(path.sep);
+  const versionPattern = /^v?(\d+(\.\d+)+)$/i;
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const part = parts[i];
+    const versionMatch = part.match(versionPattern);
+    if (versionMatch) {
+      const version = versionMatch[1];
+      // 使用 semver 验证版本号
+      if (semver.valid(version)) {
+        return version;
+      }
+    }
+    if (i === parts.length - 1) {
+      const fileName = part;
+      const fileNameVersionPatterns = [
+        // 匹配 v1.2.3 或 V1.2.3
+        /[vV](\d+(\.\d+)+)/,
+        // 匹配 -1.2.3 或 _1.2.3 或 .1.2.3
+        /[-_.](\d+(\.\d+)+)/,
+        // 直接匹配版本号（确保不是其他数字，如日期）
+        /\b(\d+(\.\d+)+)\b(?!\d*[a-zA-Z])/,
+      ];
+
+      for (const pattern of fileNameVersionPatterns) {
+        const match = fileName.match(pattern);
+        if (match) {
+          const potentialVersion = match[1];
+          // 使用 semver 验证版本号
+          if (semver.valid(potentialVersion)) {
+            return potentialVersion;
+          }
+        }
+      }
+    }
+  }
+
+  // 如果没有找到版本，返回 undefined 而不是默认值
+  // 调用者应该处理 undefined 情况
+  return undefined;
 }

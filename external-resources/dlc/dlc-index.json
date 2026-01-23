@@ -1,0 +1,31 @@
+[
+  {
+    "id": "TRAINING_TAR",
+    "name": "学科培训包",
+    "versions": {
+      "2.0.0": {
+        "magnet": "magnet:?xt=urn:btih:a7f8c85dcef68ae7958f0f3548603ea9016897df&dn=ala-training-v2.0.0.tar&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce",
+        "comment": "第一个版本",
+        "riquire":{}
+      },
+      "2.0.2": {
+        "magnet": "magnet:?xt=urn:btih:98995512a1cf581a1baea19132b1a6550ec424fc&dn=ala-training-v2.0.2.tar&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce",
+        "comment": "相比上一个版本修复了一些问题",
+        "riquire":{}
+      }
+    }
+  },
+  {
+    "id": "TRAINING_COURSE",
+    "name": "学科培训课程数据",
+    "versions": {
+      "2.0.2": {
+        "magnet": "magnet:?xt=urn:btih:cff0fb96747c5fc4696af4c9fa8cd30330050250&dn=ai_learning_assistant.sql&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=wss%3A%2F%2F114.66.58.95%3A17853%2Fannounce",
+        "comment": "第一个版本",
+        "riquire":{
+          "TRAINING_TAR": "^2.0.0"
+        }
+      }
+    }
+  }
+]

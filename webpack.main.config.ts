@@ -1,8 +1,9 @@
-import type { Configuration } from 'webpack';
+import { type Configuration } from 'webpack';
 
 import { rules } from './webpack.rules';
 import { plugins } from './webpack.plugins';
-
+import CopyPlugin from 'copy-webpack-plugin';
+import TerserPlugin from 'terser-webpack-plugin';
 
 export const mainConfig: Configuration = {
   /**
@@ -14,8 +15,28 @@ export const mainConfig: Configuration = {
   module: {
     rules,
   },
-  plugins,
+  plugins: [
+    new CopyPlugin({
+      patterns: [
+        {
+          from: 'node_modules/node-datachannel',
+          to: 'node_modules/node-datachannel',
+        },
+      ],
+    }),
+    ...plugins,
+  ],
+  externals: {
+    'node-datachannel': 'node-datachannel',
+  },
   resolve: {
     extensions: ['.js', '.ts', '.jsx', '.tsx', '.css', '.scss', '.json', '.svg'],
+  },
+  optimization: {
+    minimizer: [
+      new TerserPlugin({
+        exclude: /node_modules\/node-datachannel\/test/,
+      }),
+    ],
   },
 };

@@ -1,7 +1,7 @@
 {
   "name": "ai-learning-assistant-launcher",
   "productName": "AI-Learning-Assistant-Launcher",
-  "version": "2.0.1",
+  "version": "2.0.1-p2p",
   "description": "My Electron application description",
   "main": ".webpack/main",
   "scripts": {
@@ -35,6 +35,7 @@
     "@types/cross-spawn": "^6.0.6",
     "@types/dockerode": "^3.3.40",
     "@types/form-data": "^2.2.1",
+    "@types/lodash": "^4.17.21",
     "@types/node": "^24.0.15",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
@@ -44,6 +45,7 @@
     "@vercel/webpack-asset-relocator-loader": "1.7.3",
     "@xterm/xterm": "^5.5.0",
     "antd": "^5.26.1",
+    "copy-webpack-plugin": "^13.0.1",
     "cpy": "^11.1.0",
     "cross-env": "^7.0.3",
     "cross-spawn": "^7.0.6",
@@ -62,17 +64,21 @@
     "iconv-lite": "^0.6.3",
     "isomorphic-git": "^1.32.0",
     "node-loader": "^2.1.0",
+    "node-polyfill-webpack-plugin": "^4.1.0",
     "path-browserify": "^1.0.1",
     "prettier": "3.6.1",
+    "process": "^0.11.10",
     "react-router-dom": "^7.6.2",
     "sass": "^1.89.2",
     "sass-loader": "^16.0.5",
     "style-loader": "^3.3.4",
     "sudo-prompt": "^9.2.1",
+    "terser-webpack-plugin": "^5.3.16",
     "ts-loader": "^9.5.2",
     "ts-node": "^10.9.2",
     "typescript": "~4.5.4",
     "uuid": "^11.1.0",
+    "webtorrent": "^2.8.5",
     "xterm-theme": "^1.1.0"
   },
   "dependencies": {
@@ -81,10 +87,12 @@
     "@langchain/google-genai": "^0.2.18",
     "@langchain/ollama": "^0.2.4",
     "@langchain/openai": "^0.6.14",
+    "@types/webtorrent": "^0.110.1",
     "electron-squirrel-startup": "^1.0.1",
     "langchain": "^0.3.35",
     "pdf-lib": "^1.17.1",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "semver": "^7.7.3"
   }
 }

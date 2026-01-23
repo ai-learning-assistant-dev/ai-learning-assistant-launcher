@@ -18,6 +18,7 @@ import { LeftOutlined, RightOutlined } from '@ant-design/icons';
 import { useTrainingServiceShortcut } from '../../containers/use-training-service-shortcut';
 import { useLogContainer } from '../../containers/backup';
 import { useVM } from '../../containers/use-vm';
+import { TorrentProgress } from '../../containers/torrent-progress';
 
 export default function Hello() {
   const trainingServiceShortcut = useTrainingServiceShortcut();
@@ -136,7 +137,12 @@ export default function Hello() {
 
   // 新增：打开使用文档
   const openUserManual = () => {
-    window.electron?.ipcRenderer.sendMessage('open-external-url', 'open', 'browser', 'https://docs.qq.com/aio/DS1NnZkZkdkFiSVdP');
+    window.electron?.ipcRenderer.sendMessage(
+      'open-external-url',
+      'open',
+      'browser',
+      'https://docs.qq.com/aio/DS1NnZkZkdkFiSVdP',
+    );
   };
   // 新增：打开使用文档
   // const openUserManual = async () => {
@@ -211,6 +217,15 @@ export default function Hello() {
   const removeTrainingService = async () => {
     setTrainingServiceRemoving(true);
     await trainingServiceShortcut.remove();
+    setTrainingServiceRemoving(false);
+  };
+
+  const updateCourseTrainingService = async () => {
+    setTrainingServiceStarting(true);
+    setTrainingServiceRemoving(true);
+    await trainingServiceShortcut.updateCourse();
+    message.success('学科培训更新成功');
+    setTrainingServiceStarting(false);
     setTrainingServiceRemoving(false);
   };
 
@@ -545,30 +560,57 @@ export default function Hello() {
                     </div>
                     <div className="feature-description">
                       <p className="description-text">
-                        AI辅助的学科知识培训，学员建档设立目标，帮助补齐技能知识短板
+                        AI辅助的学科知识培训，学员建档设立目标，帮助补齐技能知识短板。
+                        {trainingServiceShortcut.state !== '还未安装' &&
+                          `当前版本：${trainingServiceShortcut.versionInfo.currentVersion}`}
                       </p>
                     </div>
+                    {trainingServiceShortcut.versionInfo.haveNew && (
+                      <TorrentProgress
+                        id={'TRAINING_TAR'}
+                        version={
+                          trainingServiceShortcut.versionInfo.latestVersion
+                        }
+                      />
+                    )}
                   </div>
                   <div className="feature-button-container">
-                    <Button
-                      className="feature-button"
-                      block
-                      size="large"
-                      onClick={openTrainingService}
-                      loading={
-                        trainingServiceStarting ||
-                        trainingServiceShortcut.initing
-                      }
-                      disabled={
-                        trainingServiceRemoving ||
-                        !isPodmanInstalled ||
-                        wslLoading
-                      }
-                    >
-                      {trainingServiceShortcut.state === '还未安装'
-                        ? '安装'
-                        : '开始'}
-                    </Button>
+                    {((trainingServiceShortcut.state !== '还未安装' &&
+                      !trainingServiceShortcut.versionInfo.haveNew) ||
+                      trainingServiceShortcut.state === '还未安装') && (
+                      <Button
+                        className="feature-button"
+                        block
+                        size="large"
+                        onClick={openTrainingService}
+                        loading={
+                          trainingServiceStarting ||
+                          trainingServiceShortcut.initing
+                        }
+                        disabled={
+                          trainingServiceRemoving ||
+                          !isPodmanInstalled ||
+                          wslLoading
+                        }
+                      >
+                        {trainingServiceShortcut.state === '还未安装'
+                          ? '安装'
+                          : '开始'}
+                      </Button>
+                    )}
+                    {trainingServiceShortcut.state !== '还未安装' &&
+                      trainingServiceShortcut.versionInfo.haveNew && (
+                        <Button
+                          className="feature-button"
+                          block
+                          size="large"
+                          onClick={updateCourseTrainingService}
+                          loading={trainingServiceRemoving}
+                          disabled={!isPodmanInstalled || wslLoading}
+                        >
+                          更新课程
+                        </Button>
+                      )}
                     {trainingServiceShortcut.state !== '还未安装' && (
                       <Button
                         className="feature-button"
@@ -610,6 +652,8 @@ export default function Hello() {
                     <img src={jointBuildIcon} alt="共建计划" className="joint-build-icon" />
                     <span>共建计划</span>
                   </Button>
+                <NavLink to="/p2p-test">
+                  <Button className="manual-button">P2P测试</Button>
                 </NavLink>
                 <Button
                   className="status-indicator"

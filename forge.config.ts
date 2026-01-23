@@ -28,6 +28,11 @@ const config: ForgeConfig = {
   plugins: [
     new AutoUnpackNativesPlugin({}),
     new WebpackPlugin({
+      /* 
+        About WebTorrent：Forge配置此项可以避开CSP
+        TODO 如何向变化的Tracker和对等主机发送请求？
+       */
+      devContentSecurityPolicy: `default-src 'self' 'unsafe-inline' data:;script-src 'self' 'unsafe-inline' 'unsafe-eval';connect-src 'self' ws://127.0.0.1:8000 ws://121.40.137.135:8200;`,
       mainConfig,
       renderer: {
         config: rendererConfig,
@@ -65,44 +70,33 @@ const config: ForgeConfig = {
 
       const buildPath = outputPaths[0];
       const copyRules = [path.join(__dirname, 'external-resources', '**')];
+      const bigFileSuffix = [
+        '*.exe',
+        '*.msi',
+        '*.tar.zst',
+        '*.tar.gz',
+        '*.tar',
+        '*.mp4',
+      ];
       if (process.env.MAKE_MINI) {
-        copyRules.push(
-          '!' +
-            path.join(
-              __dirname,
-              'external-resources',
-              'ai-assistant-backend',
-              '*.exe',
-            ),
-        );
-        copyRules.push(
-          '!' +
-            path.join(
-              __dirname,
-              'external-resources',
-              'ai-assistant-backend',
-              '*.msi',
-            ),
-        );
-        copyRules.push(
-          '!' +
-            path.join(
-              __dirname,
-              'external-resources',
-              'ai-assistant-backend',
-              '*.tar.zst',
-            ),
-        );
-        copyRules.push(
-          '!' +
-            path.join(
-              __dirname,
-              'external-resources',
-              'ai-assistant-backend',
-              '*.tar.gz',
-            ),
-        );
+        bigFileSuffix.forEach((suffix) => {
+          copyRules.push(
+            '!' +
+              path.join(
+                __dirname,
+                'external-resources',
+                'ai-assistant-backend',
+                suffix,
+              ),
+          );
+        });
       }
+      // DLC内的大文件不打到包内
+      bigFileSuffix.forEach((suffix) => {
+        copyRules.push(
+          '!' + path.join(__dirname, 'external-resources', 'dlc', '**', suffix),
+        );
+      });
       try {
         await cpy(copyRules, path.join(buildPath, 'external-resources'));
       } catch (e) {
