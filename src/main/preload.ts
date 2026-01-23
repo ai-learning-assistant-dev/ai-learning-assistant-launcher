@@ -27,6 +27,7 @@ import {
   setTrayEnabledHandle,
   DiskInfo,
 } from './joint-build/type-info';
+import {
   DLCIndex,
   logsWebtorrentHandle,
   pauseWebtorrentHandle,
@@ -154,6 +155,7 @@ const mainHandle = {
     const handler = (_event: IpcRendererEvent, enabled: boolean) => callback(enabled);
     ipcRenderer.on('joint-build-status-changed', handler);
     return () => ipcRenderer.removeListener('joint-build-status-changed', handler);
+  },
   startWebtorrentHandle: async (url: string) => {
     return ipcInvoke(startWebtorrentHandle, url);
   },

@@ -652,6 +652,7 @@ export default function Hello() {
                     <img src={jointBuildIcon} alt="共建计划" className="joint-build-icon" />
                     <span>共建计划</span>
                   </Button>
+                </NavLink>
                 <NavLink to="/p2p-test">
                   <Button className="manual-button">P2P测试</Button>
                 </NavLink>
