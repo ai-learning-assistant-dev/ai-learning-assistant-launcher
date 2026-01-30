@@ -18,6 +18,7 @@ import path from 'path';
 import { appPath } from '../exec';
 import fs, { existsSync, mkdirSync, readFileSync, unlinkSync } from 'fs';
 import { compare } from 'semver';
+import { WEBTORRENT_CONFIG } from '../webtorrent-config';
 
 let client: WebTorrent.Instance | null = null;
 let uploadEnabled = true; // 默认开启上传
@@ -231,7 +232,10 @@ export async function destroyWebtorrentForInstall(
       torrent.pause();
       torrent.destroy({ destroyStore: false }, safeResolve);
 
-      setTimeout(safeResolve, 3000);
+      setTimeout(
+        safeResolve,
+        WEBTORRENT_CONFIG.TORRENT_DESTROY_CALLBACK_TIMEOUT,
+      );
     });
   }
 }
@@ -471,8 +475,8 @@ export async function waitTorrentDone(id: DLCId, version: string) {
 
   // 轮询检查种子是否完成
   return new Promise<WebTorrent.Torrent>((resolve, reject) => {
-    const checkInterval = 1000; // 1秒检查一次
-    const maxAttempts = 3600; // 最多检查1小时（3600秒）
+    const checkInterval = WEBTORRENT_CONFIG.DOWNLOAD_CHECK_INTERVAL;
+    const maxAttempts = WEBTORRENT_CONFIG.DOWNLOAD_MAX_ATTEMPTS;
     let attempts = 0;
 
     const intervalId = setInterval(() => {
@@ -503,8 +507,8 @@ export async function waitTorrentDone(id: DLCId, version: string) {
         return;
       }
 
-      // 输出进度信息（可选，每10秒输出一次）
-      if (attempts % 10 === 0) {
+      // 输出进度信息（可选，每N秒输出一次）
+      if (attempts % WEBTORRENT_CONFIG.DOWNLOAD_PROGRESS_LOG_INTERVAL === 0) {
         console.debug(
           `种子 ${currentTorrent.name} 下载进度: ${(currentTorrent.progress * 100).toFixed(2)}%`,
         );

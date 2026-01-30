@@ -22,6 +22,7 @@ export default function ObsidianApp() {
   const [downloading, setDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [isDownloadComplete, setIsDownloadComplete] = useState(false);
+  const [currentMagnet, setCurrentMagnet] = useState<string | null>(null);
 
   useEffect(() => {
     checkObsidianUpdate();
@@ -38,7 +39,7 @@ export default function ObsidianApp() {
   }, [downloading, isDownloadComplete]);
 
   const checkObsidianUpdate = async () => {
-    // 检查是否已经有下载完成的文件
+    // 检查是否已经有下载完成的文件，或正在下载中（用于恢复后台下载状态）
     try {
       const dlcIndex = await window.mainHandle.queryWebtorrentHandle();
       const obsidianDLC = dlcIndex.find(
@@ -48,9 +49,20 @@ export default function ObsidianApp() {
         const latestVersion = Object.keys(obsidianDLC.versions).sort().pop();
         if (latestVersion) {
           const versionInfo = obsidianDLC.versions[latestVersion];
-          if (versionInfo.progress && versionInfo.progress.progress >= 1) {
-            setIsDownloadComplete(true);
-            setDownloadProgress(100);
+          if (versionInfo.progress) {
+            const progress = versionInfo.progress.progress || 0;
+            if (progress >= 1) {
+              // 下载已完成
+              setIsDownloadComplete(true);
+              setDownloadProgress(100);
+              setDownloading(false);
+            } else if (progress > 0) {
+              // 正在下载中，恢复下载状态
+              setDownloading(true);
+              setDownloadProgress(Math.floor(progress * 100));
+              setCurrentMagnet(versionInfo.magnet);
+              setIsDownloadComplete(false);
+            }
           }
         }
       }
@@ -114,6 +126,7 @@ export default function ObsidianApp() {
 
       const versionInfo = obsidianDLC.versions[latestVersion];
       const magnet = versionInfo.magnet;
+      setCurrentMagnet(magnet);
 
       const result = await window.mainHandle.startWebtorrentHandle(magnet);
       if (result.success) {
@@ -125,6 +138,24 @@ export default function ObsidianApp() {
       console.error('下载Obsidian失败:', error);
       message.error('下载失败：' + error.message);
       setDownloading(false);
+      setCurrentMagnet(null);
+    }
+  };
+
+  const handleCancelDownload = async () => {
+    if (!currentMagnet) {
+      message.warning('没有正在进行的下载');
+      return;
+    }
+    try {
+      await window.mainHandle.pauseWebtorrentHandle(currentMagnet);
+      setDownloading(false);
+      setDownloadProgress(0);
+      setCurrentMagnet(null);
+      message.info('已取消下载');
+    } catch (error) {
+      console.error('取消下载失败:', error);
+      message.error('取消下载失败');
     }
   };
 
@@ -215,19 +246,23 @@ export default function ObsidianApp() {
                     strokeColor="#1677ff"
                   />
                 )}
-                <Button
-                  type={isDownloadComplete ? 'primary' : 'default'}
-                  shape="round"
-                  className={isDownloadComplete ? 'download-complete-btn' : ''}
-                  loading={false}
-                  onClick={handleDownloadOrInstall}
-                >
-                  {isDownloadComplete
-                    ? '安装Obsidian'
-                    : downloading
-                      ? '下载中...'
-                      : '更新Obsidian'}
-                </Button>
+                {downloading && !isDownloadComplete ? (
+                  <Button shape="round" danger onClick={handleCancelDownload}>
+                    取消下载
+                  </Button>
+                ) : (
+                  <Button
+                    type={isDownloadComplete ? 'primary' : 'default'}
+                    shape="round"
+                    className={
+                      isDownloadComplete ? 'download-complete-btn' : ''
+                    }
+                    loading={false}
+                    onClick={handleDownloadOrInstall}
+                  >
+                    {isDownloadComplete ? '安装Obsidian' : '更新Obsidian'}
+                  </Button>
+                )}
               </div>
             ),
             <Button

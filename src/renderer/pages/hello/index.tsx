@@ -207,6 +207,7 @@ export default function Hello() {
   const [launcherDownloadProgress, setLauncherDownloadProgress] = useState(0);
   const [launcherDownloadComplete, setLauncherDownloadComplete] =
     useState(false);
+  const [launcherMagnet, setLauncherMagnet] = useState<string | null>(null);
 
   // 轮询下载进度
   useEffect(() => {
@@ -262,7 +263,7 @@ export default function Hello() {
       const info = await window.mainHandle.checkLauncherUpdateHandle();
       setLauncherUpdateInfo(info);
 
-      // 检查是否已有下载完成的更新包
+      // 检查是否已有下载完成的更新包，或正在下载中（用于恢复后台下载状态）
       if (info?.haveNew) {
         const dlcIndex = await window.mainHandle.queryWebtorrentHandle();
         const dlc = dlcIndex.find(
@@ -270,9 +271,20 @@ export default function Hello() {
         );
         if (dlc) {
           const versionInfo = dlc.versions[info.latestVersion];
-          if (versionInfo?.progress?.progress >= 1) {
-            setLauncherDownloadComplete(true);
-            setLauncherDownloadProgress(100);
+          if (versionInfo?.progress) {
+            const progress = versionInfo.progress.progress || 0;
+            if (progress >= 1) {
+              // 下载已完成
+              setLauncherDownloadComplete(true);
+              setLauncherDownloadProgress(100);
+              setLauncherUpdating(false);
+            } else if (progress > 0) {
+              // 正在下载中，恢复下载状态
+              setLauncherUpdating(true);
+              setLauncherDownloadProgress(progress * 100);
+              setLauncherMagnet(versionInfo.magnet);
+              setLauncherDownloadComplete(false);
+            }
           }
         }
       }
@@ -311,6 +323,18 @@ export default function Hello() {
     setLauncherDownloadComplete(false);
 
     try {
+      // 获取 DLC 信息并保存 magnet
+      const dlcIndex = await window.mainHandle.queryWebtorrentHandle();
+      const dlc = dlcIndex.find(
+        (item) => item.id === 'AI_LEARNING_ASSISTANT_LAUNCHER',
+      );
+      if (dlc && launcherUpdateInfo) {
+        const versionInfo = dlc.versions[launcherUpdateInfo.latestVersion];
+        if (versionInfo?.magnet) {
+          setLauncherMagnet(versionInfo.magnet);
+        }
+      }
+
       const downloadResult =
         await window.mainHandle.downloadLauncherUpdateHandle();
 
@@ -324,12 +348,31 @@ export default function Hello() {
       setLauncherDownloadProgress(100);
       setLauncherDownloadComplete(true);
       setLauncherUpdating(false);
+      setLauncherMagnet(null);
       message.success('下载完成，点击按钮重启并更新');
     } catch (error) {
       console.error('更新启动器失败:', error);
       message.error('更新失败：' + error.message);
       setLauncherUpdating(false);
       setLauncherDownloadProgress(0);
+      setLauncherMagnet(null);
+    }
+  };
+
+  const handleCancelLauncherUpdate = async () => {
+    if (!launcherMagnet) {
+      message.warning('没有正在进行的下载');
+      return;
+    }
+    try {
+      await window.mainHandle.pauseWebtorrentHandle(launcherMagnet);
+      setLauncherUpdating(false);
+      setLauncherDownloadProgress(0);
+      setLauncherMagnet(null);
+      message.info('已取消下载');
+    } catch (error) {
+      console.error('取消下载失败:', error);
+      message.error('取消下载失败');
     }
   };
 
@@ -765,15 +808,25 @@ export default function Hello() {
                         strokeColor="#1677ff"
                       />
                     )}
-                    <Button
-                      className={`status-indicator update-button ${launcherDownloadComplete ? 'download-complete' : ''}`}
-                      onClick={handleLauncherUpdate}
-                      loading={launcherUpdating && launcherDownloadComplete}
-                    >
-                      <span className="log-text">
-                        {launcherDownloadComplete ? '重启并更新' : '更新'}
-                      </span>
-                    </Button>
+                    {launcherUpdating && !launcherDownloadComplete ? (
+                      <Button
+                        className="status-indicator update-button"
+                        danger
+                        onClick={handleCancelLauncherUpdate}
+                      >
+                        <span className="log-text">取消下载</span>
+                      </Button>
+                    ) : (
+                      <Button
+                        className={`status-indicator update-button ${launcherDownloadComplete ? 'download-complete' : ''}`}
+                        onClick={handleLauncherUpdate}
+                        loading={launcherUpdating && launcherDownloadComplete}
+                      >
+                        <span className="log-text">
+                          {launcherDownloadComplete ? '重启并更新' : '更新'}
+                        </span>
+                      </Button>
+                    )}
                   </div>
                 )}
                 <Button

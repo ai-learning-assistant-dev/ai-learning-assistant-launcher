@@ -21,7 +21,7 @@ import {
   statSync,
   rmSync,
   writeFileSync,
-  readFileSync,
+  appendFileSync,
 } from 'fs';
 import { spawn } from 'child_process';
 import AdmZip from 'adm-zip';
@@ -34,6 +34,70 @@ const currentVersion = packageJson.version;
 // 使用类型注解确保类型安全
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const originalFs: typeof import('fs') = require('original-fs');
+
+// 更新日志文件路径
+const updateLogPath = path.join(appPath, 'launcher-update.log');
+
+/**
+ * 写入更新日志到文件
+ * @param level 日志级别
+ * @param message 日志消息
+ * @param data 附加数据
+ */
+function writeUpdateLog(
+  level: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR',
+  message: string,
+  data?: unknown,
+) {
+  const timestamp = new Date().toISOString();
+  let logLine = `[${timestamp}] [${level}] ${message}`;
+  if (data !== undefined) {
+    try {
+      logLine += ` ${JSON.stringify(data)}`;
+    } catch {
+      logLine += ` [无法序列化的数据]`;
+    }
+  }
+  logLine += '\n';
+
+  try {
+    appendFileSync(updateLogPath, logLine, { encoding: 'utf8' });
+  } catch (err) {
+    console.error('写入更新日志失败:', err);
+  }
+
+  // 同时输出到控制台
+  switch (level) {
+    case 'DEBUG':
+      console.debug(message, data ?? '');
+      break;
+    case 'INFO':
+      console.log(message, data ?? '');
+      break;
+    case 'WARN':
+      console.warn(message, data ?? '');
+      break;
+    case 'ERROR':
+      console.error(message, data ?? '');
+      break;
+  }
+}
+
+/**
+ * 初始化日志文件（清空旧日志或添加分隔符）
+ */
+function initUpdateLog() {
+  const separator = `
+${'='.repeat(60)}
+[${new Date().toISOString()}] 启动器更新日志开始
+${'='.repeat(60)}
+`;
+  try {
+    appendFileSync(updateLogPath, separator, { encoding: 'utf8' });
+  } catch {
+    // 忽略错误
+  }
+}
 
 export default async function init(ipcMain: IpcMain) {
   ipcHandle(ipcMain, checkLauncherUpdateHandle, async (_event) =>
@@ -48,6 +112,9 @@ export default async function init(ipcMain: IpcMain) {
 }
 
 export async function checkLauncherUpdate() {
+  initUpdateLog();
+  writeUpdateLog('INFO', '[checkLauncherUpdate] 开始检查启动器更新');
+
   try {
     const latestVersionInfo = getLatestVersion(
       'AI_LEARNING_ASSISTANT_LAUNCHER',
@@ -55,7 +122,7 @@ export async function checkLauncherUpdate() {
     const latestVersion = latestVersionInfo.version;
     const haveNew = semver.lt(currentVersion, latestVersion);
 
-    console.debug('检查启动器更新:', {
+    writeUpdateLog('INFO', '[checkLauncherUpdate] 检查启动器更新完成', {
       currentVersion,
       latestVersion,
       haveNew,
@@ -67,7 +134,13 @@ export async function checkLauncherUpdate() {
       haveNew,
     };
   } catch (error) {
-    console.error('检查启动器更新失败:', error);
+    writeUpdateLog(
+      'ERROR',
+      '[checkLauncherUpdate] 检查启动器更新失败',
+      error instanceof Error
+        ? { message: error.message, stack: error.stack }
+        : error,
+    );
     return {
       currentVersion,
       latestVersion: currentVersion,
@@ -77,46 +150,65 @@ export async function checkLauncherUpdate() {
 }
 
 export async function downloadLauncherUpdate() {
+  writeUpdateLog('INFO', '[downloadLauncherUpdate] 开始下载启动器更新');
+
   try {
     const latestVersionInfo = getLatestVersion(
       'AI_LEARNING_ASSISTANT_LAUNCHER',
     );
 
-    console.debug('开始下载启动器更新:', latestVersionInfo);
+    writeUpdateLog('DEBUG', '[downloadLauncherUpdate] 获取到最新版本信息', {
+      version: latestVersionInfo.version,
+      magnet: latestVersionInfo.dlcInfo?.magnet?.substring(0, 50) + '...',
+    });
 
     await startWebtorrent(latestVersionInfo.dlcInfo.magnet);
+    writeUpdateLog('DEBUG', '[downloadLauncherUpdate] WebTorrent 已启动');
 
     const torrent = await waitTorrentDone(
       'AI_LEARNING_ASSISTANT_LAUNCHER',
       latestVersionInfo.version,
     );
 
-    console.debug('启动器更新下载完成');
+    const filePath = path.join(torrent.path, torrent.files[0].name);
+    writeUpdateLog('INFO', '[downloadLauncherUpdate] 启动器更新下载完成', {
+      path: torrent.path,
+      fileName: torrent.files[0].name,
+    });
 
     // 检查是否为本地开发环境
     const isDev = !app.isPackaged;
     if (isDev) {
-      console.warn('当前为本地开发环境，启动器更新功能可能无法正常工作');
+      writeUpdateLog(
+        'WARN',
+        '[downloadLauncherUpdate] 当前为本地开发环境，启动器更新功能可能无法正常工作',
+      );
     }
 
     return {
       success: true,
       version: latestVersionInfo.version,
-      filePath: path.join(torrent.path, torrent.files[0].name),
+      filePath,
       isDev,
     };
   } catch (error) {
-    console.error('下载启动器更新失败:', error);
+    writeUpdateLog(
+      'ERROR',
+      '[downloadLauncherUpdate] 下载启动器更新失败',
+      error instanceof Error
+        ? { message: error.message, stack: error.stack }
+        : error,
+    );
     throw error;
   }
 }
 
 export async function installLauncherUpdate() {
-  console.debug('[installLauncherUpdate] 开始执行安装更新');
+  writeUpdateLog('INFO', '[installLauncherUpdate] 开始执行安装更新');
 
   const isPackaged = app.isPackaged;
   if (!isPackaged) {
-    console.warn('[installLauncherUpdate] 开发模式下不支持自动更新');
+    writeUpdateLog('WARN', '[installLauncherUpdate] 开发模式下不支持自动更新');
     return {
       success: false,
       message: '开发模式下不支持自动更新，请手动解压',
@@ -124,12 +216,12 @@ export async function installLauncherUpdate() {
   }
 
   try {
-    console.debug('[installLauncherUpdate] 获取最新版本信息...');
+    writeUpdateLog('DEBUG', '[installLauncherUpdate] 获取最新版本信息...');
     const latestVersionInfo = getLatestVersion(
       'AI_LEARNING_ASSISTANT_LAUNCHER',
     );
     const version = latestVersionInfo.version;
-    console.debug('[installLauncherUpdate] 最新版本:', version);
+    writeUpdateLog('DEBUG', '[installLauncherUpdate] 最新版本:', version);
 
     const downloadPath = path.join(
       appPath,
@@ -149,10 +241,11 @@ export async function installLauncherUpdate() {
     console.debug('[installLauncherUpdate] 文件句柄已释放');
 
     const files = readdirSync(downloadPath);
-    console.debug('[installLauncherUpdate] 下载目录文件列表:', files);
+    writeUpdateLog('DEBUG', '[installLauncherUpdate] 下载目录文件列表:', files);
     const zipFile = files.find((f) => f.endsWith('.zip'));
 
     if (!zipFile) {
+      writeUpdateLog('ERROR', '[installLauncherUpdate] 未找到下载的更新包');
       throw new Error('未找到下载的更新包');
     }
 
@@ -161,9 +254,12 @@ export async function installLauncherUpdate() {
 
     // ✅ 创建临时目录
     const tempDir = path.join(appPath, 'update-temp');
-    console.debug('[installLauncherUpdate] 临时目录:', tempDir);
+    writeUpdateLog('DEBUG', '[installLauncherUpdate] 临时目录:', tempDir);
     if (existsSync(tempDir)) {
-      console.debug('[installLauncherUpdate] 清理已存在的临时目录...');
+      writeUpdateLog(
+        'DEBUG',
+        '[installLauncherUpdate] 清理已存在的临时目录...',
+      );
       rmSync(tempDir, { recursive: true, force: true });
     }
     mkdirSync(tempDir, { recursive: true });
@@ -195,7 +291,8 @@ export async function installLauncherUpdate() {
     try {
       const zip = new AdmZip(tempZipPath);
       const zipEntries = zip.getEntries();
-      console.log(
+      writeUpdateLog(
+        'DEBUG',
         '[installLauncherUpdate] ZIP包含的文件数量:',
         zipEntries.length,
       );
@@ -218,7 +315,7 @@ export async function installLauncherUpdate() {
           originalFs.writeFileSync(entryPath, content);
         }
       }
-      console.log('[installLauncherUpdate] 解压完成');
+      writeUpdateLog('INFO', '[installLauncherUpdate] 解压完成');
     } catch (extractError) {
       console.error('[installLauncherUpdate] 解压失败:', extractError);
       throw extractError;
@@ -246,10 +343,18 @@ export async function installLauncherUpdate() {
     const newExePath = findExe(extractDir);
 
     if (!newExePath) {
+      writeUpdateLog(
+        'ERROR',
+        '[installLauncherUpdate] 未在更新包中找到启动器可执行文件',
+      );
       throw new Error('未在更新包中找到启动器可执行文件');
     }
 
-    console.debug('找到新版本可执行文件:', newExePath);
+    writeUpdateLog(
+      'DEBUG',
+      '[installLauncherUpdate] 找到新版本可执行文件:',
+      newExePath,
+    );
 
     const currentExePath = app.getPath('exe');
     const currentExeDir = path.dirname(currentExePath);
@@ -371,10 +476,12 @@ start "" "${currentExePath}"
       };
     }
   } catch (error) {
-    console.error('[installLauncherUpdate] 安装启动器更新失败:', error);
-    console.error(
-      '[installLauncherUpdate] 错误堆栈:',
-      error instanceof Error ? error.stack : '无堆栈信息',
+    writeUpdateLog(
+      'ERROR',
+      '[installLauncherUpdate] 安装启动器更新失败',
+      error instanceof Error
+        ? { message: error.message, stack: error.stack }
+        : error,
     );
     throw error;
   }

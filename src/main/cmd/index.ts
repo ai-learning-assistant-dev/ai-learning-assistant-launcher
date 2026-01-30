@@ -23,24 +23,7 @@ import { RunResult } from '@podman-desktop/api';
 import { podMachineName } from '../podman-desktop/type-info';
 import { isVTReady, isWSLInstall, wslVersion } from './is-wsl-install';
 import { loggerFactory } from '../terminal-log';
-
-/**
- * 安装程序相关的时间配置（单位：毫秒）
- */
-const INSTALL_TIMING_CONFIG = {
-  /** 销毁 torrent 后等待文件句柄释放的时间 */
-  TORRENT_DESTROY_WAIT: 2000,
-  /** 重试的基础等待时间 */
-  RETRY_BASE_WAIT: 1000,
-  /** 每次重试增加的等待时间 */
-  RETRY_INCREMENT: 1000,
-  /** 所有重试失败后的最终等待时间 */
-  FINAL_RETRY_WAIT: 10000,
-  /** 最大重试次数 */
-  MAX_RETRIES: 8,
-  /** LM Studio 安装检测命令超时时间 */
-  LM_STUDIO_CHECK_TIMEOUT: 15000,
-} as const;
+import { WEBTORRENT_CONFIG } from '../webtorrent-config';
 
 /**
  * 判断错误是否为 EBUSY 错误（文件被占用）
@@ -85,16 +68,16 @@ async function executeWithRetry(
   options: RetryExecuteOptions,
 ): Promise<boolean> {
   const { exePath, args, logPrefix } = options;
-  const maxRetries = INSTALL_TIMING_CONFIG.MAX_RETRIES;
+  const maxRetries = WEBTORRENT_CONFIG.MAX_RETRIES;
 
   for (let retry = 0; retry < maxRetries; retry++) {
     try {
       // 每次重试前等待更长时间，让文件句柄有充足时间释放
       const waitTime =
         retry === 0
-          ? INSTALL_TIMING_CONFIG.RETRY_BASE_WAIT
-          : INSTALL_TIMING_CONFIG.RETRY_BASE_WAIT +
-            retry * INSTALL_TIMING_CONFIG.RETRY_INCREMENT;
+          ? WEBTORRENT_CONFIG.RETRY_BASE_WAIT
+          : WEBTORRENT_CONFIG.RETRY_BASE_WAIT +
+            retry * WEBTORRENT_CONFIG.RETRY_INCREMENT;
       await new Promise((resolve) => setTimeout(resolve, waitTime));
 
       console.debug(
@@ -112,7 +95,7 @@ async function executeWithRetry(
         // 所有重试都失败了，尝试最后一次长等待
         console.warn(`[${logPrefix}] 所有重试都失败，尝试最后一次长等待...`);
         await new Promise((resolve) =>
-          setTimeout(resolve, INSTALL_TIMING_CONFIG.FINAL_RETRY_WAIT),
+          setTimeout(resolve, WEBTORRENT_CONFIG.FINAL_RETRY_WAIT),
         );
         try {
           const result = await commandLine.exec(exePath, args);
@@ -179,7 +162,7 @@ async function installFromP2POrFallback(
             await destroyWebtorrentForInstall(versionInfo.magnet);
             // 等待额外的时间确保文件句柄完全释放
             await new Promise((resolve) =>
-              setTimeout(resolve, INSTALL_TIMING_CONFIG.TORRENT_DESTROY_WAIT),
+              setTimeout(resolve, WEBTORRENT_CONFIG.TORRENT_DESTROY_WAIT),
             );
             console.debug(`[${logPrefix}] 种子已销毁，等待完成`);
           } catch (e) {
@@ -734,7 +717,7 @@ export async function isLMStudioInstall() {
       new Promise<RunResult>((resolve, reject) =>
         setTimeout(
           () => reject('isLMStudioInstall命令超时'),
-          INSTALL_TIMING_CONFIG.LM_STUDIO_CHECK_TIMEOUT,
+          WEBTORRENT_CONFIG.LM_STUDIO_CHECK_TIMEOUT,
         ),
       ),
       // 如果用户安装lmstudio然后又卸载了lmstudio，那么这个命令会一直卡着，也不报错，所以要用一个超时promise与它竞赛

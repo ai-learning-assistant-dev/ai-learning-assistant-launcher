@@ -6,12 +6,12 @@
       "2.0.0": {
         "magnet": "magnet:?xt=urn:btih:a7f8c85dcef68ae7958f0f3548603ea9016897df&dn=ala-training-v2.0.0.tar&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce",
         "comment": "第一个版本",
-        "riquire": {}
+        "require": {}
       },
       "2.0.2": {
         "magnet": "magnet:?xt=urn:btih:98995512a1cf581a1baea19132b1a6550ec424fc&dn=ala-training-v2.0.2.tar&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce",
         "comment": "相比上一个版本修复了一些问题",
-        "riquire": {}
+        "require": {}
       }
     }
   },
@@ -22,7 +22,7 @@
       "2.0.2": {
         "magnet": "magnet:?xt=urn:btih:cff0fb96747c5fc4696af4c9fa8cd30330050250&dn=ai_learning_assistant.sql&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=wss%3A%2F%2F114.66.58.95%3A17853%2Fannounce",
         "comment": "第一个版本",
-        "riquire": {
+        "require": {
           "TRAINING_TAR": "^2.0.0"
         }
       }
@@ -35,7 +35,7 @@
       "2.0.3": {
         "magnet": "magnet:?xt=urn:btih:5e685a7cbe4045efc40f7a593dddfdf56ae7c59d&dn=AI-Learning-Assistant-Launcher-win32-x64-2.0.3.zip&tr=wss%3A%2F%2Ftracker.openwebtorrent.com&tr=wss%3A%2F%2Ftracker.btorrent.xyz",
         "comment": "第一个版本",
-        "riquire": {}
+        "require": {}
       }
     }
   },
@@ -46,7 +46,7 @@
       "1.11.4": {
         "magnet": "magnet:?xt=urn:btih:0e35e31fcbfa86153cd155f24c5d835e977d7d8b&dn=Obsidian-1.11.4.exe&tr=wss%3A%2F%2Ftracker.openwebtorrent.com&tr=wss%3A%2F%2Ftracker.btorrent.xyz",
         "comment": "第一个版本",
-        "riquire": {}
+        "require": {}
       }
     }
   },
@@ -57,7 +57,7 @@
       "0.3.39": {
         "magnet": "magnet:?xt=urn:btih:f99095d4fc565a5e7fcf971f80817d8dbf617c97&dn=LM-Studio-0.3.39-x64.exe&tr=wss%3A%2F%2Ftracker.openwebtorrent.com&tr=wss%3A%2F%2Ftracker.btorrent.xyz",
         "comment": "第一个版本",
-        "riquire": {}
+        "require": {}
       }
     }
   }

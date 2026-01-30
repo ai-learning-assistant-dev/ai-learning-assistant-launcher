@@ -75,6 +75,7 @@ export default function LMService() {
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [isDownloadComplete, setIsDownloadComplete] = useState(false);
   const [latestVersion, setLatestVersion] = useState<string | null>(null);
+  const [lmStudioMagnet, setLmStudioMagnet] = useState<string | null>(null);
 
   useEffect(() => {
     checkLMStudioUpdate();
@@ -91,7 +92,7 @@ export default function LMService() {
   }, [downloading, isDownloadComplete]);
 
   const checkLMStudioUpdate = async () => {
-    // 检查是否已经有下载完成的文件
+    // 检查是否已经有下载完成的文件，或正在下载中（用于恢复后台下载状态）
     try {
       const dlcIndex = await window.mainHandle.queryWebtorrentHandle();
       const lmStudioDLC = dlcIndex.find(
@@ -102,9 +103,20 @@ export default function LMService() {
         if (version) {
           setLatestVersion(version);
           const versionInfo = lmStudioDLC.versions[version];
-          if (versionInfo.progress && versionInfo.progress.progress >= 1) {
-            setIsDownloadComplete(true);
-            setDownloadProgress(100);
+          if (versionInfo.progress) {
+            const progress = versionInfo.progress.progress || 0;
+            if (progress >= 1) {
+              // 下载已完成
+              setIsDownloadComplete(true);
+              setDownloadProgress(100);
+              setDownloading(false);
+            } else if (progress > 0) {
+              // 正在下载中，恢复下载状态
+              setDownloading(true);
+              setDownloadProgress(Math.floor(progress * 100));
+              setLmStudioMagnet(versionInfo.magnet);
+              setIsDownloadComplete(false);
+            }
           }
         }
       }
@@ -169,6 +181,7 @@ export default function LMService() {
       setLatestVersion(version);
       const versionInfo = lmStudioDLC.versions[version];
       const magnet = versionInfo.magnet;
+      setLmStudioMagnet(magnet);
 
       const result = await window.mainHandle.startWebtorrentHandle(magnet);
       if (result.success) {
@@ -180,6 +193,24 @@ export default function LMService() {
       console.error('下载LM Studio失败:', error);
       message.error('下载失败：' + (error as Error).message);
       setDownloading(false);
+      setLmStudioMagnet(null);
+    }
+  };
+
+  const handleCancelLMStudioDownload = async () => {
+    if (!lmStudioMagnet) {
+      message.warning('没有正在进行的下载');
+      return;
+    }
+    try {
+      await window.mainHandle.pauseWebtorrentHandle(lmStudioMagnet);
+      setDownloading(false);
+      setDownloadProgress(0);
+      setLmStudioMagnet(null);
+      message.info('已取消下载');
+    } catch (error) {
+      console.error('取消下载失败:', error);
+      message.error('取消下载失败');
     }
   };
   // const llmContainer = containers.filter(
@@ -285,26 +316,37 @@ export default function LMService() {
                       strokeColor="#1677ff"
                     />
                   )}
-                  <Button
-                    type={isDownloadComplete ? 'primary' : 'default'}
-                    shape="round"
-                    className={
-                      isDownloadComplete ? 'download-complete-btn' : ''
-                    }
-                    loading={
-                      checkingWsl ||
-                      (cmdLoading &&
-                        cmdOperating.serviceName === 'lm-studio' &&
-                        cmdOperating.actionName === 'install')
-                    }
-                    onClick={handleDownloadOrInstallLMStudio}
-                  >
-                    {isDownloadComplete
-                      ? `安装 ${latestVersion || ''}`
-                      : downloading
-                        ? '下载中...'
-                        : '下载并安装LMStudio'}
-                  </Button>
+                  {downloading && !isDownloadComplete ? (
+                    <Button
+                      shape="round"
+                      danger
+                      onClick={handleCancelLMStudioDownload}
+                    >
+                      取消下载
+                    </Button>
+                  ) : (
+                    <Button
+                      type={isDownloadComplete ? 'primary' : 'default'}
+                      shape="round"
+                      className={
+                        isDownloadComplete ? 'download-complete-btn' : ''
+                      }
+                      loading={
+                        checkingWsl ||
+                        (cmdLoading &&
+                          cmdOperating.serviceName === 'lm-studio' &&
+                          cmdOperating.actionName === 'install')
+                      }
+                      disabled={checkingWsl}
+                      onClick={handleDownloadOrInstallLMStudio}
+                    >
+                      {checkingWsl
+                        ? '检测安装状态...'
+                        : isDownloadComplete
+                          ? `安装 ${latestVersion || ''}`
+                          : '下载并安装LMStudio'}
+                    </Button>
+                  )}
                 </div>
               )}
             </div>
