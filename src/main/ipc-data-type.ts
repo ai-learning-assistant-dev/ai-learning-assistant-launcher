@@ -17,7 +17,8 @@ export type Channels =
   | 'backup'
   | 'open-external-url'
   | 'webtorrent'
-  | 'launcher-update';
+  | 'launcher-update'
+  | 'native-training-service';
 
 export enum MESSAGE_TYPE {
   /** 阻断性错误，会把转圈中的按钮变成不转圈 */
