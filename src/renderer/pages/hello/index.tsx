@@ -1,4 +1,12 @@
-import { Button, message, Space, Modal, notification, Popconfirm } from 'antd';
+import {
+  Button,
+  message,
+  Space,
+  Modal,
+  notification,
+  Popconfirm,
+  Progress,
+} from 'antd';
 import { NavLink } from 'react-router-dom';
 import { useEffect, useState, useRef } from 'react'; // 添加 useRef 导入
 import obsidianLogo from './2023_Obsidian_logo.png';
@@ -176,6 +184,7 @@ export default function Hello() {
 
   useEffect(() => {
     startAutoSlide();
+    checkLauncherUpdate();
 
     return () => {
       clearSlideInterval();
@@ -213,6 +222,50 @@ export default function Hello() {
   };
 
   const [trainingServiceRemoving, setTrainingServiceRemoving] = useState(false);
+  const [launcherUpdateInfo, setLauncherUpdateInfo] = useState<{
+    currentVersion: string;
+    latestVersion: string;
+    haveNew: boolean;
+  } | null>(null);
+  const [launcherUpdating, setLauncherUpdating] = useState(false);
+  const [launcherDownloadProgress, setLauncherDownloadProgress] = useState(0);
+  const [launcherDownloadComplete, setLauncherDownloadComplete] =
+    useState(false);
+  const [launcherMagnet, setLauncherMagnet] = useState<string | null>(null);
+
+  // 轮询下载进度
+  useEffect(() => {
+    if (!launcherUpdating || !launcherUpdateInfo?.haveNew) return;
+
+    let mounted = true;
+    const fetchProgress = async () => {
+      try {
+        const dlcIndex = await window.mainHandle.queryWebtorrentHandle();
+        const dlc = dlcIndex.find(
+          (item) => item.id === 'AI_LEARNING_ASSISTANT_LAUNCHER',
+        );
+        if (!dlc || !mounted) return;
+
+        const versionInfo = dlc.versions[launcherUpdateInfo.latestVersion];
+        if (versionInfo?.progress) {
+          const progress = (versionInfo.progress.progress || 0) * 100;
+          if (mounted) {
+            setLauncherDownloadProgress(progress);
+          }
+        }
+      } catch (error) {
+        console.error('获取下载进度失败:', error);
+      }
+    };
+
+    fetchProgress();
+    const intervalId = setInterval(fetchProgress, 1000);
+
+    return () => {
+      mounted = false;
+      clearInterval(intervalId);
+    };
+  }, [launcherUpdating, launcherUpdateInfo]);
 
   const removeTrainingService = async () => {
     setTrainingServiceRemoving(true);
@@ -227,6 +280,124 @@ export default function Hello() {
     message.success('学科培训更新成功');
     setTrainingServiceStarting(false);
     setTrainingServiceRemoving(false);
+  };
+
+  const checkLauncherUpdate = async () => {
+    try {
+      const info = await window.mainHandle.checkLauncherUpdateHandle();
+      setLauncherUpdateInfo(info);
+
+      // 检查是否已有下载完成的更新包，或正在下载中（用于恢复后台下载状态）
+      if (info?.haveNew) {
+        const dlcIndex = await window.mainHandle.queryWebtorrentHandle();
+        const dlc = dlcIndex.find(
+          (item) => item.id === 'AI_LEARNING_ASSISTANT_LAUNCHER',
+        );
+        if (dlc) {
+          const versionInfo = dlc.versions[info.latestVersion];
+          if (versionInfo?.progress) {
+            const progress = versionInfo.progress.progress || 0;
+            if (progress >= 1) {
+              // 下载已完成
+              setLauncherDownloadComplete(true);
+              setLauncherDownloadProgress(100);
+              setLauncherUpdating(false);
+            } else if (progress > 0) {
+              // 正在下载中，恢复下载状态
+              setLauncherUpdating(true);
+              setLauncherDownloadProgress(progress * 100);
+              setLauncherMagnet(versionInfo.magnet);
+              setLauncherDownloadComplete(false);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('检查启动器更新失败:', error);
+    }
+  };
+
+  const handleLauncherUpdate = async () => {
+    if (!launcherUpdateInfo || !launcherUpdateInfo.haveNew) {
+      message.info('已是最新版本');
+      return;
+    }
+
+    // 如果下载已完成，直接执行安装
+    if (launcherDownloadComplete) {
+      setLauncherUpdating(true);
+      try {
+        const result = await window.mainHandle.installLauncherUpdateHandle();
+        if (result.success) {
+          message.success(result.message);
+        } else {
+          message.warning(result.message);
+        }
+      } catch (error) {
+        console.error('安装启动器更新失败:', error);
+        message.error('安装失败：' + error.message);
+      } finally {
+        setLauncherUpdating(false);
+      }
+      return;
+    }
+
+    setLauncherUpdating(true);
+    setLauncherDownloadProgress(0);
+    setLauncherDownloadComplete(false);
+
+    try {
+      // 获取 DLC 信息并保存 magnet
+      const dlcIndex = await window.mainHandle.queryWebtorrentHandle();
+      const dlc = dlcIndex.find(
+        (item) => item.id === 'AI_LEARNING_ASSISTANT_LAUNCHER',
+      );
+      if (dlc && launcherUpdateInfo) {
+        const versionInfo = dlc.versions[launcherUpdateInfo.latestVersion];
+        if (versionInfo?.magnet) {
+          setLauncherMagnet(versionInfo.magnet);
+        }
+      }
+
+      const downloadResult =
+        await window.mainHandle.downloadLauncherUpdateHandle();
+
+      // 开发模式下不执行安装，直接提示
+      if (downloadResult.isDev) {
+        message.warning('开发模式下不支持自动更新，请手动解压');
+        setLauncherUpdating(false);
+        return;
+      }
+
+      setLauncherDownloadProgress(100);
+      setLauncherDownloadComplete(true);
+      setLauncherUpdating(false);
+      setLauncherMagnet(null);
+      message.success('下载完成，点击按钮重启并更新');
+    } catch (error) {
+      console.error('更新启动器失败:', error);
+      message.error('更新失败：' + error.message);
+      setLauncherUpdating(false);
+      setLauncherDownloadProgress(0);
+      setLauncherMagnet(null);
+    }
+  };
+
+  const handleCancelLauncherUpdate = async () => {
+    if (!launcherMagnet) {
+      message.warning('没有正在进行的下载');
+      return;
+    }
+    try {
+      await window.mainHandle.pauseWebtorrentHandle(launcherMagnet);
+      setLauncherUpdating(false);
+      setLauncherDownloadProgress(0);
+      setLauncherMagnet(null);
+      message.info('已取消下载');
+    } catch (error) {
+      console.error('取消下载失败:', error);
+      message.error('取消下载失败');
+    }
   };
 
   const wslStatusText = () => {
@@ -649,13 +820,49 @@ export default function Hello() {
               <div className="log-export">
                 <NavLink to="/joint-build" className="joint-build-link">
                   <Button className="joint-build-button">
-                    <img src={jointBuildIcon} alt="共建计划" className="joint-build-icon" />
+                    <img
+                      src={jointBuildIcon}
+                      alt="共建计划"
+                      className="joint-build-icon"
+                    />
                     <span>共建计划</span>
                   </Button>
                 </NavLink>
-                <NavLink to="/p2p-test">
+                {/* <NavLink to="/p2p-test">
                   <Button className="manual-button">P2P测试</Button>
-                </NavLink>
+                </NavLink> */}
+                {launcherUpdateInfo?.haveNew && (
+                  <div className="launcher-update-wrapper">
+                    {launcherUpdating && !launcherDownloadComplete && (
+                      <Progress
+                        type="circle"
+                        percent={Math.round(launcherDownloadProgress)}
+                        size={28}
+                        strokeWidth={10}
+                        strokeColor="#1677ff"
+                      />
+                    )}
+                    {launcherUpdating && !launcherDownloadComplete ? (
+                      <Button
+                        className="status-indicator update-button"
+                        danger
+                        onClick={handleCancelLauncherUpdate}
+                      >
+                        <span className="log-text">取消下载</span>
+                      </Button>
+                    ) : (
+                      <Button
+                        className={`status-indicator update-button ${launcherDownloadComplete ? 'download-complete' : ''}`}
+                        onClick={handleLauncherUpdate}
+                        loading={launcherUpdating && launcherDownloadComplete}
+                      >
+                        <span className="log-text">
+                          {launcherDownloadComplete ? '重启并更新' : '更新'}
+                        </span>
+                      </Button>
+                    )}
+                  </div>
+                )}
                 <Button
                   className="status-indicator"
                   onClick={handleExportLogs}

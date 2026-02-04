@@ -79,8 +79,8 @@ const createWindow = (): void => {
 
 export async function installTrainingService() {
   const latestVersion = getLatestVersion('TRAINING_TAR');
-  const torrent = await startWebtorrent(latestVersion.dlcInfo.magnet);
-  await waitTorrentDone('TRAINING_TAR', latestVersion.version);
+  await startWebtorrent(latestVersion.dlcInfo.magnet);
+  const torrent = await waitTorrentDone('TRAINING_TAR', latestVersion.version);
   const tarPath = path.join(torrent.path, torrent.files[0].name);
   return installService('TRAINING', null, tarPath);
 }
@@ -117,8 +117,11 @@ export async function updateCourseTrainingService() {
   }
   if ((await courseHaveNewVersionTrainingService()).haveNew) {
     const latestVersion = getLatestVersion('TRAINING_TAR');
-    const torrent = await startWebtorrent(latestVersion.dlcInfo.magnet);
-    await waitTorrentDone('TRAINING_TAR', latestVersion.version);
+    await startWebtorrent(latestVersion.dlcInfo.magnet);
+    const torrent = await waitTorrentDone(
+      'TRAINING_TAR',
+      latestVersion.version,
+    );
     try {
       await stopService('TRAINING');
       await removeService('TRAINING');

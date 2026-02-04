@@ -110,3 +110,7 @@ external-resources/dlc/**/*.tar
 external-resources/dlc/**/*.zip
 external-resources/dlc/**/*.sql
 external-resources/dlc/**/*.torrent
+
+# 忽略启动器更新临时目录
+update-temp/
+update.bat

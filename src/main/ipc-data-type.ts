@@ -16,7 +16,8 @@ export type Channels =
   | 'training-service'
   | 'backup'
   | 'open-external-url'
-  | 'webtorrent';
+  | 'webtorrent'
+  | 'launcher-update';
 
 export enum MESSAGE_TYPE {
   /** 阻断性错误，会把转圈中的按钮变成不转圈 */
@@ -69,11 +70,10 @@ import {
   ActionName as LogActionName,
   ServiceName as LogServiceName,
 } from './backup/type-info';
-import { 
+import {
   ActionName as ActionNameUrl,
   ServiceName as ServiceNameUrl,
 } from './external-url/type-info';
-
 
 export type AllAction =
   | ActionNamePodman
