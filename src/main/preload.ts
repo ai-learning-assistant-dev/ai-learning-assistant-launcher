@@ -44,6 +44,16 @@ import {
   downloadLauncherUpdateHandle,
   installLauncherUpdateHandle,
 } from './launcher-update/type-info';
+import {
+  courseHaveNewVersionNativeTrainingServiceHandle,
+  installNativeTrainingServiceHandle,
+  logsNativeTrainingServiceHandle,
+  queryNativeTrainingServiceHandle,
+  removeNativeTrainingServiceHandle,
+  startNativeTrainingServiceHandle,
+  updateCourseNativeTrainingServiceHandle,
+} from './native-training-service/type-info';
+import { NativeServiceInfo } from './native-script/type-info';
 
 const electronHandler = {
   ipcRenderer: {
@@ -143,6 +153,33 @@ const mainHandle = {
       logsTrainingServiceHandle,
     );
   },
+  queryNativeTrainingServiceHandle: async () => {
+    return ipcInvoke<NativeServiceInfo>(queryNativeTrainingServiceHandle);
+  },
+  installNativeTrainingServiceHandle: async () => {
+    return ipcInvoke(installNativeTrainingServiceHandle);
+  },
+  startNativeTrainingServiceHandle: async () => {
+    return ipcInvoke(startNativeTrainingServiceHandle);
+  },
+  removeNativeTrainingServiceHandle: async () => {
+    return ipcInvoke(removeNativeTrainingServiceHandle);
+  },
+  updateCourseNativeTrainingServiceHandle: async () => {
+    return ipcInvoke(updateCourseNativeTrainingServiceHandle);
+  },
+  courseHaveNewVersionNativeTrainingServiceHandle: async () => {
+    return ipcInvoke<{
+      currentVersion: string;
+      latestVersion: string;
+      haveNew: boolean;
+    }>(courseHaveNewVersionNativeTrainingServiceHandle);
+  },
+  logsNativeTrainingServiceHandle: async () => {
+    return ipcInvoke<{ imageId: string; logs: string }>(
+      logsNativeTrainingServiceHandle,
+    );
+  },
   // 共建计划相关
   selectJointBuildFolder: async (): Promise<string | null> => {
     return ipcInvoke(selectFolderHandle);
@@ -155,14 +192,17 @@ const mainHandle = {
   },
   // 托盘菜单事件监听
   onNavigateTo: (callback: (route: string) => void) => {
-    const handler = (_event: IpcRendererEvent, route: string) => callback(route);
+    const handler = (_event: IpcRendererEvent, route: string) =>
+      callback(route);
     ipcRenderer.on('navigate-to', handler);
     return () => ipcRenderer.removeListener('navigate-to', handler);
   },
   onJointBuildStatusChanged: (callback: (enabled: boolean) => void) => {
-    const handler = (_event: IpcRendererEvent, enabled: boolean) => callback(enabled);
+    const handler = (_event: IpcRendererEvent, enabled: boolean) =>
+      callback(enabled);
     ipcRenderer.on('joint-build-status-changed', handler);
-    return () => ipcRenderer.removeListener('joint-build-status-changed', handler);
+    return () =>
+      ipcRenderer.removeListener('joint-build-status-changed', handler);
   },
   startWebtorrentHandle: async (url: string) => {
     return ipcInvoke<

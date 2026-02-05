@@ -23,13 +23,13 @@ import frame8 from './Frame 8.png';
 import jointBuildIcon from '../../../../icons/joint_build.png';
 import './index.scss';
 import { LeftOutlined, RightOutlined } from '@ant-design/icons';
-import { useTrainingServiceShortcut } from '../../containers/use-training-service-shortcut';
+import { useNativeTrainingServiceShortcut } from '../../containers/use-native-training-service-shortcut';
 import { useLogContainer } from '../../containers/backup';
 import { useVM } from '../../containers/use-vm';
 import { TorrentProgress } from '../../containers/torrent-progress';
 
 export default function Hello() {
-  const trainingServiceShortcut = useTrainingServiceShortcut();
+  const trainingShortcut = useNativeTrainingServiceShortcut();
   const { exportLogs, setupBackupListener } = useLogContainer();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [scale, setScale] = useState(1);
@@ -62,22 +62,24 @@ export default function Hello() {
   useEffect(() => {
     const initTrayStatus = async () => {
       const masterSwitch = localStorage.getItem('joint_build_master_switch');
-      const welcomeChoice = localStorage.getItem('ai_learning_assistant_welcome_shown');
-      
+      const welcomeChoice = localStorage.getItem(
+        'ai_learning_assistant_welcome_shown',
+      );
+
       let trayEnabled = false;
       if (masterSwitch !== null) {
         trayEnabled = masterSwitch === 'true';
       } else if (welcomeChoice === 'true') {
         trayEnabled = true;
       }
-      
+
       try {
         await window.mainHandle.setTrayEnabled(trayEnabled);
       } catch (error) {
         console.error('初始化托盘状态失败:', error);
       }
     };
-    
+
     initTrayStatus();
   }, []);
 
@@ -214,7 +216,7 @@ export default function Hello() {
   const openTrainingService = async () => {
     setTrainingServiceStarting(true);
     try {
-      await trainingServiceShortcut.start();
+      await trainingShortcut.start();
     } catch (e) {
       message.error(e.message);
     }
@@ -269,14 +271,14 @@ export default function Hello() {
 
   const removeTrainingService = async () => {
     setTrainingServiceRemoving(true);
-    await trainingServiceShortcut.remove();
+    await trainingShortcut.remove();
     setTrainingServiceRemoving(false);
   };
 
   const updateCourseTrainingService = async () => {
     setTrainingServiceStarting(true);
     setTrainingServiceRemoving(true);
-    await trainingServiceShortcut.updateCourse();
+    await trainingShortcut.updateCourse();
     message.success('学科培训更新成功');
     setTrainingServiceStarting(false);
     setTrainingServiceRemoving(false);
@@ -732,31 +734,28 @@ export default function Hello() {
                     <div className="feature-description">
                       <p className="description-text">
                         AI辅助的学科知识培训，学员建档设立目标，帮助补齐技能知识短板。
-                        {trainingServiceShortcut.state !== '还未安装' &&
-                          `当前版本：${trainingServiceShortcut.versionInfo.currentVersion}`}
+                        {trainingShortcut.state !== 'not_install' &&
+                          `当前版本：${trainingShortcut.versionInfo.currentVersion}`}
                       </p>
                     </div>
-                    {trainingServiceShortcut.versionInfo.haveNew && (
+                    {trainingShortcut.versionInfo.haveNew && (
                       <TorrentProgress
                         id={'TRAINING_TAR'}
-                        version={
-                          trainingServiceShortcut.versionInfo.latestVersion
-                        }
+                        version={trainingShortcut.versionInfo.latestVersion}
                       />
                     )}
                   </div>
                   <div className="feature-button-container">
-                    {((trainingServiceShortcut.state !== '还未安装' &&
-                      !trainingServiceShortcut.versionInfo.haveNew) ||
-                      trainingServiceShortcut.state === '还未安装') && (
+                    {((trainingShortcut.state !== 'not_install' &&
+                      !trainingShortcut.versionInfo.haveNew) ||
+                      trainingShortcut.state === 'not_install') && (
                       <Button
                         className="feature-button"
                         block
                         size="large"
                         onClick={openTrainingService}
                         loading={
-                          trainingServiceStarting ||
-                          trainingServiceShortcut.initing
+                          trainingServiceStarting || trainingShortcut.initing
                         }
                         disabled={
                           trainingServiceRemoving ||
@@ -764,13 +763,13 @@ export default function Hello() {
                           wslLoading
                         }
                       >
-                        {trainingServiceShortcut.state === '还未安装'
+                        {trainingShortcut.state === 'not_install'
                           ? '安装'
                           : '开始'}
                       </Button>
                     )}
-                    {trainingServiceShortcut.state !== '还未安装' &&
-                      trainingServiceShortcut.versionInfo.haveNew && (
+                    {trainingShortcut.state !== 'not_install' &&
+                      trainingShortcut.versionInfo.haveNew && (
                         <Button
                           className="feature-button"
                           block
@@ -782,12 +781,12 @@ export default function Hello() {
                           更新课程
                         </Button>
                       )}
-                    {trainingServiceShortcut.state !== '还未安装' && (
+                    {trainingShortcut.state !== 'not_install' && (
                       <Button
                         className="feature-button"
                         block
                         size="large"
-                        onClick={trainingServiceShortcut.downloadLogs}
+                        onClick={trainingShortcut.downloadLogs}
                         disabled={
                           !isPodmanInstalled ||
                           wslLoading ||
@@ -797,7 +796,7 @@ export default function Hello() {
                         日志
                       </Button>
                     )}
-                    {trainingServiceShortcut.state !== '还未安装' && (
+                    {trainingShortcut.state !== 'not_install' && (
                       <Button
                         className="feature-button uninstall"
                         block

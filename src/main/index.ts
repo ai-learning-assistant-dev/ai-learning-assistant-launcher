@@ -1,16 +1,14 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import initLogger from './logger';
-import initPodman from './podman-desktop/simple-container-manage';
 import initCmd from './cmd';
 import initConfigs from './configs';
 import initObsidianPlugin, { updateTemplate } from './obsidian-plugin';
 import initWorkspace from './workspace';
-import initContainerLogs from './podman-desktop/container-logs';
 import initLMStudio from './lm-studio';
 import initExampleMain from './example-main';
 import initTerminalLog from './terminal-log';
 import initPdfConvert from './pdf-convert';
-import initTrainingService from './training-service';
+import initNativeTrainingService from './native-training-service';
 import initLogService from './backup';
 import initExternalUrl from './external-url';
 import { setupJointBuildHandlers, setupWindowCloseHandler, isTrayEnabled } from './joint-build';
@@ -76,11 +74,11 @@ initCmd(ipcMain);
 initConfigs(ipcMain);
 initObsidianPlugin(ipcMain);
 initWorkspace(ipcMain);
-initContainerLogs(ipcMain);
+// initContainerLogs(ipcMain);
 initLMStudio(ipcMain);
 initExampleMain(ipcMain);
 initPdfConvert(ipcMain);
-initTrainingService(ipcMain);
+initNativeTrainingService(ipcMain);
 initExternalUrl(ipcMain);
 setupJointBuildHandlers(ipcMain);
 initDLC(ipcMain);
@@ -109,7 +107,7 @@ const createWindow = async () => {
   mainWindow.show();
 
   // 需要等待连接podman
-  await initPodman(ipcMain);
+  // await initPodman(ipcMain);
 
   // and load the index.html of the app.
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);

@@ -1,5 +1,6 @@
 import { BrowserWindow, IpcMain } from 'electron';
 import {
+  queryNativeTrainingServiceHandle,
   installNativeTrainingServiceHandle,
   logsNativeTrainingServiceHandle,
   removeNativeTrainingServiceHandle,
@@ -32,6 +33,9 @@ import path from 'node:path';
 let trainingWindow: BrowserWindow | null = null;
 
 export default async function init(ipcMain: IpcMain) {
+  ipcHandle(ipcMain, queryNativeTrainingServiceHandle, async (_event) =>
+    queryTrainingService(),
+  );
   ipcHandle(ipcMain, installNativeTrainingServiceHandle, async (_event) =>
     installTrainingService(),
   );
@@ -77,6 +81,10 @@ const createWindow = (): void => {
   });
 };
 
+export async function queryTrainingService() {
+  return getServiceInfo('NATIVE_TRAINING');
+}
+
 export async function installTrainingService() {
   const latestVersion = getLatestVersion('TRAINING_TAR');
   await startWebtorrent(latestVersion.dlcInfo.magnet);
@@ -100,7 +108,7 @@ export async function logsTrainingService() {
 
 export async function startTrainingService() {
   const info = await startService('NATIVE_TRAINING');
-  if (info && info.Status === 'healthy') {
+  if (info && info.state === 'running') {
     createWindow();
   } else {
     await monitorStatusIsHealthy('NATIVE_TRAINING');

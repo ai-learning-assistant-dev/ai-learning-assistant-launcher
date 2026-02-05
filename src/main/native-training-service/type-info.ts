@@ -2,6 +2,8 @@ import type { Channels } from '../ipc-data-type';
 
 export const channel: Channels = 'native-training-service';
 
+export const queryNativeTrainingServiceHandle = `${channel}query`;
+
 export const installNativeTrainingServiceHandle = `${channel}install`;
 
 export const startNativeTrainingServiceHandle = `${channel}start`;
