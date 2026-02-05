@@ -86,10 +86,6 @@ export async function queryTrainingService() {
 }
 
 export async function installTrainingService() {
-  const latestVersion = getLatestVersion('TRAINING_TAR');
-  await startWebtorrent(latestVersion.dlcInfo.magnet);
-  const torrent = await waitTorrentDone('TRAINING_TAR', latestVersion.version);
-  const tarPath = path.join(torrent.path, torrent.files[0].name);
   return installService('NATIVE_TRAINING');
 }
 

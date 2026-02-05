@@ -27,6 +27,7 @@ import { useNativeTrainingServiceShortcut } from '../../containers/use-native-tr
 import { useLogContainer } from '../../containers/backup';
 import { useVM } from '../../containers/use-vm';
 import { TorrentProgress } from '../../containers/torrent-progress';
+import { TerminalLogScreen } from '../../containers/terminal-log-screen';
 
 export default function Hello() {
   const trainingShortcut = useNativeTrainingServiceShortcut();
@@ -35,6 +36,7 @@ export default function Hello() {
   const [scale, setScale] = useState(1);
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const [showTerminalLog, setShowTerminalLog] = useState(false);
 
   const {
     isWSLInstalled,
@@ -786,7 +788,7 @@ export default function Hello() {
                         className="feature-button"
                         block
                         size="large"
-                        onClick={trainingShortcut.downloadLogs}
+                        onClick={() => setShowTerminalLog(true)}
                         disabled={
                           !isPodmanInstalled ||
                           wslLoading ||
@@ -918,6 +920,19 @@ export default function Hello() {
         >
           <span className="button-text">卸载Podman</span>
         </Button>
+      </Modal>
+      <Modal
+        open={showTerminalLog}
+        footer={false}
+        closable={true}
+        onCancel={() => setShowTerminalLog(false)}
+      >
+        <TerminalLogScreen
+          id="hello-terminal-log"
+          cols={100}
+          rows={20}
+          style={{ width: 'calc(100% - 20px)', marginTop: '16px' }}
+        />
       </Modal>
     </div>
   );

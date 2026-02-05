@@ -114,3 +114,6 @@ external-resources/dlc/**/*.torrent
 # 忽略启动器更新临时目录
 update-temp/
 update.bat
+
+# 忽略下载下来的代码
+external-resources\native-training

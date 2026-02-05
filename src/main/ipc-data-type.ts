@@ -75,6 +75,7 @@ import {
   ActionName as ActionNameUrl,
   ServiceName as ServiceNameUrl,
 } from './external-url/type-info';
+import { NativeServiceName } from './native-script/type-info';
 
 export type AllAction =
   | ActionNamePodman
@@ -98,7 +99,8 @@ export type AllService =
   | ServiceNameExampleMain
   | ServiceNameWorkspace
   | LogServiceName
-  | ServiceNameUrl;
+  | ServiceNameUrl
+  | NativeServiceName;
 
 export class MessageData<
   A extends AllAction = AllAction,
