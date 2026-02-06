@@ -1,6 +1,6 @@
 import { Switch, Button, Progress, message, Slider } from 'antd';
 import { NavLink } from 'react-router-dom';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { LeftOutlined } from '@ant-design/icons';
 import jointBuildIcon from '../../../../icons/joint_build.png';
 import { DLCIndex, OneDLCInfo } from '../../../main/dlc/type-info';
@@ -72,16 +72,22 @@ export default function JointBuild() {
   const [dLCIndex, setDLCIndex] = useState<DLCIndex>([]);
   const [refreshTrigger, setRefreshTrigger] = useState(1);
   const [uploadLimit, setUploadLimit] = useState(0); // 0 表示不限速，单位 KB/s
+  const uploadLimitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 定时刷新DLC数据
   useEffect(() => {
     window.mainHandle
       .queryWebtorrentHandle()
       .then((newDLCIndex) => setDLCIndex(newDLCIndex))
-      .catch(console.error);
+      .catch((err) => {
+        // 降低日志频率，只在首次或间隔打印
+        if (refreshTrigger === 1 || refreshTrigger % 10 === 0) {
+          console.error('查询WebTorrent状态失败:', err);
+        }
+      });
     const timeout = setTimeout(
       () => setRefreshTrigger(refreshTrigger + 1),
-      1000,
+      3000, // 从1秒改为3秒，降低刷新和日志频率
     );
     return () => {
       clearTimeout(timeout);
@@ -147,6 +153,10 @@ export default function JointBuild() {
     
     return () => {
       window.removeEventListener('joint-build-status-changed', handleStatusChange as EventListener);
+      // 清理上传限速防抖定时器
+      if (uploadLimitTimerRef.current) {
+        clearTimeout(uploadLimitTimerRef.current);
+      }
     };
   }, []);
 
@@ -173,15 +183,24 @@ export default function JointBuild() {
     }
   };
 
-  // 处理上传限速变化
-  const handleUploadLimitChange = async (value: number) => {
+  // 处理上传限速变化（防抖：UI 实时更新，后端调用延迟）
+  const handleUploadLimitChange = (value: number) => {
     setUploadLimit(value);
-    localStorage.setItem(STORAGE_KEY_UPLOAD_LIMIT, String(value));
-    try {
-      await window.mainHandle.setUploadLimit(value * 1024); // 转换为 bytes/s
-    } catch (error) {
-      console.error('设置上传限速失败:', error);
+    
+    // 清除之前的定时器
+    if (uploadLimitTimerRef.current) {
+      clearTimeout(uploadLimitTimerRef.current);
     }
+    
+    // 防抖：500ms 后才同步到后端
+    uploadLimitTimerRef.current = setTimeout(async () => {
+      localStorage.setItem(STORAGE_KEY_UPLOAD_LIMIT, String(value));
+      try {
+        await window.mainHandle.setUploadLimit(value * 1024); // 转换为 bytes/s
+      } catch (error) {
+        console.error('设置上传限速失败:', error);
+      }
+    }, 500);
   };
 
   // 处理开始做种
@@ -269,14 +288,14 @@ export default function JointBuild() {
           <div className="slider-container">
             <Slider
               min={0}
-              max={10240}
+              max={20480}
               step={64}
               value={uploadLimit}
               onChange={handleUploadLimitChange}
               tooltip={{
                 formatter: (value) => value === 0 ? '不限速' : `${value} KB/s`
               }}
-              style={{ flex: 1 }}
+              style={{ width: '50%' }}
             />
             <span className="limit-value">
               {uploadLimit === 0 ? '不限速' : `${uploadLimit} KB/s`}
