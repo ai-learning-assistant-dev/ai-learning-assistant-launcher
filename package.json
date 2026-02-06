@@ -83,6 +83,7 @@
   },
   "dependencies": {
     "@langchain/anthropic": "^0.3.30",
+    "@langchain/core": "^1.1.19",
     "@langchain/deepseek": "^0.1.0",
     "@langchain/google-genai": "^0.2.18",
     "@langchain/ollama": "^0.2.4",

@@ -3,19 +3,10 @@ import { NavLink } from 'react-router-dom';
 import { useState, useEffect, useCallback } from 'react';
 import { LeftOutlined } from '@ant-design/icons';
 import jointBuildIcon from '../../../../icons/joint_build.png';
+import { DLCIndex, OneDLCInfo } from '../../../main/dlc/type-info';
 import './index.scss';
 
-interface ModuleItem {
-  id: string;
-  name: string;
-  description: string;
-  diskUsage: string;
-  recommendLevel: number; // 1-3
-  enabled: boolean;
-}
-
 const STORAGE_KEY_MASTER = 'joint_build_master_switch';
-const STORAGE_KEY_MODULES = 'joint_build_modules';
 const STORAGE_KEY_DISK_PATH = 'joint_build_disk_path';
 const STORAGE_KEY_WELCOME = 'ai_learning_assistant_welcome_shown'; // 欢迎弹窗用户选择
 
@@ -24,39 +15,62 @@ const bytesToGB = (bytes: number): number => {
   return Math.round((bytes / (1024 * 1024 * 1024)) * 10) / 10;
 };
 
+// 格式化字节大小
+const formatBytes = (bytes: number): string => {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+};
+
+// 获取做种状态（只关心已下载完成的资源）
+function getSeedingState(version: OneDLCInfo['versions'][string]): '未下载' | '已暂停做种' | '做种中' {
+  if (version.progress && version.progress.done) {
+    if (version.progress.paused) {
+      return '已暂停做种';
+    } else {
+      return '做种中';
+    }
+  }
+  return '未下载';
+}
+
+// 获取状态颜色
+function getStateColor(state: string): string {
+  switch (state) {
+    case '做种中':
+      return '#52c41a';
+    case '已暂停做种':
+      return '#faad14';
+    default:
+      return '#999';
+  }
+}
+
 export default function JointBuild() {
   const [masterSwitch, setMasterSwitch] = useState(false);
   const [diskPath, setDiskPath] = useState('C:\\');
   const [diskUsed, setDiskUsed] = useState(0);
   const [diskTotal, setDiskTotal] = useState(0);
   const [diskLoading, setDiskLoading] = useState(false);
-  // todo: 这些数据从哪获取？还是写死
-  const [modules, setModules] = useState<ModuleItem[]>([
-    {
-      id: 'launcher',
-      name: 'AI学习助手启动器',
-      description: '磁盘占用 200MB',
-      diskUsage: '200MB',
-      recommendLevel: 3,
-      enabled: true,
-    },
-    {
-      id: 'training-package',
-      name: '学科培训安装包',
-      description: '磁盘占用 200MB',
-      diskUsage: '200MB',
-      recommendLevel: 3,
-      enabled: false,
-    },
-    {
-      id: 'voice-model',
-      name: '学科培训语音模型',
-      description: '磁盘占用 2.1GB',
-      diskUsage: '2.1GB',
-      recommendLevel: 2,
-      enabled: false,
-    },
-  ]);
+  const [dLCIndex, setDLCIndex] = useState<DLCIndex>([]);
+  const [refreshTrigger, setRefreshTrigger] = useState(1);
+
+  // 定时刷新DLC数据
+  useEffect(() => {
+    window.mainHandle
+      .queryWebtorrentHandle()
+      .then((newDLCIndex) => setDLCIndex(newDLCIndex))
+      .catch(console.error);
+    const timeout = setTimeout(
+      () => setRefreshTrigger(refreshTrigger + 1),
+      1000,
+    );
+    return () => {
+      clearTimeout(timeout);
+    };
+  }, [refreshTrigger]);
 
   // 获取磁盘信息
   const fetchDiskInfo = useCallback(async (path: string) => {
@@ -92,21 +106,6 @@ export default function JointBuild() {
     // 初始化时同步托盘状态到主进程
     window.mainHandle.setTrayEnabled(initialMasterSwitch).catch(console.error);
 
-    const savedModules = localStorage.getItem(STORAGE_KEY_MODULES);
-    if (savedModules) {
-      try {
-        const parsed = JSON.parse(savedModules);
-        setModules((prev) =>
-          prev.map((mod) => {
-            const saved = parsed.find((s: ModuleItem) => s.id === mod.id);
-            return saved ? { ...mod, enabled: saved.enabled } : mod;
-          })
-        );
-      } catch (e) {
-        console.error('Failed to parse saved modules:', e);
-      }
-    }
-
     const savedDiskPath = localStorage.getItem(STORAGE_KEY_DISK_PATH);
     const initialPath = savedDiskPath || 'C:\\';
     setDiskPath(initialPath);
@@ -129,17 +128,13 @@ export default function JointBuild() {
   }, []);
 
   // 保存配置到 localStorage
-  const saveConfig = (master: boolean, mods: ModuleItem[]) => {
+  const saveConfig = (master: boolean) => {
     localStorage.setItem(STORAGE_KEY_MASTER, String(master));
-    localStorage.setItem(
-      STORAGE_KEY_MODULES,
-      JSON.stringify(mods.map((m) => ({ id: m.id, enabled: m.enabled })))
-    );
   };
 
   const handleMasterSwitchChange = async (checked: boolean) => {
     setMasterSwitch(checked);
-    saveConfig(checked, modules);
+    saveConfig(checked);
     
     // 同步托盘状态到主进程
     try {
@@ -155,12 +150,26 @@ export default function JointBuild() {
     }
   };
 
-  const handleModuleToggle = (id: string, checked: boolean) => {
-    const newModules = modules.map((mod) =>
-      mod.id === id ? { ...mod, enabled: checked } : mod
-    );
-    setModules(newModules);
-    saveConfig(masterSwitch, newModules);
+  // 处理开始做种
+  const handleStartSeeding = async (magnet: string) => {
+    try {
+      await window.mainHandle.startWebtorrentHandle(magnet);
+      message.success('开始做种');
+    } catch (error) {
+      console.error('启动做种失败:', error);
+      message.error('启动做种失败');
+    }
+  };
+
+  // 处理暂停做种
+  const handlePauseSeeding = async (magnet: string) => {
+    try {
+      await window.mainHandle.pauseWebtorrentHandle(magnet);
+      message.info('已暂停做种');
+    } catch (error) {
+      console.error('暂停失败:', error);
+      message.error('暂停失败');
+    }
   };
 
   const handleChangePath = async () => {
@@ -179,22 +188,25 @@ export default function JointBuild() {
     }
   };
 
-  const renderRecommendLevel = (level: number) => {
-    const fires = [];
-    for (let i = 0; i < 3; i++) {
-      fires.push(
-        <span
-          key={i}
-          className={`recommend-fire ${i < level ? 'active' : ''}`}
-        >
-          🔥
-        </span>
-      );
-    }
-    return fires;
+  // 获取最新版本
+  const getLatestVersion = (dlc: OneDLCInfo): { key: string; version: OneDLCInfo['versions'][string] } | null => {
+    const versionKeys = Object.keys(dlc.versions);
+    if (versionKeys.length === 0) return null;
+    // 按版本号排序，取最新的
+    const sortedKeys = versionKeys.sort((a, b) => {
+      const partsA = a.split('.').map(Number);
+      const partsB = b.split('.').map(Number);
+      for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
+        const numA = partsA[i] || 0;
+        const numB = partsB[i] || 0;
+        if (numA !== numB) return numB - numA;
+      }
+      return 0;
+    });
+    return { key: sortedKeys[0], version: dlc.versions[sortedKeys[0]] };
   };
 
-  const diskUsedPercent = Math.round((diskUsed / diskTotal) * 100);
+  const diskUsedPercent = diskTotal > 0 ? Math.round((diskUsed / diskTotal) * 100) : 0;
 
   return (
     <div className="joint-build-page">
@@ -226,6 +238,9 @@ export default function JointBuild() {
           <span className="disk-path">磁盘路径：{diskPath}</span>
           <Button onClick={handleChangePath}>更换路径</Button>
         </div>
+        <div className="disk-stats">
+          <span>已用 {diskUsed} GB / 总计 {diskTotal} GB</span>
+        </div>
         <Progress
           percent={diskUsedPercent}
           showInfo={false}
@@ -235,27 +250,76 @@ export default function JointBuild() {
       </div>
 
       <div className="section">
-        <h2>共建参与模块设置</h2>
-        <p className="section-desc">管理参与哪些模块的共建计划，请根据您电脑的磁盘空余选择开启</p>
+        <h2>共建参与模块</h2>
+        <p className="section-desc">以下是您已下载的资源包，开启做种可以帮助其他学习者更快获取资源</p>
         <div className="modules-list">
-          {modules.map((mod) => (
-            <div key={mod.id} className="module-card">
-              <div className="module-info">
-                <div className="module-header">
-                  <span className="module-name">{mod.name}</span>
-                  <span className="module-recommend">
-                    推荐指数 {renderRecommendLevel(mod.recommendLevel)}
-                  </span>
+          {dLCIndex.map((dlc) => {
+            const latestVersionInfo = getLatestVersion(dlc);
+            if (!latestVersionInfo) return null;
+            
+            const { key: versionKey, version } = latestVersionInfo;
+            const state = getSeedingState(version);
+            const progress = version.progress;
+            
+            // 只显示已下载完成的资源
+            if (state === '未下载') return null;
+            
+            return (
+              <div key={dlc.id} className="module-card">
+                <div className="module-info">
+                  <div className="module-header">
+                    <span className="module-name">{dlc.name}</span>
+                    <span className="module-version">v{versionKey}</span>
+                  </div>
+                  <div className="module-status">
+                    <span 
+                      className="status-badge"
+                      style={{ color: getStateColor(state) }}
+                    >
+                      {state}
+                    </span>
+                  </div>
+                  {progress && (
+                    <div className="module-stats">
+                      {progress.uploadSpeed > 0 && (
+                        <span>↑ {formatBytes(progress.uploadSpeed)}/s</span>
+                      )}
+                      {progress.numPeers > 0 && (
+                        <span>节点: {progress.numPeers}</span>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <span className="module-disk">磁盘占用 {mod.diskUsage}</span>
+                <div className="module-actions">
+                  {state === '已暂停做种' && (
+                    <Button
+                      type="primary"
+                      size="small"
+                      onClick={() => handleStartSeeding(version.magnet)}
+                      disabled={!masterSwitch}
+                    >
+                      开始做种
+                    </Button>
+                  )}
+                  {state === '做种中' && (
+                    <Button
+                      size="small"
+                      onClick={() => handlePauseSeeding(version.magnet)}
+                    >
+                      暂停做种
+                    </Button>
+                  )}
+                </div>
               </div>
-              <Switch
-                checked={mod.enabled}
-                onChange={(checked) => handleModuleToggle(mod.id, checked)}
-                disabled={!masterSwitch}
-              />
-            </div>
-          ))}
+            );
+          })}
+          {dLCIndex.filter(dlc => {
+            const latestVersionInfo = getLatestVersion(dlc);
+            if (!latestVersionInfo) return false;
+            return getSeedingState(latestVersionInfo.version) !== '未下载';
+          }).length === 0 && (
+            <div className="empty-tip">暂无已下载的资源包可供做种</div>
+          )}
         </div>
       </div>
     </div>

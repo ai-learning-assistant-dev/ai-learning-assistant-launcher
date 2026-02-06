@@ -93,12 +93,18 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
 
     .disk-path {
       font-size: 14px;
       color: #666;
     }
+  }
+
+  .disk-stats {
+    font-size: 12px;
+    color: #999;
+    margin-bottom: 8px;
   }
 
   .modules-list {
@@ -118,7 +124,8 @@
       .module-info {
         display: flex;
         flex-direction: column;
-        gap: 4px;
+        gap: 6px;
+        flex: 1;
 
         .module-header {
           display: flex;
@@ -131,29 +138,58 @@
             color: #333;
           }
 
-          .module-recommend {
+          .module-version {
             font-size: 12px;
             color: #999;
-            display: flex;
-            align-items: center;
-            gap: 2px;
-
-            .recommend-fire {
-              opacity: 0.3;
-              font-size: 12px;
-
-              &.active {
-                opacity: 1;
-              }
-            }
+            background: #f5f5f5;
+            padding: 2px 8px;
+            border-radius: 4px;
           }
         }
 
-        .module-disk {
+        .module-status {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+
+          .status-badge {
+            font-size: 13px;
+            font-weight: 500;
+          }
+
+          .download-progress {
+            font-size: 12px;
+            color: #1890ff;
+            font-weight: 500;
+          }
+        }
+
+        .module-stats {
+          display: flex;
+          gap: 16px;
           font-size: 12px;
           color: #999;
+
+          span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+          }
         }
       }
+
+      .module-actions {
+        display: flex;
+        gap: 8px;
+        flex-shrink: 0;
+      }
+    }
+
+    .empty-tip {
+      text-align: center;
+      padding: 40px 20px;
+      color: #999;
+      font-size: 14px;
     }
   }
 }
