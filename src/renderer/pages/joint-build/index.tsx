@@ -24,13 +24,25 @@ const formatBytes = (bytes: number): string => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 };
 
-// 获取做种状态（只关心已下载完成的资源）
-function getSeedingState(version: OneDLCInfo['versions'][string]): '未下载' | '已暂停做种' | '做种中' {
-  if (version.progress && version.progress.done) {
-    if (version.progress.paused) {
-      return '已暂停做种';
-    } else {
-      return '做种中';
+// 获取做种状态（只要种子添加到 WebTorrent 中就可以显示）
+function getSeedingState(version: OneDLCInfo['versions'][string]): '未下载' | '已暂停做种' | '做种中' | '验证中' {
+  // 只要 progress 存在，就说明种子已添加到 WebTorrent
+  if (version.progress) {
+    // 完全完成或进度 >= 99%
+    if (version.progress.done || version.progress.progress >= 0.99) {
+      if (version.progress.paused) {
+        return '已暂停做种';
+      } else {
+        return '做种中';
+      }
+    }
+    // 有进度但未完成（验证中或部分下载）
+    if (version.progress.progress > 0) {
+      if (version.progress.paused) {
+        return '已暂停做种';
+      } else {
+        return '验证中';
+      }
     }
   }
   return '未下载';
@@ -43,6 +55,8 @@ function getStateColor(state: string): string {
       return '#52c41a';
     case '已暂停做种':
       return '#faad14';
+    case '验证中':
+      return '#1890ff';
     default:
       return '#999';
   }
@@ -287,18 +301,21 @@ export default function JointBuild() {
                       {progress.numPeers > 0 && (
                         <span>节点: {progress.numPeers}</span>
                       )}
+                      {state === '验证中' && (
+                        <span>进度: {Math.round(progress.progress * 100)}%</span>
+                      )}
                     </div>
                   )}
                 </div>
                 <div className="module-actions">
-                  {state === '已暂停做种' && (
+                  {(state === '已暂停做种' || state === '验证中') && (
                     <Button
                       type="primary"
                       size="small"
                       onClick={() => handleStartSeeding(version.magnet)}
                       disabled={!masterSwitch}
                     >
-                      开始做种
+                      {state === '验证中' ? '继续验证' : '开始做种'}
                     </Button>
                   )}
                   {state === '做种中' && (
