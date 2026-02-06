@@ -34,6 +34,8 @@ import {
   queryWebtorrentHandle,
   removeWebtorrentHandle,
   startWebtorrentHandle,
+  setUploadLimitHandle,
+  getUploadLimitHandle,
   DLCId,
 } from './dlc/type-info';
 
@@ -170,6 +172,12 @@ const mainHandle = {
   },
   logsWebtorrentHandle: async (url: string) => {
     return ipcInvoke(logsWebtorrentHandle, url);
+  },
+  setUploadLimit: async (limit: number) => {
+    return ipcInvoke<{ success: boolean; limit: number }>(setUploadLimitHandle, limit);
+  },
+  getUploadLimit: async () => {
+    return ipcInvoke<number>(getUploadLimitHandle);
   },
 };
 

@@ -86,6 +86,31 @@
     .switch-label {
       font-size: 14px;
       color: #333;
+      white-space: nowrap;
+    }
+
+    &.upload-limit-card {
+      margin-top: 12px;
+
+      .slider-container {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex: 1;
+        margin-left: 24px;
+
+        .ant-slider {
+          flex: 1;
+          margin: 0;
+        }
+
+        .limit-value {
+          font-size: 13px;
+          color: #666;
+          min-width: 80px;
+          text-align: right;
+        }
+      }
     }
   }
 

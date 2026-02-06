@@ -1,4 +1,4 @@
-import { Switch, Button, Progress, message } from 'antd';
+import { Switch, Button, Progress, message, Slider } from 'antd';
 import { NavLink } from 'react-router-dom';
 import { useState, useEffect, useCallback } from 'react';
 import { LeftOutlined } from '@ant-design/icons';
@@ -9,6 +9,7 @@ import './index.scss';
 const STORAGE_KEY_MASTER = 'joint_build_master_switch';
 const STORAGE_KEY_DISK_PATH = 'joint_build_disk_path';
 const STORAGE_KEY_WELCOME = 'ai_learning_assistant_welcome_shown'; // 欢迎弹窗用户选择
+const STORAGE_KEY_UPLOAD_LIMIT = 'joint_build_upload_limit';
 
 // 字节转GB
 const bytesToGB = (bytes: number): number => {
@@ -70,6 +71,7 @@ export default function JointBuild() {
   const [diskLoading, setDiskLoading] = useState(false);
   const [dLCIndex, setDLCIndex] = useState<DLCIndex>([]);
   const [refreshTrigger, setRefreshTrigger] = useState(1);
+  const [uploadLimit, setUploadLimit] = useState(0); // 0 表示不限速，单位 KB/s
 
   // 定时刷新DLC数据
   useEffect(() => {
@@ -124,6 +126,13 @@ export default function JointBuild() {
     const initialPath = savedDiskPath || 'C:\\';
     setDiskPath(initialPath);
     
+    // 加载上传限速设置
+    const savedUploadLimit = localStorage.getItem(STORAGE_KEY_UPLOAD_LIMIT);
+    const initialLimit = savedUploadLimit ? parseInt(savedUploadLimit, 10) : 0;
+    setUploadLimit(initialLimit);
+    // 同步到后端
+    window.mainHandle.setUploadLimit(initialLimit * 1024).catch(console.error); // 转换为 bytes/s
+    
     // 初始化时获取磁盘信息
     fetchDiskInfo(initialPath);
   }, [fetchDiskInfo]);
@@ -161,6 +170,17 @@ export default function JointBuild() {
       message.success('共建计划已开启，关闭窗口后将最小化到托盘');
     } else {
       message.info('共建计划已关闭');
+    }
+  };
+
+  // 处理上传限速变化
+  const handleUploadLimitChange = async (value: number) => {
+    setUploadLimit(value);
+    localStorage.setItem(STORAGE_KEY_UPLOAD_LIMIT, String(value));
+    try {
+      await window.mainHandle.setUploadLimit(value * 1024); // 转换为 bytes/s
+    } catch (error) {
+      console.error('设置上传限速失败:', error);
     }
   };
 
@@ -243,6 +263,25 @@ export default function JointBuild() {
             checked={masterSwitch}
             onChange={handleMasterSwitchChange}
           />
+        </div>
+        <div className="switch-card upload-limit-card">
+          <span className="switch-label">上传限速</span>
+          <div className="slider-container">
+            <Slider
+              min={0}
+              max={10240}
+              step={64}
+              value={uploadLimit}
+              onChange={handleUploadLimitChange}
+              tooltip={{
+                formatter: (value) => value === 0 ? '不限速' : `${value} KB/s`
+              }}
+              style={{ flex: 1 }}
+            />
+            <span className="limit-value">
+              {uploadLimit === 0 ? '不限速' : `${uploadLimit} KB/s`}
+            </span>
+          </div>
         </div>
       </div>
 

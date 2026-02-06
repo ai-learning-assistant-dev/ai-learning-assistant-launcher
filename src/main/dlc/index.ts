@@ -5,6 +5,8 @@ import {
   queryWebtorrentHandle,
   pauseWebtorrentHandle,
   removeWebtorrentHandle,
+  setUploadLimitHandle,
+  getUploadLimitHandle,
   DLCIndex,
   DLCId,
   OneDLCInfo,
@@ -18,6 +20,8 @@ import fs, { existsSync, mkdirSync, readFileSync, unlinkSync } from 'fs';
 import { compare } from 'semver';
 
 let client: WebTorrent.Instance | null = null;
+// 上传速度限制 (bytes/s)，0 表示不限速
+let uploadSpeedLimit = 0;
 const getWebTorrent = async () => {
   const WebTorrentClass: WebTorrent.WebTorrent =
     // @ts-ignore
@@ -80,6 +84,12 @@ export default async function init(ipcMain: IpcMain) {
   );
   ipcHandle(ipcMain, logsWebtorrentHandle, async (_event, magnet: string) =>
     logsWebtorrent(magnet),
+  );
+  ipcHandle(ipcMain, setUploadLimitHandle, async (_event, limit: number) =>
+    setUploadLimit(limit),
+  );
+  ipcHandle(ipcMain, getUploadLimitHandle, async (_event) =>
+    getUploadLimit(),
   );
   // 检查种子文件和对应的实际文件，如果有文件，就添加到webtorrent中
   await restoreTorrentsFromFiles();
@@ -236,6 +246,32 @@ export async function removeWebtorrent(magnet: string) {
 export async function logsWebtorrent(magnet: string) {
   console.debug(`请求日志 for magnet: ${magnet}`);
   return null;
+}
+
+/**
+ * 设置上传速度限制
+ * @param limit 限制速度 (bytes/s)，0 表示不限速
+ */
+export function setUploadLimit(limit: number) {
+  uploadSpeedLimit = limit;
+  if (client) {
+    // WebTorrent 支持 throttleUpload 方法来动态设置上传限速
+    // @ts-ignore - throttleUpload 方法存在但类型定义中没有
+    if (typeof client.throttleUpload === 'function') {
+      // @ts-ignore
+      // -1 表示禁用限速，正数表示限速值 (bytes/s)
+      client.throttleUpload(limit > 0 ? limit : -1);
+    }
+  }
+  console.debug(`上传速度限制设置为: ${limit > 0 ? (limit / 1024).toFixed(1) + ' KB/s' : '不限速'}`);
+  return { success: true, limit };
+}
+
+/**
+ * 获取当前上传速度限制
+ */
+export function getUploadLimit(): number {
+  return uploadSpeedLimit;
 }
 
 const dlcIndexPath = path.join(
@@ -602,11 +638,7 @@ async function restoreTorrentsFromFiles() {
                 console.debug(`[${torrent.name}] 新连接: ${wire.remoteAddress}`);
               });
 
-              torrent.on('upload', (bytes) => {
-                console.debug(`[${torrent.name}] 上传: ${bytes} bytes, 总上传: ${torrent.uploaded}, 速度: ${torrent.uploadSpeed} B/s`);
-              });
-
-              // 定时打印状态
+              // 定时打印状态（包含上传信息）
               const statusInterval = setInterval(() => {
                 // @ts-ignore - destroyed 属性存在但类型定义中没有
                 if (torrent.destroyed) {
