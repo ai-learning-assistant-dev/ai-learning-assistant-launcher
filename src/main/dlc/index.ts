@@ -5,18 +5,23 @@ import {
   queryWebtorrentHandle,
   pauseWebtorrentHandle,
   removeWebtorrentHandle,
+  setUploadLimitHandle,
+  getUploadLimitHandle,
   DLCIndex,
   DLCId,
   OneDLCInfo,
 } from './type-info';
 import { ipcHandle } from '../ipc-util';
 import WebTorrent, * as allExports from 'webtorrent';
+import crypto from 'crypto';
 import path from 'path';
 import { appPath } from '../exec';
 import fs, { existsSync, mkdirSync, readFileSync, unlinkSync } from 'fs';
 import { compare } from 'semver';
 
 let client: WebTorrent.Instance | null = null;
+// 上传速度限制 (bytes/s)，0 表示不限速
+let uploadSpeedLimit = 0;
 const getWebTorrent = async () => {
   const WebTorrentClass: WebTorrent.WebTorrent =
     // @ts-ignore
@@ -60,9 +65,14 @@ const getWebTorrent = async () => {
 
 export default async function init(ipcMain: IpcMain) {
   client = await getWebTorrent();
-  ipcHandle(ipcMain, startWebtorrentHandle, async (_event, magnet: string) =>
-    startWebtorrent(magnet),
-  );
+  ipcHandle(ipcMain, startWebtorrentHandle, async (_event, magnet: string) => {
+    const torrent = await startWebtorrent(magnet);
+    // 返回可序列化的对象而不是 torrent 实例
+    if (torrent) {
+      return { infoHash: torrent.infoHash, name: torrent.name };
+    }
+    return null;
+  });
   ipcHandle(ipcMain, queryWebtorrentHandle, async (_event) =>
     queryWebtorrent(),
   );
@@ -75,8 +85,72 @@ export default async function init(ipcMain: IpcMain) {
   ipcHandle(ipcMain, logsWebtorrentHandle, async (_event, magnet: string) =>
     logsWebtorrent(magnet),
   );
+  ipcHandle(ipcMain, setUploadLimitHandle, async (_event, limit: number) =>
+    setUploadLimit(limit),
+  );
+  ipcHandle(ipcMain, getUploadLimitHandle, async (_event) =>
+    getUploadLimit(),
+  );
   // 检查种子文件和对应的实际文件，如果有文件，就添加到webtorrent中
   await restoreTorrentsFromFiles();
+}
+
+/**
+ * 从torrent文件中提取infoHash
+ * 简单实现：查找"4:info"标记，提取info字典并计算SHA1
+ */
+function extractInfoHashFromTorrent(buffer: Buffer): string | undefined {
+  // 查找 "4:info" 的位置
+  const infoKeyPattern = Buffer.from('4:infod');
+  let infoStart = buffer.indexOf(infoKeyPattern);
+  if (infoStart === -1) {
+    return undefined;
+  }
+  // info字典从 "4:info" 之后的 'd' 开始
+  infoStart = infoStart + 6; // 跳过 "4:info"
+  
+  // 从infoStart开始，找到对应的字典结束位置
+  // bencode 字典以 'd' 开始，以 'e' 结束
+  let depth = 0;
+  let infoEnd = infoStart;
+  
+  for (let i = infoStart; i < buffer.length; i++) {
+    const byte = buffer[i];
+    
+    if (byte === 0x64 || byte === 0x6c) { // 'd' or 'l' (dict or list start)
+      depth++;
+    } else if (byte === 0x65) { // 'e' (end)
+      depth--;
+      if (depth === 0) {
+        infoEnd = i + 1;
+        break;
+      }
+    } else if (byte >= 0x30 && byte <= 0x39) { // '0'-'9' (string length)
+      // 解析字符串长度
+      let lengthStr = '';
+      let j = i;
+      while (j < buffer.length && buffer[j] >= 0x30 && buffer[j] <= 0x39) {
+        lengthStr += String.fromCharCode(buffer[j]);
+        j++;
+      }
+      if (buffer[j] === 0x3a) { // ':'
+        const strLength = parseInt(lengthStr, 10);
+        i = j + strLength; // 跳过字符串内容
+      }
+    } else if (byte === 0x69) { // 'i' (integer start)
+      // 跳过整数直到 'e'
+      while (i < buffer.length && buffer[i] !== 0x65) {
+        i++;
+      }
+    }
+  }
+  
+  if (infoEnd <= infoStart) {
+    return undefined;
+  }
+  
+  const infoBuffer = buffer.subarray(infoStart, infoEnd);
+  return crypto.createHash('sha1').update(infoBuffer).digest('hex');
 }
 
 export async function startWebtorrent(magnet: string) {
@@ -117,6 +191,7 @@ export async function startWebtorrent(magnet: string) {
     }
   } else {
     console.warn('没找到链接对应的索引信息', magnet);
+    return null;
   }
 }
 
@@ -171,6 +246,32 @@ export async function removeWebtorrent(magnet: string) {
 export async function logsWebtorrent(magnet: string) {
   console.debug(`请求日志 for magnet: ${magnet}`);
   return null;
+}
+
+/**
+ * 设置上传速度限制
+ * @param limit 限制速度 (bytes/s)，0 表示不限速
+ */
+export function setUploadLimit(limit: number) {
+  uploadSpeedLimit = limit;
+  if (client) {
+    // WebTorrent 支持 throttleUpload 方法来动态设置上传限速
+    // @ts-ignore - throttleUpload 方法存在但类型定义中没有
+    if (typeof client.throttleUpload === 'function') {
+      // @ts-ignore
+      // -1 表示禁用限速，正数表示限速值 (bytes/s)
+      client.throttleUpload(limit > 0 ? limit : -1);
+    }
+  }
+  console.debug(`上传速度限制设置为: ${limit > 0 ? (limit / 1024).toFixed(1) + ' KB/s' : '不限速'}`);
+  return { success: true, limit };
+}
+
+/**
+ * 获取当前上传速度限制
+ */
+export function getUploadLimit(): number {
+  return uploadSpeedLimit;
 }
 
 const dlcIndexPath = path.join(
@@ -305,9 +406,8 @@ function getProgress(magnet?: string) {
   const params = new URL(magnet).searchParams;
   const xt = params.get('xt');
   const torrent = client.torrents.filter((torrent) => {
-    const hash = xt.split(':')?.pop();
-    // console.debug('hash', hash, 'infohash', torrent.infoHash);
-    return torrent.infoHash === hash;
+    const hash = xt.split(':')?.pop()?.toLowerCase();
+    return torrent.infoHash.toLowerCase() === hash;
   })[0];
 
   if (torrent) {
@@ -484,14 +584,28 @@ async function restoreTorrentsFromFiles() {
 
         for (const torrentFile of torrentFiles) {
           const torrentPath = path.join(versionPath, torrentFile);
-          const infoHash = torrentFile.replace('.torrent', '');
+          
+          // 读取并解析torrent文件以获取真实的infoHash
+          let torrentBuffer: Buffer;
+          let infoHash: string | undefined;
+          try {
+            torrentBuffer = fs.readFileSync(torrentPath);
+            infoHash = extractInfoHashFromTorrent(torrentBuffer);
+          } catch (error) {
+            console.error(`解析种子文件失败 ${torrentPath}:`, error);
+            continue;
+          }
+
+          if (!infoHash) {
+            console.warn(`种子文件 ${torrentPath} 没有有效的infoHash，跳过`);
+            continue;
+          }
 
           // 检查是否已经添加了这个种子
           const existingTorrent = client.torrents.find(
-            (t) => t.infoHash === infoHash,
+            (t) => t.infoHash.toLowerCase() === infoHash.toLowerCase(),
           );
           if (existingTorrent) {
-            console.debug(`种子 ${infoHash} 已经存在，跳过`);
             continue;
           }
 
@@ -509,31 +623,48 @@ async function restoreTorrentsFromFiles() {
             (file) => file !== torrentFile && !file.endsWith('.torrent'),
           );
           if (otherFiles.length === 0) {
-            console.debug(
-              `版本 ${dlcId}/${version} 没有实际文件，跳过种子 ${infoHash}`,
-            );
             continue;
           }
 
           try {
-            // 读取.torrent文件
-            const torrentBuffer = fs.readFileSync(torrentPath);
-
-            // 添加种子到WebTorrent
+            // 添加种子到WebTorrent（使用之前已读取的torrentBuffer）
             client.add(torrentBuffer, { path: versionPath }, (torrent) => {
               console.debug(
                 `恢复种子成功: ${torrent.name} (${torrent.infoHash})`,
               );
-              console.debug(`存储路径: ${torrent.path}`);
 
-              // 根据用户要求，恢复种子后让下载处于暂停状态
-              console.debug(`恢复种子后暂停下载: ${torrent.name}`);
-              torrent.pause();
+              // 监听做种相关事件
+              torrent.on('wire', (wire) => {
+                console.debug(`[${torrent.name}] 新连接: ${wire.remoteAddress}`);
+              });
 
-              // 如果文件已经完整，切换到做种模式
-              if (torrent.progress === 1) {
-                console.debug(`文件已完整，切换到做种模式: ${torrent.name}`);
-                torrent.deselect(0, torrent.pieces.length - 1, 0);
+              // 定时打印状态（包含上传信息）
+              const statusInterval = setInterval(() => {
+                // @ts-ignore - destroyed 属性存在但类型定义中没有
+                if (torrent.destroyed) {
+                  clearInterval(statusInterval);
+                  return;
+                }
+                console.debug(
+                  `[${torrent.name}] 状态: peers=${torrent.numPeers}, 上传=${torrent.uploaded}, 上传速度=${torrent.uploadSpeed} B/s, ratio=${torrent.ratio.toFixed(2)}`
+                );
+              }, 30000); // 每30秒打印一次
+
+              // 等待验证完成后开始做种
+              const handleReady = () => {
+                // 验证完成后恢复做种（不暂停）
+                console.debug(`[${torrent.name}] 验证完成，开始做种`);
+                torrent.resume();
+              };
+
+              // 如果已经验证完成则直接处理
+              if (torrent.done) {
+                handleReady();
+              } else {
+                // 等待 ready 事件（验证完成）
+                torrent.once('ready', handleReady);
+                // 如果部分文件已下载，也监听 done 事件
+                torrent.once('done', handleReady);
               }
             });
 

@@ -1,0 +1,75 @@
+.welcome-modal-content {
+  padding: 10px 0;
+  text-align: left;
+}
+
+.welcome-modal-icon {
+  font-size: 32px;
+  margin-bottom: 16px;
+}
+
+.welcome-modal-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #000;
+  margin: 0 0 12px 0;
+  line-height: 1.5;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.welcome-title-icon {
+  width: 24px;
+  height: 24px;
+  vertical-align: middle;
+}
+
+.welcome-modal-description {
+  font-size: 14px;
+  color: #666;
+  margin: 0 0 8px 0;
+  line-height: 1.6;
+}
+
+.welcome-modal-note {
+  font-size: 13px;
+  color: #999;
+  margin: 0 0 24px 0;
+}
+
+.welcome-modal-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.welcome-modal-buttons button {
+  flex: 1;
+  max-width: 180px;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.btn-reject {
+  background: #f5f5f5;
+  color: #666;
+}
+
+.btn-reject:hover {
+  background: #e8e8e8;
+}
+
+.btn-accept {
+  background: #000;
+  color: #fff;
+}
+
+.btn-accept:hover {
+  background: #333;
+}

@@ -1,0 +1,220 @@
+.joint-build-page {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  padding: 24px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  background: #fafafa;
+
+  .header-container {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 32px;
+
+    .back-link {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: #fff;
+      border: 1px solid #e5e5e5;
+      color: #333;
+      text-decoration: none;
+      transition: all 0.3s;
+
+      &:hover {
+        background: #f5f5f5;
+      }
+    }
+
+    .header-icon {
+      width: 28px;
+      height: 28px;
+      margin-top: 2px;
+    }
+
+    .header-text {
+      flex: 1;
+
+      h1 {
+        font-size: 20px;
+        font-weight: 600;
+        color: #000;
+        margin: 0 0 8px 0;
+      }
+
+      p {
+        font-size: 14px;
+        color: #666;
+        margin: 0;
+        line-height: 1.5;
+      }
+    }
+  }
+
+  .section {
+    margin-bottom: 24px;
+
+    h2 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #000;
+      margin: 0 0 12px 0;
+    }
+
+    .section-desc {
+      font-size: 13px;
+      color: #999;
+      margin: 0 0 12px 0;
+    }
+  }
+
+  .switch-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    border-radius: 8px;
+    padding: 16px 20px;
+
+    .switch-label {
+      font-size: 14px;
+      color: #333;
+      white-space: nowrap;
+    }
+
+    &.upload-limit-card {
+      margin-top: 12px;
+
+      .slider-container {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        width: 30%;
+        margin-left: 24px;
+
+        .ant-slider {
+          flex: 1;
+          margin: 0;
+        }
+
+        .limit-value {
+          font-size: 13px;
+          color: #666;
+          min-width: 80px;
+          text-align: right;
+        }
+      }
+    }
+  }
+
+  .disk-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+
+    .disk-path {
+      font-size: 14px;
+      color: #666;
+    }
+  }
+
+  .disk-stats {
+    font-size: 12px;
+    color: #999;
+    margin-bottom: 8px;
+  }
+
+  .modules-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+
+    .module-card {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #fff;
+      border: 1px solid #e5e5e5;
+      border-radius: 8px;
+      padding: 16px 20px;
+
+      .module-info {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        flex: 1;
+
+        .module-header {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+
+          .module-name {
+            font-size: 14px;
+            font-weight: 500;
+            color: #333;
+          }
+
+          .module-version {
+            font-size: 12px;
+            color: #999;
+            background: #f5f5f5;
+            padding: 2px 8px;
+            border-radius: 4px;
+          }
+        }
+
+        .module-status {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+
+          .status-badge {
+            font-size: 13px;
+            font-weight: 500;
+          }
+
+          .download-progress {
+            font-size: 12px;
+            color: #1890ff;
+            font-weight: 500;
+          }
+        }
+
+        .module-stats {
+          display: flex;
+          gap: 16px;
+          font-size: 12px;
+          color: #999;
+
+          span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+          }
+        }
+      }
+
+      .module-actions {
+        display: flex;
+        gap: 8px;
+        flex-shrink: 0;
+      }
+    }
+
+    .empty-tip {
+      text-align: center;
+      padding: 40px 20px;
+      color: #999;
+      font-size: 14px;
+    }
+  }
+}

@@ -1,4 +1,4 @@
-import { MemoryRouter as Router, Routes, Route } from 'react-router-dom';
+import { MemoryRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
 import '@ant-design/v5-patch-for-react-19';
 import Hello from './pages/hello';
 import './app.css';
@@ -15,13 +15,46 @@ import PdfConvert from './pages/pdf-convert';
 import PdfConfig from './pages/pdf-config';
 import LLMConfig from './pages/llm-api-config';
 import VoiceRTCConfig from './pages/voice-rtc-config';
+import WelcomeModal from './pages/welcome/WelcomeModal';
+import JointBuild from './pages/joint-build';
+import { useEffect } from 'react';
+
+// 托盘菜单导航监听组件
+function TrayNavigationHandler() {
+  const navigate = useNavigate();
+  
+  useEffect(() => {
+    // 监听托盘菜单的导航事件
+    const unsubscribeNavigate = window.mainHandle.onNavigateTo((route: string) => {
+      navigate(route);
+    });
+    
+    // 监听共建计划状态变化事件
+    const unsubscribeStatus = window.mainHandle.onJointBuildStatusChanged((enabled: boolean) => {
+      // 更新 localStorage
+      localStorage.setItem('joint_build_master_switch', String(enabled));
+      // 触发页面刷新或状态更新
+      window.dispatchEvent(new CustomEvent('joint-build-status-changed', { detail: enabled }));
+    });
+    
+    return () => {
+      unsubscribeNavigate();
+      unsubscribeStatus();
+    };
+  }, [navigate]);
+  
+  return null;
+}
 import P2PTest from './pages/p2p-test';
 
 export default function App() {
   return (
     <AntdApp>
+      <WelcomeModal />
       <Router>
+        <TrayNavigationHandler />
         <Routes>
+          <Route path="/joint-build" element={<JointBuild />} />
           <Route path="/ai-service" element={<AiService />} />
           <Route path="/lm-service" element={<LMService />} />
           <Route path="/llm-api-config" element={<LLMConfig />} />

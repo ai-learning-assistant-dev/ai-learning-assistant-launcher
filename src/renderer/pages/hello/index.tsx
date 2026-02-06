@@ -12,6 +12,7 @@ import wslLogo from './wslLogo.png';
 // 新增导入Frame 3和Frame 8图片
 import frame3 from './Frame 3.png';
 import frame8 from './Frame 8.png';
+import jointBuildIcon from '../../../../icons/joint_build.png';
 import './index.scss';
 import { LeftOutlined, RightOutlined } from '@ant-design/icons';
 import { useTrainingServiceShortcut } from '../../containers/use-training-service-shortcut';
@@ -48,6 +49,29 @@ export default function Hello() {
       if (cancel) cancel();
     };
   }, [setupBackupListener]);
+
+  // 初始化托盘状态（根据共建开关）
+  useEffect(() => {
+    const initTrayStatus = async () => {
+      const masterSwitch = localStorage.getItem('joint_build_master_switch');
+      const welcomeChoice = localStorage.getItem('ai_learning_assistant_welcome_shown');
+      
+      let trayEnabled = false;
+      if (masterSwitch !== null) {
+        trayEnabled = masterSwitch === 'true';
+      } else if (welcomeChoice === 'true') {
+        trayEnabled = true;
+      }
+      
+      try {
+        await window.mainHandle.setTrayEnabled(trayEnabled);
+      } catch (error) {
+        console.error('初始化托盘状态失败:', error);
+      }
+    };
+    
+    initTrayStatus();
+  }, []);
 
   const [currentSlide, setCurrentSlide] = useState(0);
 
@@ -623,6 +647,12 @@ export default function Hello() {
                 版本号：{__NPM_PACKAGE_VERSION__} 源码版本：{__COMMIT_HASH__}
               </div>
               <div className="log-export">
+                <NavLink to="/joint-build" className="joint-build-link">
+                  <Button className="joint-build-button">
+                    <img src={jointBuildIcon} alt="共建计划" className="joint-build-icon" />
+                    <span>共建计划</span>
+                  </Button>
+                </NavLink>
                 <NavLink to="/p2p-test">
                   <Button className="manual-button">P2P测试</Button>
                 </NavLink>

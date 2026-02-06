@@ -22,12 +22,20 @@ import {
   courseHaveNewVersionTrainingServiceHandle,
 } from './training-service/type-info';
 import {
+  selectFolderHandle,
+  getDiskInfoHandle,
+  setTrayEnabledHandle,
+  DiskInfo,
+} from './joint-build/type-info';
+import {
   DLCIndex,
   logsWebtorrentHandle,
   pauseWebtorrentHandle,
   queryWebtorrentHandle,
   removeWebtorrentHandle,
   startWebtorrentHandle,
+  setUploadLimitHandle,
+  getUploadLimitHandle,
   DLCId,
 } from './dlc/type-info';
 
@@ -129,6 +137,27 @@ const mainHandle = {
       logsTrainingServiceHandle,
     );
   },
+  // 共建计划相关
+  selectJointBuildFolder: async (): Promise<string | null> => {
+    return ipcInvoke(selectFolderHandle);
+  },
+  getJointBuildDiskInfo: async (diskPath: string): Promise<DiskInfo> => {
+    return ipcInvoke(getDiskInfoHandle, diskPath);
+  },
+  setTrayEnabled: async (enabled: boolean): Promise<boolean> => {
+    return ipcInvoke(setTrayEnabledHandle, enabled);
+  },
+  // 托盘菜单事件监听
+  onNavigateTo: (callback: (route: string) => void) => {
+    const handler = (_event: IpcRendererEvent, route: string) => callback(route);
+    ipcRenderer.on('navigate-to', handler);
+    return () => ipcRenderer.removeListener('navigate-to', handler);
+  },
+  onJointBuildStatusChanged: (callback: (enabled: boolean) => void) => {
+    const handler = (_event: IpcRendererEvent, enabled: boolean) => callback(enabled);
+    ipcRenderer.on('joint-build-status-changed', handler);
+    return () => ipcRenderer.removeListener('joint-build-status-changed', handler);
+  },
   startWebtorrentHandle: async (url: string) => {
     return ipcInvoke(startWebtorrentHandle, url);
   },
@@ -143,6 +172,12 @@ const mainHandle = {
   },
   logsWebtorrentHandle: async (url: string) => {
     return ipcInvoke(logsWebtorrentHandle, url);
+  },
+  setUploadLimit: async (limit: number) => {
+    return ipcInvoke<{ success: boolean; limit: number }>(setUploadLimitHandle, limit);
+  },
+  getUploadLimit: async () => {
+    return ipcInvoke<number>(getUploadLimitHandle);
   },
 };
 
