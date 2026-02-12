@@ -61,10 +61,10 @@ export function useNativeTrainingServiceShortcut() {
   };
 
   const updateCourse = async () => {
+    await queryServiceInfo();
     if (serviceInfo.state !== 'not_install') {
       serviceInfo.state = 'updating';
       await window.mainHandle.updateCourseNativeTrainingServiceHandle();
-      await queryServiceInfo();
     }
   };
 

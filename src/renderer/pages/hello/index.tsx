@@ -426,52 +426,61 @@ export default function Hello() {
       >
         <div className="hello-container" ref={contentRef}>
           <div className="hello-content">
-            <div className="hello-header">
-              <div className="header-content">
-                <div className="hero-image">
-                  <div className="carousel-container">
-                    {slides.map((slide, index) => (
-                      <div
-                        key={index}
-                        className={`carousel-slide ${index === currentSlide ? 'active' : ''}`}
-                      >
-                        {slide.content}
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="carousel-bottom-controls">
-                    <div className="carousel-indicators">
-                      {slides.map((_, index) => (
+            {showTerminalLog ? (
+              <TerminalLogScreen
+                id="hello-terminal-log"
+                cols={100}
+                rows={20}
+                style={{ width: 'calc(100% - 20px)', marginTop: '16px' }}
+              />
+            ) : (
+              <div className="hello-header">
+                <div className="header-content">
+                  <div className="hero-image">
+                    <div className="carousel-container">
+                      {slides.map((slide, index) => (
                         <div
                           key={index}
-                          className={`indicator ${index === currentSlide ? 'active' : ''}`}
-                          onClick={() => goToSlide(index)}
-                        />
+                          className={`carousel-slide ${index === currentSlide ? 'active' : ''}`}
+                        >
+                          {slide.content}
+                        </div>
                       ))}
                     </div>
-                    <div className="carousel-navigation">
-                      <button
-                        className="carousel-control-bottom"
-                        onClick={prevSlide}
-                      >
-                        <Space>
-                          <LeftOutlined />
-                        </Space>
-                      </button>
-                      <button
-                        className="carousel-control-bottom"
-                        onClick={nextSlide}
-                      >
-                        <Space>
-                          <RightOutlined />
-                        </Space>
-                      </button>
+
+                    <div className="carousel-bottom-controls">
+                      <div className="carousel-indicators">
+                        {slides.map((_, index) => (
+                          <div
+                            key={index}
+                            className={`indicator ${index === currentSlide ? 'active' : ''}`}
+                            onClick={() => goToSlide(index)}
+                          />
+                        ))}
+                      </div>
+                      <div className="carousel-navigation">
+                        <button
+                          className="carousel-control-bottom"
+                          onClick={prevSlide}
+                        >
+                          <Space>
+                            <LeftOutlined />
+                          </Space>
+                        </button>
+                        <button
+                          className="carousel-control-bottom"
+                          onClick={nextSlide}
+                        >
+                          <Space>
+                            <RightOutlined />
+                          </Space>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* WSL功能区域 */}
             <div className="wsl-section">
@@ -920,19 +929,6 @@ export default function Hello() {
         >
           <span className="button-text">卸载Podman</span>
         </Button>
-      </Modal>
-      <Modal
-        open={showTerminalLog}
-        footer={false}
-        closable={true}
-        onCancel={() => setShowTerminalLog(false)}
-      >
-        <TerminalLogScreen
-          id="hello-terminal-log"
-          cols={100}
-          rows={20}
-          style={{ width: 'calc(100% - 20px)', marginTop: '16px' }}
-        />
       </Modal>
     </div>
   );

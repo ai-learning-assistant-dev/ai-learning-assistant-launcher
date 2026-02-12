@@ -8,14 +8,39 @@ import {
 import { appPath } from '../exec/util';
 import { Exec } from '../exec';
 import { loggerFactory } from '../terminal-log';
-import { mkdirSync, rm, rmSync, unlinkSync } from 'fs';
+import { existsSync, readFileSync, mkdirSync, rmSync } from 'fs';
 
 const commandLine = new Exec();
 
 export async function getServiceInfo(
   serviceName: NativeServiceName,
 ): Promise<NativeServiceInfo> {
-  return { state: 'not_install', version: '1.0.0' };
+  if (serviceName === 'NATIVE_TRAINING') {
+    // 检查external-resources/native-training目录是否存在
+    const nativeTrainingPath = path.join(
+      appPath,
+      'external-resources',
+      'native-training',
+    );
+
+    if (existsSync(nativeTrainingPath)) {
+      // 检查package.json文件是否存在
+      const packageJsonPath = path.join(nativeTrainingPath, 'package.json');
+      if (existsSync(packageJsonPath)) {
+        try {
+          const packageJsonContent = readFileSync(packageJsonPath, 'utf-8');
+          const packageJson = JSON.parse(packageJsonContent);
+          const version = packageJson.version || '0.0.0';
+          return { state: 'stopped', version };
+        } catch (error) {
+          // 如果读取或解析失败，返回默认值
+          return { state: 'stopped', version: '0.0.0' };
+        }
+      }
+    }
+  }
+
+  return { state: 'not_install', version: '0.0.0' };
 }
 export async function getServiceLogs(serviceName: NativeServiceName) {}
 
@@ -50,11 +75,16 @@ export async function startService(
   serviceName: NativeServiceName,
 ): Promise<NativeServiceInfo> {
   if (serviceName === 'NATIVE_TRAINING') {
-    await commandLine.exec('bun tsdown && bun ./dist/app.mjs', [], {
-      shell: true,
-      logger: loggerFactory(serviceName),
-      cwd: gitPath,
-    });
+    await commandLine.exec(
+      'bun tsoa spec-and-routes && bun tsdown && bun ./dist/app.mjs',
+      [],
+      {
+        shell: true,
+        encoding: 'utf8',
+        logger: loggerFactory(serviceName),
+        cwd: gitPath,
+      },
+    );
   }
   return { state: 'running', version: '1.0.0' };
 }

@@ -149,7 +149,7 @@ export async function courseHaveNewVersionTrainingService() {
   const currentVersion = await getCourseVersion();
   return {
     currentVersion: currentVersion,
-    latestVersion: getLatestVersion('TRAINING_TAR').version,
-    haveNew: !isLatestVersion('TRAINING_TAR', currentVersion),
+    latestVersion: currentVersion,
+    haveNew: false,
   };
 }
