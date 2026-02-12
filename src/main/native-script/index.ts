@@ -50,7 +50,12 @@ export async function installService(
   serviceName: NativeServiceName,
 ): Promise<NativeServiceInfo> {
   if (serviceName === 'NATIVE_TRAINING') {
-    rmSync(gitPath, { recursive: true });
+    try {
+      rmSync(gitPath, { recursive: true });
+    } catch (e) {
+      console.error(e);
+    }
+
     mkdirSync(gitPath, { recursive: true });
     await gitClone(
       'https://github.com/ai-learning-assistant-dev/ai-learning-assistant-training-server.git',
@@ -70,7 +75,11 @@ export async function monitorStatusIsHealthy(
 ): Promise<boolean> {
   return true;
 }
-export async function uninstallService(serviceName: NativeServiceName) {}
+export async function uninstallService(serviceName: NativeServiceName) {
+  if (serviceName === 'NATIVE_TRAINING') {
+    rmSync(gitPath, { recursive: true });
+  }
+}
 export async function startService(
   serviceName: NativeServiceName,
 ): Promise<NativeServiceInfo> {
