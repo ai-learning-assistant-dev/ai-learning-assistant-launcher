@@ -9,6 +9,7 @@ import { appPath } from '../exec/util';
 import { Exec } from '../exec';
 import { loggerFactory } from '../terminal-log';
 import { existsSync, readFileSync, mkdirSync, rmSync, cpSync } from 'fs';
+import { CancellationTokenSourceImpl } from '../exec/cancellation-token';
 
 const commandLine = new Exec();
 
@@ -116,10 +117,33 @@ export async function installService(
     return { state: 'stopped', version: '1.0.0' };
   }
 }
-export async function monitorStatusIsHealthy(
+export async function monitorStateIsRuning(
   serviceName: NativeServiceName,
-): Promise<boolean> {
-  return true;
+): Promise<void> {
+  if (serviceName === 'NATIVE_TRAINING') {
+    console.debug('checking health', serviceName);
+    return new Promise<void>((resolve, reject) => {
+      const interval = setInterval(async () => {
+        const newInfo = await getServiceInfo(serviceName);
+        if (newInfo) {
+          if (newInfo.state !== 'starting') {
+            if (newInfo.state === 'running') {
+              clearInterval(interval);
+              resolve();
+            } else {
+              clearInterval(interval);
+              reject();
+            }
+          } else {
+            // do nothing
+          }
+        } else {
+          clearInterval(interval);
+          reject();
+        }
+      }, 1000);
+    });
+  }
 }
 export async function uninstallService(serviceName: NativeServiceName) {
   if (serviceName === 'NATIVE_TRAINING') {
@@ -135,12 +159,15 @@ export async function startService(
   serviceName: NativeServiceName,
 ): Promise<NativeServiceInfo> {
   if (serviceName === 'NATIVE_TRAINING') {
-    await commandLine.exec('set PORT=7100 && bun ./dist/app.mjs', [], {
+    const tokenSource = new CancellationTokenSourceImpl();
+    commandLine.exec('set PORT=7100 && bun ./dist/app.mjs', [], {
       shell: true,
       encoding: 'utf8',
       logger: loggerFactory(serviceName),
       cwd: trainingServerSourcePath,
+      token: tokenSource.token,
     });
+    return getServiceInfo(serviceName);
   }
   return { state: 'running', version: '1.0.0' };
 }

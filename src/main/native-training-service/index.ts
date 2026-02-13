@@ -14,7 +14,7 @@ import {
   getServiceInfo,
   getServiceLogs,
   installService,
-  monitorStatusIsHealthy,
+  monitorStateIsRuning,
   uninstallService,
   startService,
   stopService,
@@ -107,7 +107,7 @@ export async function startTrainingService() {
   if (info && info.state === 'running') {
     createWindow();
   } else {
-    await monitorStatusIsHealthy('NATIVE_TRAINING');
+    await monitorStateIsRuning('NATIVE_TRAINING');
     createWindow();
   }
   return { someData: 'data1' };
