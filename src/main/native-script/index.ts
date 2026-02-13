@@ -8,7 +8,7 @@ import {
 import { appPath } from '../exec/util';
 import { Exec } from '../exec';
 import { loggerFactory } from '../terminal-log';
-import { existsSync, readFileSync, mkdirSync, rmSync } from 'fs';
+import { existsSync, readFileSync, mkdirSync, rmSync, cpSync } from 'fs';
 
 const commandLine = new Exec();
 
@@ -44,29 +44,75 @@ export async function getServiceInfo(
 }
 export async function getServiceLogs(serviceName: NativeServiceName) {}
 
-const gitPath = path.join(appPath, 'external-resources', 'native-training');
+const trainingServerSourcePath = path.join(
+  appPath,
+  'external-resources',
+  'native-training',
+);
+const trainingServerSourcePublicPath = path.join(
+  trainingServerSourcePath,
+  'public',
+);
+const trainingFrontendPath = path.join(
+  appPath,
+  'external-resources',
+  'native-training-front-tmp',
+);
+const trainingFrontendDistPath = path.join(trainingFrontendPath, 'dist');
 
 export async function installService(
   serviceName: NativeServiceName,
 ): Promise<NativeServiceInfo> {
   if (serviceName === 'NATIVE_TRAINING') {
     try {
-      rmSync(gitPath, { recursive: true });
+      rmSync(trainingServerSourcePath, { recursive: true });
     } catch (e) {
-      console.error(e);
+      console.warn(e);
+    }
+    mkdirSync(trainingServerSourcePath, { recursive: true });
+
+    try {
+      rmSync(trainingFrontendPath, { recursive: true });
+    } catch (e) {
+      console.warn(e);
     }
 
-    mkdirSync(gitPath, { recursive: true });
+    console.debug('开始下载程序');
+
+    mkdirSync(trainingFrontendPath, { recursive: true });
     await gitClone(
       'https://github.com/ai-learning-assistant-dev/ai-learning-assistant-training-server.git',
-      gitPath,
+      trainingServerSourcePath,
       'version-manager',
     );
-    await commandLine.exec('bun install', [], {
+
+    console.debug('开始编译程序');
+    await commandLine.exec(
+      'bun install && bun tsoa spec-and-routes && bun tsdown',
+      [],
+      {
+        shell: true,
+        logger: loggerFactory(serviceName),
+        cwd: trainingServerSourcePath,
+      },
+    );
+    await gitClone(
+      'https://github.com/ai-learning-assistant-dev/ai-learning-assistant-training-front.git',
+      trainingFrontendPath,
+      'main',
+    );
+    await commandLine.exec('bun install && bun tsc -b && bun vite build', [], {
       shell: true,
       logger: loggerFactory(serviceName),
-      cwd: gitPath,
+      cwd: trainingFrontendPath,
     });
+
+    cpSync(trainingFrontendDistPath, trainingServerSourcePublicPath, {
+      recursive: true,
+    });
+
+    rmSync(trainingFrontendPath);
+
     return { state: 'stopped', version: '1.0.0' };
   }
 }
@@ -77,23 +123,24 @@ export async function monitorStatusIsHealthy(
 }
 export async function uninstallService(serviceName: NativeServiceName) {
   if (serviceName === 'NATIVE_TRAINING') {
-    rmSync(gitPath, { recursive: true });
+    rmSync(trainingServerSourcePath, { recursive: true });
+    try {
+      rmSync(trainingFrontendPath, { recursive: true });
+    } catch (e) {
+      console.warn(e);
+    }
   }
 }
 export async function startService(
   serviceName: NativeServiceName,
 ): Promise<NativeServiceInfo> {
   if (serviceName === 'NATIVE_TRAINING') {
-    await commandLine.exec(
-      'bun tsoa spec-and-routes && bun tsdown && bun ./dist/app.mjs',
-      [],
-      {
-        shell: true,
-        encoding: 'utf8',
-        logger: loggerFactory(serviceName),
-        cwd: gitPath,
-      },
-    );
+    await commandLine.exec('set PORT=7100 && bun ./dist/app.mjs', [], {
+      shell: true,
+      encoding: 'utf8',
+      logger: loggerFactory(serviceName),
+      cwd: trainingServerSourcePath,
+    });
   }
   return { state: 'running', version: '1.0.0' };
 }
