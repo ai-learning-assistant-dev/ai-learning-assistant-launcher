@@ -10,8 +10,33 @@ import { Exec } from '../exec';
 import { loggerFactory } from '../terminal-log';
 import { existsSync, readFileSync, mkdirSync, rmSync, cpSync } from 'fs';
 import { CancellationTokenSourceImpl } from '../exec/cancellation-token';
+import http from 'http';
 
 const commandLine = new Exec();
+
+// 健康检查函数，检查服务是否在运行
+async function checkServiceHealth(url: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const req = http.get(url, (res) => {
+      // 如果状态码是2xx或3xx，认为服务是健康的
+      if (res.statusCode && res.statusCode >= 200 && res.statusCode < 400) {
+        resolve(true);
+      } else {
+        resolve(false);
+      }
+      res.resume(); // 消耗响应数据以释放连接
+    });
+
+    req.on('error', () => {
+      resolve(false);
+    });
+
+    req.setTimeout(3000, () => {
+      req.destroy();
+      resolve(false);
+    });
+  });
+}
 
 export async function getServiceInfo(
   serviceName: NativeServiceName,
@@ -32,7 +57,10 @@ export async function getServiceInfo(
           const packageJsonContent = readFileSync(packageJsonPath, 'utf-8');
           const packageJson = JSON.parse(packageJsonContent);
           const version = packageJson.version || '0.0.0';
-          return { state: 'stopped', version };
+
+          // 检查http://127.0.0.1:7100是否能正常访问，如果能访问,则返回的state是running，否则是stopped
+          const isHealthy = await checkServiceHealth('http://127.0.0.1:7100');
+          return { state: isHealthy ? 'running' : 'stopped', version };
         } catch (error) {
           // 如果读取或解析失败，返回默认值
           return { state: 'stopped', version: '0.0.0' };
@@ -126,7 +154,7 @@ export async function monitorStateIsRuning(
       const interval = setInterval(async () => {
         const newInfo = await getServiceInfo(serviceName);
         if (newInfo) {
-          if (newInfo.state !== 'starting') {
+          if (newInfo.state !== 'stopped') {
             if (newInfo.state === 'running') {
               clearInterval(interval);
               resolve();
@@ -147,6 +175,7 @@ export async function monitorStateIsRuning(
 }
 export async function uninstallService(serviceName: NativeServiceName) {
   if (serviceName === 'NATIVE_TRAINING') {
+    // TODO 终止占用7100端口的进程
     rmSync(trainingServerSourcePath, { recursive: true });
     try {
       rmSync(trainingFrontendPath, { recursive: true });
@@ -159,14 +188,18 @@ export async function startService(
   serviceName: NativeServiceName,
 ): Promise<NativeServiceInfo> {
   if (serviceName === 'NATIVE_TRAINING') {
-    const tokenSource = new CancellationTokenSourceImpl();
-    commandLine.exec('set PORT=7100 && bun ./dist/app.mjs', [], {
-      shell: true,
-      encoding: 'utf8',
-      logger: loggerFactory(serviceName),
-      cwd: trainingServerSourcePath,
-      token: tokenSource.token,
-    });
+    const info = await getServiceInfo(serviceName);
+    if (info.state !== 'running') {
+      const tokenSource = new CancellationTokenSourceImpl();
+      commandLine.exec('set PORT=7100 && bun ./dist/app.mjs', [], {
+        shell: true,
+        encoding: 'utf8',
+        logger: loggerFactory(serviceName),
+        cwd: trainingServerSourcePath,
+        token: tokenSource.token,
+      });
+    }
+    await monitorStateIsRuning(serviceName);
     return getServiceInfo(serviceName);
   }
   return { state: 'running', version: '1.0.0' };

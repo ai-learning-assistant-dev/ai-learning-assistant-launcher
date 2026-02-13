@@ -41,11 +41,7 @@ export function useNativeTrainingServiceShortcut() {
       serviceInfo.state = 'starting';
       await window.mainHandle.startNativeTrainingServiceHandle();
       await queryServiceInfo();
-    } else if (serviceInfo.state === 'stopped') {
-      serviceInfo.state = 'starting';
-      await window.mainHandle.startNativeTrainingServiceHandle();
-      await queryServiceInfo();
-    } else if (serviceInfo.state === 'exited') {
+    } else {
       serviceInfo.state = 'starting';
       await window.mainHandle.startNativeTrainingServiceHandle();
       await queryServiceInfo();
