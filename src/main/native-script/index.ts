@@ -5,7 +5,7 @@ import {
   NativeServiceName,
   NativeServiceInfo,
 } from './type-info';
-import { appPath } from '../exec/util';
+import { appPath, isWindows } from '../exec/util';
 import { Exec } from '../exec';
 import { loggerFactory } from '../terminal-log';
 import { existsSync, readFileSync, mkdirSync, rmSync, cpSync } from 'fs';
@@ -13,6 +13,64 @@ import { CancellationTokenSourceImpl } from '../exec/cancellation-token';
 import http from 'http';
 
 const commandLine = new Exec();
+
+// 终止占用指定端口的进程
+async function killProcessOnPort(port: number): Promise<void> {
+  try {
+    if (isWindows()) {
+      // Windows: 使用netstat查找占用端口的进程ID
+      // 注意：这里使用shell命令字符串，因为netstat和findstr需要管道连接
+      const netstatResult = await commandLine.exec(
+        `netstat -ano | findstr :${port}`,
+        [],
+        {
+          shell: true,
+        },
+      );
+
+      const lines = netstatResult.stdout.split('\n');
+      const pids = new Set<string>();
+
+      for (const line of lines) {
+        const match = line.match(/\s+(\d+)$/);
+        if (match) {
+          pids.add(match[1]);
+        }
+      }
+
+      // 终止所有找到的进程
+      for (const pid of pids) {
+        try {
+          await commandLine.exec('taskkill', ['/F', '/PID', pid]);
+          console.debug(`已终止进程 PID: ${pid} (端口: ${port})`);
+        } catch (error) {
+          console.warn(`无法终止进程 PID: ${pid}`, error);
+        }
+      }
+    } else {
+      // macOS/Linux: 使用lsof查找占用端口的进程ID
+      const lsofResult = await commandLine.exec('lsof', ['-ti', `:${port}`]);
+
+      const pids = lsofResult.stdout
+        .trim()
+        .split('\n')
+        .filter((pid) => pid.trim() !== '');
+
+      // 终止所有找到的进程
+      for (const pid of pids) {
+        try {
+          await commandLine.exec('kill', ['-9', pid]);
+          console.debug(`已终止进程 PID: ${pid} (端口: ${port})`);
+        } catch (error) {
+          console.warn(`无法终止进程 PID: ${pid}`, error);
+        }
+      }
+    }
+  } catch (error) {
+    // 如果命令执行失败（例如没有找到占用端口的进程），忽略错误
+    console.debug(`没有找到占用端口 ${port} 的进程或无法终止:`, error);
+  }
+}
 
 // 健康检查函数，检查服务是否在运行
 async function checkServiceHealth(url: string): Promise<boolean> {
@@ -175,7 +233,12 @@ export async function monitorStateIsRuning(
 }
 export async function uninstallService(serviceName: NativeServiceName) {
   if (serviceName === 'NATIVE_TRAINING') {
-    // TODO 终止占用7100端口的进程
+    // 终止占用7100端口的进程
+    try {
+      await killProcessOnPort(7100);
+    } catch (e) {
+      console.warn(e);
+    }
     rmSync(trainingServerSourcePath, { recursive: true });
     try {
       rmSync(trainingFrontendPath, { recursive: true });
@@ -204,5 +267,13 @@ export async function startService(
   }
   return { state: 'running', version: '1.0.0' };
 }
-export async function stopService(serviceName: NativeServiceName) {}
+export async function stopService(serviceName: NativeServiceName) {
+  if (serviceName === 'NATIVE_TRAINING') {
+    try {
+      await killProcessOnPort(7100);
+    } catch (e) {
+      console.warn(e);
+    }
+  }
+}
 export async function updateService(serviceName: NativeServiceName) {}
