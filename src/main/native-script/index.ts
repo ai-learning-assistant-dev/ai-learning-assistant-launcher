@@ -14,6 +14,62 @@ import http from 'http';
 
 const commandLine = new Exec();
 
+// 检查进程是否是关键系统进程（Windows）
+async function isCriticalProcess(pid: string): Promise<boolean> {
+  if (!isWindows()) {
+    return false; // 非Windows系统暂不检查
+  }
+
+  try {
+    // 获取进程名称
+    const tasklistResult = await commandLine.exec('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH']);
+    const lines = tasklistResult.stdout.trim().split('\n');
+    
+    if (lines.length === 0 || lines[0] === '') {
+      return false; // 进程不存在
+    }
+
+    // CSV格式: "进程名","PID","会话名","会话#","内存使用"
+    const match = lines[0].match(/"([^"]+)","([^"]+)","([^"]+)","([^"]+)","([^"]+)"/);
+    if (!match) {
+      return false;
+    }
+
+    const processName = match[1].toLowerCase();
+    
+    // Windows关键系统进程列表
+    const criticalProcesses = [
+      'system',
+      'registry',
+      'smss.exe',
+      'csrss.exe',
+      'wininit.exe',
+      'services.exe',
+      'lsass.exe',
+      'svchost.exe',
+      'explorer.exe',
+      'taskhostw.exe',
+      'dwm.exe',
+      'ctfmon.exe',
+      'winlogon.exe',
+      'spoolsv.exe',
+      'taskeng.exe',
+      'conhost.exe',
+      'sihost.exe',
+      'runtimebroker.exe',
+      'searchindexer.exe',
+      'searchui.exe',
+      'shellexperiencehost.exe'
+    ];
+
+    // 检查是否是关键进程
+    return criticalProcesses.some(critical => processName.includes(critical.toLowerCase()));
+  } catch (error) {
+    console.warn(`无法检查进程 ${pid} 的信息:`, error);
+    return true; // 如果无法检查，安全起见不终止该进程
+  }
+}
+
 // 终止占用指定端口的进程
 async function killProcessOnPort(port: number): Promise<void> {
   try {
@@ -41,6 +97,13 @@ async function killProcessOnPort(port: number): Promise<void> {
       // 终止所有找到的进程
       for (const pid of pids) {
         try {
+          // 安全检查：不终止关键系统进程
+          const isCritical = await isCriticalProcess(pid);
+          if (isCritical) {
+            console.warn(`跳过关键系统进程 PID: ${pid} (端口: ${port})`);
+            continue;
+          }
+
           await commandLine.exec('taskkill', ['/F', '/PID', pid]);
           console.debug(`已终止进程 PID: ${pid} (端口: ${port})`);
         } catch (error) {
