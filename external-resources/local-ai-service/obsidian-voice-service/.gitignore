@@ -1,0 +1,4 @@
+/ai-learning-assistant-voice-backend-*
+voice-service.err
+voice-service.out
+service-status.json

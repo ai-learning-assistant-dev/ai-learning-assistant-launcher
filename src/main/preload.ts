@@ -31,10 +31,17 @@ import {
   DLCId,
 } from './dlc/type-info';
 import {
+  installRTSServiceHandle,
   getRTSServiceStatusHandle,
   runRTSServiceHandle,
   stopRTSServiceHandle,
 } from './local-service/rts-service/type-info';
+import {
+  getObsidianVoiceServiceStatusHandle,
+  installObsidianVoiceServiceHandle,
+  runObsidianVoiceServiceHandle,
+  stopObsidianVoiceServiceHandle,
+} from './local-service/obsidian-voice-service/type-info';
 
 const electronHandler = {
   ipcRenderer: {
@@ -144,7 +151,7 @@ const mainHandle = {
     return ipcInvoke(pauseWebtorrentHandle, url);
   },
   installRTSServiceHandle: async (): Promise<string> => {
-    return ipcInvoke('installRTSService');
+    return ipcInvoke(installRTSServiceHandle);
   },
   getRTSServiceStatusHandle: async (): Promise<string> => {
     return ipcInvoke(getRTSServiceStatusHandle);
@@ -154,6 +161,18 @@ const mainHandle = {
   },
   stopRTSServiceHandle: async (): Promise<string> => {
     return ipcInvoke(stopRTSServiceHandle);
+  },
+  installObsidianVoiceServiceHandle: async (): Promise<string> => {
+    return ipcInvoke(installObsidianVoiceServiceHandle);
+  },
+  getObsidianVoiceServiceStatusHandle: async (): Promise<string> => {
+    return ipcInvoke(getObsidianVoiceServiceStatusHandle);
+  },
+  runObsidianVoiceServiceHandle: async (): Promise<string> => {
+    return ipcInvoke(runObsidianVoiceServiceHandle);
+  },
+  stopObsidianVoiceServiceHandle: async (): Promise<string> => {
+    return ipcInvoke(stopObsidianVoiceServiceHandle);
   },
   removeWebtorrentHandle: async (url: string) => {
     return ipcInvoke(removeWebtorrentHandle, url);

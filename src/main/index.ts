@@ -15,6 +15,7 @@ import initLogService from './backup';
 import initExternalUrl from './external-url';
 import initDLC from './dlc';
 import initRTSService from './local-service/rts-service';
+import initObsidianVoiceService from './local-service/obsidian-voice-service';
 import path from 'node:path';
 import { appPath, autoAdaptEncodingForWindows } from './exec';
 import { logDeviceInfo } from './logger/log-device-info';
@@ -83,6 +84,7 @@ initTrainingService(ipcMain);
 initExternalUrl(ipcMain);
 initDLC(ipcMain);
 initRTSService(ipcMain);
+initObsidianVoiceService(ipcMain);
 updateTemplate();
 
 const createWindow = async () => {
