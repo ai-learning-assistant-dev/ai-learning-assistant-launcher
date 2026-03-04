@@ -71,7 +71,7 @@ const config: ForgeConfig = {
       const buildPath = outputPaths[0];
       const copyRules = [path.join(__dirname, 'external-resources', '**')];
       const bigFileSuffix = [
-        '*.exe',
+        // '*.exe',
         '*.msi',
         '*.tar.zst',
         '*.tar.gz',
@@ -91,10 +91,62 @@ const config: ForgeConfig = {
           );
         });
       }
+      // local-ai-service内的大文件不打到包内
+      bigFileSuffix.forEach((suffix) => {
+        copyRules.push(
+          '!' +
+            path.join(
+              __dirname,
+              'external-resources',
+              'local-ai-service',
+              '**',
+              suffix,
+            ),
+        );
+      });
       // DLC内的大文件不打到包内
       bigFileSuffix.forEach((suffix) => {
         copyRules.push(
           '!' + path.join(__dirname, 'external-resources', 'dlc', '**', suffix),
+        );
+      });
+      // native-runtime 内的大文件不打到包内
+      bigFileSuffix.forEach((suffix) => {
+        copyRules.push(
+          '!' +
+            path.join(
+              __dirname,
+              'external-resources',
+              'native-runtime',
+              '**',
+              suffix,
+            ),
+        );
+      });
+      // native-training 内的大文件不打到包内
+      bigFileSuffix.forEach((suffix) => {
+        copyRules.push(
+          '!' +
+            path.join(
+              __dirname,
+              'external-resources',
+              'native-training',
+              '**',
+              suffix,
+            ),
+        );
+      });
+      // native-training 内的大文件不打到包内
+      bigFileSuffix.forEach((suffix) => {
+        copyRules.push(
+          '!' +
+            path.join(
+              __dirname,
+              'external-resources',
+              'native-training-front-tmp',
+              '**',
+              suffix,
+            ),
         );
       });
       try {

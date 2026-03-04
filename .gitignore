@@ -116,5 +116,6 @@ update-temp/
 update.bat
 
 # 忽略下载下来的代码
-external-resources\native-training
-external-resources\native-training-front-tmp
+external-resources/native-training
+external-resources/native-training-front-tmp
+external-resources/local-ai-service
