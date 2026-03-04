@@ -71,7 +71,7 @@ const config: ForgeConfig = {
       const buildPath = outputPaths[0];
       const copyRules = [path.join(__dirname, 'external-resources', '**')];
       const bigFileSuffix = [
-        // '*.exe',
+        '*.exe',
         '*.msi',
         '*.tar.zst',
         '*.tar.gz',
@@ -95,19 +95,6 @@ const config: ForgeConfig = {
       bigFileSuffix.forEach((suffix) => {
         copyRules.push(
           '!' + path.join(__dirname, 'external-resources', 'dlc', '**', suffix),
-        );
-      });
-      // native-runtime 内的大文件不打到包内
-      bigFileSuffix.forEach((suffix) => {
-        copyRules.push(
-          '!' +
-            path.join(
-              __dirname,
-              'external-resources',
-              'native-runtime',
-              '**',
-              suffix,
-            ),
         );
       });
       const allFileSuffix = ['*'];
