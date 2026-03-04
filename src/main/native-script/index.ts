@@ -233,7 +233,7 @@ export async function installService(
     await gitClone(
       'https://github.com/ai-learning-assistant-dev/ai-learning-assistant-training-server.git',
       trainingServerSourcePath,
-      'version-manager',
+      'version-manage-with-main',
     );
 
     console.debug('开始编译程序');
