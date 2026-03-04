@@ -91,19 +91,6 @@ const config: ForgeConfig = {
           );
         });
       }
-      // local-ai-service内的大文件不打到包内
-      bigFileSuffix.forEach((suffix) => {
-        copyRules.push(
-          '!' +
-            path.join(
-              __dirname,
-              'external-resources',
-              'local-ai-service',
-              '**',
-              suffix,
-            ),
-        );
-      });
       // DLC内的大文件不打到包内
       bigFileSuffix.forEach((suffix) => {
         copyRules.push(
@@ -123,8 +110,22 @@ const config: ForgeConfig = {
             ),
         );
       });
-      // native-training 内的大文件不打到包内
-      bigFileSuffix.forEach((suffix) => {
+      const allFileSuffix = ['*'];
+      // local-ai-service内的所有文件不打到包内
+      allFileSuffix.forEach((suffix) => {
+        copyRules.push(
+          '!' +
+            path.join(
+              __dirname,
+              'external-resources',
+              'local-ai-service',
+              '**',
+              suffix,
+            ),
+        );
+      });
+      // native-training 内的所有文件不打到包内
+      allFileSuffix.forEach((suffix) => {
         copyRules.push(
           '!' +
             path.join(
@@ -136,8 +137,8 @@ const config: ForgeConfig = {
             ),
         );
       });
-      // native-training 内的大文件不打到包内
-      bigFileSuffix.forEach((suffix) => {
+      // native-training-front-tmp 内的所有文件不打到包内
+      allFileSuffix.forEach((suffix) => {
         copyRules.push(
           '!' +
             path.join(
