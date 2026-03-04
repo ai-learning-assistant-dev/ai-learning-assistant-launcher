@@ -11,6 +11,7 @@ import { loggerFactory } from '../terminal-log';
 import { existsSync, readFileSync, mkdirSync, rmSync, cpSync } from 'fs';
 import { CancellationTokenSourceImpl } from '../exec/cancellation-token';
 import http from 'http';
+import { getLatestVersion, startWebtorrent, waitTorrentDone } from '../dlc';
 
 const commandLine = new Exec();
 
@@ -227,14 +228,29 @@ export async function installService(
       console.warn(e);
     }
 
+    mkdirSync(trainingFrontendPath, { recursive: true });
+
+    console.debug('开始下载课程数据');
+
+    const latestVersion = getLatestVersion('TRAINING_COURSE');
+    await startWebtorrent(latestVersion.dlcInfo.magnet);
+    const torrent = await waitTorrentDone(
+      'TRAINING_COURSE',
+      latestVersion.version,
+    );
+    const courseSqlPath = path.join(torrent.path, torrent.files[0].name);
+
     console.debug('开始下载程序');
 
-    mkdirSync(trainingFrontendPath, { recursive: true });
     await gitClone(
-      'https://github.com/ai-learning-assistant-dev/ai-learning-assistant-training-server.git',
+      'https://gitee.com/shiftonetothree/ai-learning-assistant-training-server.git',
       trainingServerSourcePath,
       'version-manage-with-main',
     );
+
+    console.debug('将课程文件复制到代码目录');
+
+    cpSync(courseSqlPath, path.join(trainingServerSourcePath, 'back_f.sql'));
 
     console.debug('开始编译程序');
     await commandLine.exec(
@@ -246,8 +262,9 @@ export async function installService(
         cwd: trainingServerSourcePath,
       },
     );
+
     await gitClone(
-      'https://github.com/ai-learning-assistant-dev/ai-learning-assistant-training-front.git',
+      'https://gitee.com/shiftonetothree/ai-learning-assistant-training-front.git',
       trainingFrontendPath,
       'main',
     );
