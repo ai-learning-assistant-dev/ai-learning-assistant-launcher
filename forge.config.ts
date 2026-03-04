@@ -77,6 +77,7 @@ const config: ForgeConfig = {
         '*.tar.gz',
         '*.tar',
         '*.mp4',
+        '*.zip',
       ];
       if (process.env.MAKE_MINI) {
         bigFileSuffix.forEach((suffix) => {
