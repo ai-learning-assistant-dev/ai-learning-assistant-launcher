@@ -51,7 +51,7 @@ const defaultLlmConfig: LLMConfig = {
 };
 
 // 添加大模型配置文件路径
-const llmConfigPath = path.join(
+export const llmConfigPath = path.join(
   appPath,
   'external-resources',
   'config',

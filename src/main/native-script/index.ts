@@ -12,6 +12,7 @@ import { existsSync, readFileSync, mkdirSync, rmSync, cpSync } from 'fs';
 import { CancellationTokenSourceImpl } from '../exec/cancellation-token';
 import http from 'http';
 import { getLatestVersion, startWebtorrent, waitTorrentDone } from '../dlc';
+import { llmConfigPath } from '../configs';
 
 const commandLine = new Exec();
 
@@ -334,13 +335,17 @@ export async function startService(
     const info = await getServiceInfo(serviceName);
     if (info.state !== 'running') {
       const tokenSource = new CancellationTokenSourceImpl();
-      commandLine.exec('set PORT=7100 && bun ./dist/app.mjs', [], {
-        shell: true,
-        encoding: 'utf8',
-        logger: loggerFactory(serviceName),
-        cwd: trainingServerSourcePath,
-        token: tokenSource.token,
-      });
+      commandLine.exec(
+        `set PORT=7100 && set "ALA_LLM_CONFIG_PATH=${llmConfigPath}" && bun ./dist/app.mjs`,
+        [],
+        {
+          shell: true,
+          encoding: 'utf8',
+          logger: loggerFactory(serviceName),
+          cwd: trainingServerSourcePath,
+          token: tokenSource.token,
+        },
+      );
     }
     await monitorStateIsRuning(serviceName);
     return getServiceInfo(serviceName);
