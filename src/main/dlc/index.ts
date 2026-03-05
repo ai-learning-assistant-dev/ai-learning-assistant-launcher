@@ -65,7 +65,11 @@ const getWebTorrent = async () => {
     // @ts-ignore
     (await allExports.default).default;
 
-  const iceServers = [{ urls: 'stun:learning.panchuantech.cn:19244' }];
+  const iceServers = [
+    { urls: 'stun:learning.panchuantech.cn:19244' },
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:121.40.137.135:3478' },
+  ];
   // try {
   //   const ac = new AbortController();
   //   const t = setTimeout(ac.abort, 3000);
@@ -89,7 +93,11 @@ const getWebTorrent = async () => {
       rtcConfig: {
         iceServers,
       } as RTCConfiguration,
-      announce: ['wss://learning.panchuantech.cn/announce'],
+      announce: [
+        'wss://learning.panchuantech.cn/announce',
+        'wss://114.66.58.95:17853/announce',
+        'ws://121.40.137.135:8200',
+      ],
     },
   });
 
