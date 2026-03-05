@@ -768,11 +768,7 @@ export default function Hello() {
                         loading={
                           trainingServiceStarting || trainingShortcut.initing
                         }
-                        disabled={
-                          trainingServiceRemoving ||
-                          !isPodmanInstalled ||
-                          wslLoading
-                        }
+                        disabled={trainingServiceRemoving}
                       >
                         {trainingShortcut.state === 'not_install'
                           ? '安装'
@@ -787,7 +783,6 @@ export default function Hello() {
                           size="large"
                           onClick={updateCourseTrainingService}
                           loading={trainingServiceRemoving}
-                          disabled={!isPodmanInstalled || wslLoading}
                         >
                           更新课程
                         </Button>
@@ -798,11 +793,7 @@ export default function Hello() {
                         block
                         size="large"
                         onClick={() => setShowTerminalLog(true)}
-                        disabled={
-                          !isPodmanInstalled ||
-                          wslLoading ||
-                          trainingServiceRemoving
-                        }
+                        disabled={trainingServiceRemoving}
                       >
                         日志
                       </Button>
@@ -814,7 +805,6 @@ export default function Hello() {
                         size="large"
                         onClick={removeTrainingService}
                         loading={trainingServiceRemoving}
-                        disabled={!isPodmanInstalled || wslLoading}
                       >
                         卸载
                       </Button>
