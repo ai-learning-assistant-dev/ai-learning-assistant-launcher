@@ -7,6 +7,17 @@
 # 应该是rts服务，那么这里返回具体的状态，而不是直接就简单的看一下json
 
 $statusFile = "service-status.json"
-$st = Get-Content $statusFile -Raw | ConvertFrom-Json
-Write-Output $st.status   
+
+if (-not (Test-Path $statusFile)) {
+    Write-Output "not_installed"
+    exit 0
+}
+
+try {
+    $raw = Get-Content $statusFile -Raw
+    $st = $raw | ConvertFrom-Json
+    Write-Output $st.status
+} catch {
+    Write-Output "error"
+}
 exit 0

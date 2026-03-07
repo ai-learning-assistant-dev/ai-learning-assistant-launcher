@@ -135,13 +135,20 @@ try {
     Update-SpacyModelUrl
     Sync-UvEnvironment 
   }
+  
+  # Create initial status file after install success
+  $statusFile = "$PSScriptRoot\service-status.json"
+  @{
+      status = 'stopped'
+      pid    = $null
+      stamp  = [datetime]::Now.ToString('o')
+      error  = $null
+  } | ConvertTo-Json -Compress | Set-Content -Path $statusFile -Encoding UTF8 -Force
+  
   Write-Output "success"   
   # exit 0                   
 }
 catch {
   Write-Host "zip the code failed" -ForegroundColor Red
   Write-Output "error"
-  # exit 0               
 }
-Write-Output "success"
-# exit 0

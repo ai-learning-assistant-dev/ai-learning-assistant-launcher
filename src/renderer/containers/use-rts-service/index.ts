@@ -87,9 +87,7 @@ export function useRtsService(): UseRtsServiceReturn {
       console.log('run RTS service result: ', res);
       setRtsProgress(100);
 
-      if (res.includes('success')) {
-        message.success('RTS 服务启动成功！');
-      } else {
+      if (!res.includes('success')) {
         message.error('启动失败：' + res);
       }
 
@@ -123,9 +121,7 @@ export function useRtsService(): UseRtsServiceReturn {
       const res = await window.mainHandle.stopRTSServiceHandle();
       setRtsProgress(100);
 
-      if (res.includes('success')) {
-        message.success('RTS 服务已停止！');
-      } else {
+      if (!res.includes('success')) {
         message.warning('停止结果：' + res);
       }
 
@@ -143,14 +139,19 @@ export function useRtsService(): UseRtsServiceReturn {
   // 初始化和定时刷新 RTS 状态
   useEffect(() => {
     refreshRtsStatus();
-    const interval = setInterval(refreshRtsStatus, 5000);
-    return () => clearInterval(interval);
+    const interval = setInterval(() => {
+      refreshRtsStatus();
+    }, 5000);
+    return () => {
+      clearInterval(interval);
+    };
   }, [refreshRtsStatus]);
 
-  // 监听状态变化，当达到目标状态时自动结束加载
+  // 监听状态变化，当达到目标状态时自动结束加载并显示成功消息
   useEffect(() => {
     // 启动操作完成：状态变成 running
     if (rtsOperation === 'run' && rtsState === 'running') {
+      message.success('RTS 服务启动成功！');
       setRtsProgress(100);
       setTimeout(() => {
         setRtsLoading(false);
@@ -160,6 +161,7 @@ export function useRtsService(): UseRtsServiceReturn {
     }
     // 停止操作完成：状态变成 stopped
     if (rtsOperation === 'stop' && rtsState === 'stopped') {
+      message.success('RTS 服务已停止！');
       setRtsProgress(100);
       setTimeout(() => {
         setRtsLoading(false);

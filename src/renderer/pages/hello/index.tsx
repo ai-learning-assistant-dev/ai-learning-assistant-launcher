@@ -497,7 +497,9 @@ export default function Hello() {
                               ? '启动中'
                               : rtsState === 'stopped'
                                 ? '已停止'
-                                : rtsState || '检测中...'}
+                                : rtsState === 'not_installed'
+                                  ? '未安装'
+                                  : '检测中...'}
                       </span>
                     </div>
                   </div>

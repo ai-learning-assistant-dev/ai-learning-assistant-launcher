@@ -62,7 +62,7 @@ function Write-Status {
 # 启动RTS服务
 function Start-FlaskNonBlock {
     param(
-        [int]$MaxRetry  = 30,
+        [int]$MaxRetry  = 180,  # Increased: 180 * 2s = 6 minutes max wait
         [int]$Port      = 8989,
         [string]$LogOut = "$PSScriptRoot\flask.out",
         [string]$LogErr = "$PSScriptRoot\flask.err"
@@ -79,35 +79,52 @@ function Start-FlaskNonBlock {
         -RedirectStandardOutput $LogOut `
         -RedirectStandardError  $LogErr
 
-    # Write-Host "flask PID=$($proc.Id)  out=$LogOut err=$LogErr"
+    # Record starting status with actual PID (not 0)
+    Write-Status -Status 'starting' -service_PID $proc.Id
 
-    # 这个时候我们没有PID可以传递，简单记录一下状态
-    Write-Status -Status 'starting' 
-
-    # 轮询端口确认服务进程真的启动了
+    # Poll port to confirm service started (optimized: shorter intervals)
     $ok = $false
     for ($i = 1; $i -le $MaxRetry; $i++) {
-        Start-Sleep -Seconds 10
-        if ($proc.HasExited) { break }  # 进程已经不存在了
+        Start-Sleep -Seconds 2
+        
+        # Check if process is still running (more reliable than HasExited)
+        $currentProc = Get-Process -Id $proc.Id -ErrorAction SilentlyContinue
+        if (-not $currentProc) { 
+            # Read error log for debugging
+            if (Test-Path $LogErr) {
+                $errContent = Get-Content $LogErr -Tail 10 -ErrorAction SilentlyContinue
+                Write-Host "Process exited prematurely. Last 10 lines of flask.err:" -ForegroundColor Yellow
+                $errContent | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+            }
+            break 
+        }
+        
         $tcp = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue
-        <# 
-            这里实际上存在一种通过进程实现的内存耗尽的可能
-            这里假定启动Flask的进程自己失败了就会结束
-            但是如果失败了也仍然保持着存在，也可能反复启动几次
-            耗尽显存
-        #>
         if ($tcp) {
-            $proc = Get-Process -Id $tcp.OwningProcess -ErrorAction SilentlyContinue
+            Write-Host "Port $Port is now listening" -ForegroundColor Green
             $ok = $true
             Write-Status -Status 'running' -service_PID $tcp.OwningProcess 
             break
+        }
+        # Progress indicator every 10 retries (20 seconds)
+        if ($i % 10 -eq 0) {
+            Write-Host "Still waiting for port $Port... ($i/$MaxRetry retries, $([int]($i*2))s elapsed)" -ForegroundColor Yellow
+            # Update status to show still starting
+            Write-Status -Status 'starting' -service_PID $proc.Id
         }
     }
 
     # 结果判定
     if (-not $ok) {
+        Write-Host "Service failed to start within timeout" -ForegroundColor Red
+        # Read error log for debugging
+        if (Test-Path $LogErr) {
+            $errContent = Get-Content $LogErr -Tail 20 -ErrorAction SilentlyContinue
+            Write-Host "Last 20 lines of flask.err:" -ForegroundColor Yellow
+            $errContent | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+        }
         taskkill /PID $proc.Id /T /F 2>$null
-        Write-Status -Status 'error' -ErrorMsg $_.Exception.Message -service_PID $null
+        Write-Status -Status 'error' -ErrorMsg "Service failed to start within timeout" -service_PID $null
         return $false
     }
     return $true

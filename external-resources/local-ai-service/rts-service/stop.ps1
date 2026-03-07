@@ -8,6 +8,7 @@
 #>
 
 $statusFile = "$PSScriptRoot\service-status.json"
+
 function Write-Status {
     param(
         [string]$Status = $null,
@@ -24,7 +25,8 @@ function Write-Status {
 }
 
 if (Test-Path $statusFile) {
-    $st = Get-Content $statusFile -Raw | ConvertFrom-Json
+    $raw = Get-Content $statusFile -Raw
+    $st = $raw | ConvertFrom-Json
     if ($st.pid -eq 0 -or -not $st.pid) {
         Write-Host "No PID found, nothing to kill." -ForegroundColor Yellow
     } else {

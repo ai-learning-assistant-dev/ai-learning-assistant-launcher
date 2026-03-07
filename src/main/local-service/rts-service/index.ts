@@ -23,12 +23,21 @@ const psDir = path.resolve(
   '../../external-resources/local-ai-service/rts-service',
 );
 
+// Extract last non-empty line from stdout (filter out debug output)
+function extractStatus(stdout: string): string {
+  const lines = stdout
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line);
+  return lines.length > 0 ? lines[lines.length - 1] : '';
+}
+
 /* 
   单次获取RTS服务状态
 */
 export async function getRTSServiceStatus(): Promise<string> {
   try {
-    const { stdout, stderr } = await exec(
+    const { stdout } = await exec(
       'powershell',
       [
         '-ExecutionPolicy',
@@ -39,9 +48,8 @@ export async function getRTSServiceStatus(): Promise<string> {
       { encoding: 'utf8' },
     );
     console.log('getRTSServiceStatus ', stdout);
-    // if (stderr) console.warn('PS stderr:', stderr);
-    // console.log("stdout.trim():",stdout.trim())
-    return stdout.trim();
+    const status = extractStatus(stdout);
+    return status;
   } catch (e: any) {
     // 把 PowerShell 的具体错误打印出来
     console.error('PS exit code:', e.code);
@@ -64,7 +72,8 @@ export async function installRTSService(): Promise<string> {
       { encoding: 'utf8' },
     );
     console.log('install RTS Service result,', stdout.trim());
-    return stdout.trim(); // "success" | "error"
+    const status = extractStatus(stdout);
+    return status; // "success" | "error"
   } catch (e: any) {
     console.error('install exit code:', e.code);
     console.error('install stderr:', e.stderr?.toString());
@@ -81,7 +90,8 @@ export async function runRTSService(): Promise<string> {
       ['-ExecutionPolicy', 'Bypass', '-Command', `cd "${psDir}"; .\\run.ps1`],
       { encoding: 'utf8' },
     );
-    return stdout.trim(); // "success" | "error"
+    const status = extractStatus(stdout);
+    return status; // "success" | "error"
   } catch (e: any) {
     console.error('run failed:', e.message);
     console.error('run exit code:', e.code);
@@ -99,7 +109,8 @@ export async function stopRTSService(): Promise<string> {
       ['-ExecutionPolicy', 'Bypass', '-Command', `cd "${psDir}"; .\\stop.ps1`],
       { encoding: 'utf8' },
     );
-    return stdout.trim(); // "success"
+    const status = extractStatus(stdout);
+    return status; // "success"
   } catch (e: any) {
     console.error('stop failed:', e.message);
     console.error('stop exit code:', e.code);
