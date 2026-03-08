@@ -167,6 +167,26 @@ export async function runRTSService(): Promise<string> {
       const lines = text.split('\n');
       for (const line of lines) {
         const trimmed = line.trim();
+        // Print python.exe path length info
+        if (trimmed.startsWith('PYTHON_PATH_INFO:')) {
+          console.log('[RTS]', trimmed);
+          // Parse path length and check Windows limit (260 chars)
+          const match = trimmed.match(/\(length:\s*(\d+)\)/);
+          if (match) {
+            const pathLength = parseInt(match[1], 10);
+            if (pathLength > 260) {
+              const errorMsg = `python.exe 路径过长（当前 ${pathLength} 个字符，上限 260 个字符），可能导致 Windows 加载 DLL 失败。请将启动器移动到较短路径，例如 D:\\ALA\\`;
+              console.error('[RTS] Path too long:', pathLength);
+              sendProgressToRenderer({
+                type: 'progress',
+                percent: 0,
+                stage: 'path_error',
+                message: errorMsg,
+                operation: 'run',
+              });
+            }
+          }
+        }
         const progress = parseProgressLine(trimmed, 'run');
         if (progress) {
           console.log('Run progress:', progress);

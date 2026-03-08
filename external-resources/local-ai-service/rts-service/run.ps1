@@ -29,6 +29,35 @@ function Write-Progress-Json {
     Write-Output "PROGRESS:$json"
 }
 
+# 路径长度检测：超过200字符时报错并退出
+function Test-PathLength {
+    $scriptPath = $PSScriptRoot
+    $pathLength = $scriptPath.Length
+    Write-Host "Current script path: $scriptPath (length: $pathLength)" -ForegroundColor Cyan
+    if ($pathLength -gt 200) {
+        $errorMsg = "安装路径过长（当前 $pathLength 个字符，上限 200 个字符），spacy/kokoro 加载 DLL 时会因 Windows 260 字符限制失败。请将启动器移动到较短路径，例如 D:\ALA\"
+        Write-Host "ERROR: $errorMsg" -ForegroundColor Red
+        $progressObj = @{
+            type    = 'progress'
+            percent = 0
+            stage   = 'path_error'
+            message = $errorMsg
+        }
+        Write-Output "PROGRESS:$($progressObj | ConvertTo-Json -Compress)"
+        exit 1
+    }
+}
+Test-PathLength
+
+# Print python.exe path length
+function Print-PythonPathLength {
+    $pythonPath = "$PSScriptRoot\$extractedDir\.venv\Scripts\python.exe"
+    $pathLength = $pythonPath.Length
+    Write-Host "Python executable path: $pythonPath (length: $pathLength)" -ForegroundColor Cyan
+    Write-Output "PYTHON_PATH_INFO: $pythonPath (length: $pathLength)"
+}
+Print-PythonPathLength
+
 # 查找 uv 可执行文件路径
 Write-Progress-Json -Percent 5 -Stage "check_uv" -Message "Checking uv package manager..."
 function Find-UvPath {

@@ -79,6 +79,8 @@ export interface UseRtsServiceReturn {
   rtsProgress: number;
   rtsOperation: RtsOperation;
   rtsStageMessage: string;
+  rtsErrorMessage: string;
+  clearRtsError: () => void;
   refreshRtsStatus: () => Promise<string>;
   installRts: () => Promise<void>;
   runRts: () => Promise<void>;
@@ -91,6 +93,11 @@ export function useRtsService(): UseRtsServiceReturn {
   const [rtsProgress, setRtsProgress] = useState(0);
   const [rtsOperation, setRtsOperation] = useState<RtsOperation>(null);
   const [rtsStageMessage, setRtsStageMessage] = useState('');
+  const [rtsErrorMessage, setRtsErrorMessage] = useState('');
+
+  const clearRtsError = useCallback(() => {
+    setRtsErrorMessage('');
+  }, []);
 
   // 使用 ref 来跟踪当前操作，避免闭包问题
   const operationRef = useRef<RtsOperation>(null);
@@ -234,6 +241,16 @@ export function useRtsService(): UseRtsServiceReturn {
   useEffect(() => {
     const unsubscribe = window.mainHandle.onRtsProgress((progress) => {
       console.log('Received RTS progress:', progress);
+      // 路径过长错误：不管当前操作，直接设置错误并结束加载
+      if (progress.stage === 'path_error') {
+        setRtsErrorMessage(progress.message);
+        setRtsLoading(false);
+        setRtsOperation(null);
+        operationRef.current = null;
+        setRtsProgress(0);
+        setRtsStageMessage('');
+        return;
+      }
       // 只有当前操作与进度事件类型匹配时才更新
       if (operationRef.current === progress.operation) {
         setRtsProgress(progress.percent);
@@ -276,6 +293,8 @@ export function useRtsService(): UseRtsServiceReturn {
     rtsProgress,
     rtsOperation,
     rtsStageMessage,
+    rtsErrorMessage,
+    clearRtsError,
     refreshRtsStatus,
     installRts,
     runRts,

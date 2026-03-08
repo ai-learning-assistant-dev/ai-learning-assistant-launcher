@@ -57,6 +57,8 @@ export default function Hello() {
     rtsProgress,
     rtsOperation,
     rtsStageMessage,
+    rtsErrorMessage,
+    clearRtsError,
     installRts,
     runRts,
     stopRts,
@@ -504,6 +506,23 @@ export default function Hello() {
                       </span>
                     </div>
                   </div>
+                  {/* 路径过长错误提示 */}
+                  {rtsErrorMessage && (
+                    <div className="rts-error-message">
+                      <div className="rts-error-content">
+                        <span className="rts-error-icon">⚠️</span>
+                        <span className="rts-error-text">
+                          {rtsErrorMessage}
+                        </span>
+                      </div>
+                      <button
+                        className="rts-error-close"
+                        onClick={clearRtsError}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
                   <div className="rts-buttons-wrapper">
                     {rtsLoading && rtsProgress > 0 && (
                       <div className="rts-progress-inline">
