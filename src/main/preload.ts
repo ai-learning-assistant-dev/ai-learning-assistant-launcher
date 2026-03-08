@@ -34,6 +34,8 @@ import {
   getRTSServiceStatusHandle,
   runRTSServiceHandle,
   stopRTSServiceHandle,
+  rtsProgressChannel,
+  RTSProgressInfo,
 } from './local-service/rts-service/type-info';
 
 const electronHandler = {
@@ -160,6 +162,16 @@ const mainHandle = {
   },
   logsWebtorrentHandle: async (url: string) => {
     return ipcInvoke(logsWebtorrentHandle, url);
+  },
+  // RTS 进度事件监听
+  onRtsProgress: (callback: (progress: RTSProgressInfo) => void) => {
+    const handler = (_event: IpcRendererEvent, progress: RTSProgressInfo) => {
+      callback(progress);
+    };
+    ipcRenderer.on(rtsProgressChannel, handler);
+    return () => {
+      ipcRenderer.removeListener(rtsProgressChannel, handler);
+    };
   },
 };
 

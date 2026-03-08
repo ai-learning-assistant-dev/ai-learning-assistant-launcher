@@ -1,14 +1,16 @@
-import { execFile } from 'child_process';
+import { spawn, execFile } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 const exec = promisify(execFile);
-import { IpcMain } from 'electron';
+import { IpcMain, BrowserWindow } from 'electron';
 import { ipcHandle } from '../../ipc-util';
 import {
   getRTSServiceStatusHandle,
   installRTSServiceHandle,
   runRTSServiceHandle,
   stopRTSServiceHandle,
+  rtsProgressChannel,
+  RTSProgressInfo,
 } from './type-info';
 
 export default function init(ipcMain: IpcMain): void {
@@ -28,8 +30,41 @@ function extractStatus(stdout: string): string {
   const lines = stdout
     .split('\n')
     .map((line) => line.trim())
-    .filter((line) => line);
+    .filter((line) => line && !line.startsWith('PROGRESS:'));
   return lines.length > 0 ? lines[lines.length - 1] : '';
+}
+
+// 发送进度事件到所有渲染进程
+function sendProgressToRenderer(progressInfo: RTSProgressInfo): void {
+  const windows = BrowserWindow.getAllWindows();
+  windows.forEach((win) => {
+    if (!win.isDestroyed()) {
+      win.webContents.send(rtsProgressChannel, progressInfo);
+    }
+  });
+}
+
+// 解析进度 JSON
+function parseProgressLine(
+  line: string,
+  operation: 'install' | 'run',
+): RTSProgressInfo | null {
+  if (line.startsWith('PROGRESS:')) {
+    try {
+      const jsonStr = line.substring('PROGRESS:'.length);
+      const data = JSON.parse(jsonStr);
+      return {
+        type: 'progress',
+        percent: data.percent || 0,
+        stage: data.stage || '',
+        message: data.message || '',
+        operation,
+      };
+    } catch (e) {
+      console.error('Failed to parse progress JSON:', e);
+    }
+  }
+  return null;
 }
 
 /* 
@@ -60,8 +95,8 @@ export async function getRTSServiceStatus(): Promise<string> {
 }
 // TODO install
 export async function installRTSService(): Promise<string> {
-  try {
-    const { stdout } = await exec(
+  return new Promise((resolve) => {
+    const child = spawn(
       'powershell',
       [
         '-ExecutionPolicy',
@@ -69,36 +104,95 @@ export async function installRTSService(): Promise<string> {
         '-Command',
         `cd "${psDir}"; .\\install.ps1`,
       ],
-      { encoding: 'utf8' },
+      { shell: true },
     );
-    console.log('install RTS Service result,', stdout.trim());
-    const status = extractStatus(stdout);
-    return status; // "success" | "error"
-  } catch (e: any) {
-    console.error('install exit code:', e.code);
-    console.error('install stderr:', e.stderr?.toString());
-    console.error('install stdout:', e.stdout?.toString());
-    return 'unknown';
-  }
+
+    let stdoutData = '';
+    let stderrData = '';
+
+    child.stdout.on('data', (data: Buffer) => {
+      const text = data.toString();
+      stdoutData += text;
+
+      // 解析每一行检查是否有进度信息
+      const lines = text.split('\n');
+      for (const line of lines) {
+        const trimmed = line.trim();
+        const progress = parseProgressLine(trimmed, 'install');
+        if (progress) {
+          console.log('Install progress:', progress);
+          sendProgressToRenderer(progress);
+        }
+      }
+    });
+
+    child.stderr.on('data', (data: Buffer) => {
+      stderrData += data.toString();
+    });
+
+    child.on('close', (code) => {
+      console.log('install RTS Service result,', stdoutData.trim());
+      if (code !== 0) {
+        console.error('install exit code:', code);
+        console.error('install stderr:', stderrData);
+      }
+      const status = extractStatus(stdoutData);
+      resolve(status || 'unknown');
+    });
+
+    child.on('error', (err) => {
+      console.error('install error:', err.message);
+      resolve('unknown');
+    });
+  });
 }
 
 // TODO run
 export async function runRTSService(): Promise<string> {
-  try {
-    const { stdout } = await exec(
+  return new Promise((resolve) => {
+    const child = spawn(
       'powershell',
       ['-ExecutionPolicy', 'Bypass', '-Command', `cd "${psDir}"; .\\run.ps1`],
-      { encoding: 'utf8' },
+      { shell: true },
     );
-    const status = extractStatus(stdout);
-    return status; // "success" | "error"
-  } catch (e: any) {
-    console.error('run failed:', e.message);
-    console.error('run exit code:', e.code);
-    console.error('run stderr:', e.stderr?.toString());
-    console.error('run stdout:', e.stdout?.toString());
-    return 'unknown';
-  }
+
+    let stdoutData = '';
+    let stderrData = '';
+
+    child.stdout.on('data', (data: Buffer) => {
+      const text = data.toString();
+      stdoutData += text;
+
+      // 解析每一行检查是否有进度信息
+      const lines = text.split('\n');
+      for (const line of lines) {
+        const trimmed = line.trim();
+        const progress = parseProgressLine(trimmed, 'run');
+        if (progress) {
+          console.log('Run progress:', progress);
+          sendProgressToRenderer(progress);
+        }
+      }
+    });
+
+    child.stderr.on('data', (data: Buffer) => {
+      stderrData += data.toString();
+    });
+
+    child.on('close', (code) => {
+      if (code !== 0) {
+        console.error('run exit code:', code);
+        console.error('run stderr:', stderrData);
+      }
+      const status = extractStatus(stdoutData);
+      resolve(status || 'unknown');
+    });
+
+    child.on('error', (err) => {
+      console.error('run error:', err.message);
+      resolve('unknown');
+    });
+  });
 }
 
 // TODO stop

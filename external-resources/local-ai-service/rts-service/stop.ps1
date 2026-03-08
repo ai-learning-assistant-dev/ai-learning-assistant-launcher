@@ -15,13 +15,32 @@ function Write-Status {
         [int]$service_PID = $null, 
         [string]$ErrorMsg = $null
     )
-    @{
+    $statusData = @{
         status = $Status
         pid    = $service_PID
         stamp  = [datetime]::Now.ToString('o')
         error  = $ErrorMsg
-    } | ConvertTo-Json -Compress |
-        Set-Content -Path $statusFile -Encoding UTF8 -Force
+    } | ConvertTo-Json -Compress
+    
+    # Retry mechanism to handle file locking
+    $maxRetries = 5
+    $retryDelay = 200  # milliseconds
+    for ($retry = 0; $retry -lt $maxRetries; $retry++) {
+        try {
+            [System.IO.File]::WriteAllText($statusFile, $statusData, [System.Text.Encoding]::UTF8)
+            return
+        } catch {
+            if ($retry -lt $maxRetries - 1) {
+                Start-Sleep -Milliseconds $retryDelay
+            }
+        }
+    }
+    # Final fallback
+    try {
+        $statusData | Set-Content -Path $statusFile -Encoding UTF8 -Force
+    } catch {
+        Write-Host "Warning: Could not write status file" -ForegroundColor Yellow
+    }
 }
 
 if (Test-Path $statusFile) {

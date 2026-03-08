@@ -56,6 +56,7 @@ export default function Hello() {
     rtsLoading,
     rtsProgress,
     rtsOperation,
+    rtsStageMessage,
     installRts,
     runRts,
     stopRts,
@@ -509,23 +510,15 @@ export default function Hello() {
                         <Progress
                           percent={rtsProgress}
                           size="small"
-                          showInfo={false}
+                          showInfo={true}
                           status={rtsProgress === 100 ? 'success' : 'active'}
+                          format={(percent) => `${percent}%`}
                         />
-                        {rtsOperation === 'run' &&
-                          rtsProgress >= 80 &&
-                          rtsProgress < 100 && (
-                            <span className="rts-loading-hint">
-                              服务启动中，请耐心等待...
-                            </span>
-                          )}
-                        {rtsOperation === 'install' &&
-                          rtsProgress >= 80 &&
-                          rtsProgress < 100 && (
-                            <span className="rts-loading-hint">
-                              正在安装依赖，请耐心等待...
-                            </span>
-                          )}
+                        {rtsStageMessage && (
+                          <span className="rts-loading-hint">
+                            {rtsStageMessage}
+                          </span>
+                        )}
                       </div>
                     )}
                     {/* 安装按钮：未安装或状态未知时显示 */}
