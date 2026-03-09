@@ -34,3 +34,5 @@ export interface NativeServiceInfo {
   /** 版本号 */
   version?: string;
 }
+
+export const TRAINING_PORT = 7100;

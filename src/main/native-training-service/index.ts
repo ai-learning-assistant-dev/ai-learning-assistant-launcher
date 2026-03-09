@@ -28,6 +28,12 @@ import {
   waitTorrentDone,
 } from '../dlc';
 import path from 'node:path';
+import { appPath, Exec } from '../exec';
+import { CancellationTokenSourceImpl } from '../exec/cancellation-token';
+import { loggerFactory } from '../terminal-log';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+
+const commandLine = new Exec();
 
 // 全局变量存储trainingWindow实例
 let trainingWindow: BrowserWindow | null = null;
@@ -86,7 +92,16 @@ export async function queryTrainingService() {
 }
 
 export async function installTrainingService() {
-  return installService('NATIVE_TRAINING');
+  const installedInfo = await installService('NATIVE_TRAINING');
+  const info = await startService('NATIVE_TRAINING');
+  if (info && info.state === 'running') {
+    await updateCourseTrainingService();
+  } else {
+    await monitorStateIsRuning('NATIVE_TRAINING');
+    await updateCourseTrainingService();
+  }
+  await stopService('NATIVE_TRAINING');
+  return installedInfo;
 }
 
 export async function removeTrainingService() {
@@ -113,43 +128,90 @@ export async function startTrainingService() {
   return { someData: 'data1' };
 }
 
+const trainingServerSourcePath = path.join(
+  appPath,
+  'external-resources',
+  'native-training',
+);
+
+// 检查external-resources/native-training目录是否存在
+const nativeTrainingPath = path.join(
+  appPath,
+  'external-resources',
+  'native-training',
+);
+const courseVersionMark = path.join(nativeTrainingPath, 'course-version.json');
+
 export async function updateCourseTrainingService() {
-  try {
-    trainingWindow.close();
-  } catch (e) {
-    console.warn(e);
-  }
+  console.debug('检查是否有新课程');
   if ((await courseHaveNewVersionTrainingService()).haveNew) {
-    const latestVersion = getLatestVersion('TRAINING_TAR');
+    console.debug('开始下载课程数据');
+    const latestVersion = getLatestVersion('TRAINING_COURSE');
     await startWebtorrent(latestVersion.dlcInfo.magnet);
     const torrent = await waitTorrentDone(
-      'TRAINING_TAR',
+      'TRAINING_COURSE',
       latestVersion.version,
     );
+    const coursePath = path.join(torrent.path, torrent.files[0].name);
+    console.debug('将课程导入到学科培训');
+    const tokenSource = new CancellationTokenSourceImpl();
+    commandLine.exec(
+      `bun db:import:course "${coursePath}" --base-url=http://localhost:7100`,
+      [],
+      {
+        shell: true,
+        encoding: 'utf8',
+        logger: loggerFactory('NATIVE_TRAINING'),
+        cwd: trainingServerSourcePath,
+        token: tokenSource.token,
+      },
+    );
+    // 留下版本标记
+    writeFileSync(
+      courseVersionMark,
+      JSON.stringify({ version: latestVersion.version }, null, 2),
+    );
+    console.debug('成功将课程导入到学科培训');
     try {
-      await stopService('NATIVE_TRAINING');
-      await uninstallService('NATIVE_TRAINING');
+      trainingWindow.reload();
     } catch (e) {
       console.warn(e);
     }
-    const tarPath = path.join(torrent.path, torrent.files[0].name);
-    await updateService('NATIVE_TRAINING');
-    return { someData: 'data1' };
+  } else {
+    console.debug('没有新课程');
   }
+  return { someData: 'data1' };
 }
 
 export async function getCourseVersion() {
-  const info = await getServiceInfo('NATIVE_TRAINING');
-  const labelVersion = info && info.version;
-  console.debug('labelVersion', labelVersion);
-  return labelVersion ? labelVersion : '0.0.1';
+  if (existsSync(nativeTrainingPath)) {
+    const courseVersionMark = path.join(
+      nativeTrainingPath,
+      'course-version.json',
+    );
+    if (existsSync(courseVersionMark)) {
+      try {
+        const courseVersionJsonContent = readFileSync(
+          courseVersionMark,
+          'utf-8',
+        );
+        const courseVersionJson = JSON.parse(courseVersionJsonContent);
+        const version: string = courseVersionJson.version || '0.0.0';
+        return version;
+      } catch (error) {
+        return '0.0.0';
+      }
+    }
+  }
+  return '0.0.0';
 }
 
 export async function courseHaveNewVersionTrainingService() {
   const currentVersion = await getCourseVersion();
+  const latestVersion = getLatestVersion('TRAINING_COURSE');
   return {
     currentVersion: currentVersion,
-    latestVersion: currentVersion,
-    haveNew: false,
+    latestVersion: latestVersion.version,
+    haveNew: currentVersion != latestVersion.version,
   };
 }

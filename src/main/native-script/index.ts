@@ -4,6 +4,7 @@ import {
   NativeServiceItem,
   NativeServiceName,
   NativeServiceInfo,
+  TRAINING_PORT,
 } from './type-info';
 import { appPath, isWindows } from '../exec/util';
 import { Exec } from '../exec';
@@ -24,21 +25,29 @@ async function isCriticalProcess(pid: string): Promise<boolean> {
 
   try {
     // 获取进程名称
-    const tasklistResult = await commandLine.exec('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH']);
+    const tasklistResult = await commandLine.exec('tasklist', [
+      '/FI',
+      `PID eq ${pid}`,
+      '/FO',
+      'CSV',
+      '/NH',
+    ]);
     const lines = tasklistResult.stdout.trim().split('\n');
-    
+
     if (lines.length === 0 || lines[0] === '') {
       return false; // 进程不存在
     }
 
     // CSV格式: "进程名","PID","会话名","会话#","内存使用"
-    const match = lines[0].match(/"([^"]+)","([^"]+)","([^"]+)","([^"]+)","([^"]+)"/);
+    const match = lines[0].match(
+      /"([^"]+)","([^"]+)","([^"]+)","([^"]+)","([^"]+)"/,
+    );
     if (!match) {
       return false;
     }
 
     const processName = match[1].toLowerCase();
-    
+
     // Windows关键系统进程列表
     const criticalProcesses = [
       'system',
@@ -61,11 +70,13 @@ async function isCriticalProcess(pid: string): Promise<boolean> {
       'runtimebroker.exe',
       'searchindexer.exe',
       'searchui.exe',
-      'shellexperiencehost.exe'
+      'shellexperiencehost.exe',
     ];
 
     // 检查是否是关键进程
-    return criticalProcesses.some(critical => processName.includes(critical.toLowerCase()));
+    return criticalProcesses.some((critical) =>
+      processName.includes(critical.toLowerCase()),
+    );
   } catch (error) {
     console.warn(`无法检查进程 ${pid} 的信息:`, error);
     return true; // 如果无法检查，安全起见不终止该进程
@@ -231,38 +242,20 @@ export async function installService(
 
     mkdirSync(trainingFrontendPath, { recursive: true });
 
-    console.debug('开始下载课程数据');
-
-    const latestVersion = getLatestVersion('TRAINING_COURSE');
-    await startWebtorrent(latestVersion.dlcInfo.magnet);
-    const torrent = await waitTorrentDone(
-      'TRAINING_COURSE',
-      latestVersion.version,
-    );
-    const courseSqlPath = path.join(torrent.path, torrent.files[0].name);
-
     console.debug('开始下载程序');
 
     await gitClone(
       'https://gitee.com/shiftonetothree/ai-learning-assistant-training-server.git',
       trainingServerSourcePath,
-      'version-manage-with-main',
+      'refactor',
     );
-
-    console.debug('将课程文件复制到代码目录');
-
-    cpSync(courseSqlPath, path.join(trainingServerSourcePath, 'back_f.sql'));
 
     console.debug('开始编译程序');
-    await commandLine.exec(
-      'bun install && bun tsoa spec-and-routes && bun tsdown',
-      [],
-      {
-        shell: true,
-        logger: loggerFactory(serviceName),
-        cwd: trainingServerSourcePath,
-      },
-    );
+    await commandLine.exec('bun install && bun build:bun', [], {
+      shell: true,
+      logger: loggerFactory(serviceName),
+      cwd: trainingServerSourcePath,
+    });
 
     await gitClone(
       'https://gitee.com/shiftonetothree/ai-learning-assistant-training-front.git',
@@ -279,7 +272,7 @@ export async function installService(
       recursive: true,
     });
 
-    rmSync(trainingFrontendPath);
+    rmSync(trainingFrontendPath, { recursive: true });
 
     return { state: 'stopped', version: '1.0.0' };
   }
@@ -336,7 +329,7 @@ export async function startService(
     if (info.state !== 'running') {
       const tokenSource = new CancellationTokenSourceImpl();
       commandLine.exec(
-        `set PORT=7100 && set "ALA_LLM_CONFIG_PATH=${llmConfigPath}" && bun ./dist/app.mjs`,
+        `set PORT=${TRAINING_PORT} && set "ALA_LLM_CONFIG_PATH=${llmConfigPath}" && bun start`,
         [],
         {
           shell: true,
@@ -355,10 +348,11 @@ export async function startService(
 export async function stopService(serviceName: NativeServiceName) {
   if (serviceName === 'NATIVE_TRAINING') {
     try {
-      await killProcessOnPort(7100);
+      await killProcessOnPort(TRAINING_PORT);
     } catch (e) {
       console.warn(e);
     }
   }
 }
+
 export async function updateService(serviceName: NativeServiceName) {}

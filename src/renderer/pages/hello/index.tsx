@@ -216,6 +216,7 @@ export default function Hello() {
   const [trainingServiceStarting, setTrainingServiceStarting] = useState(false);
 
   const openTrainingService = async () => {
+    setShowTerminalLog(true);
     setTrainingServiceStarting(true);
     try {
       await trainingShortcut.start();
@@ -749,17 +750,19 @@ export default function Hello() {
                           `当前版本：${trainingShortcut.versionInfo.currentVersion}`}
                       </p>
                     </div>
-                    {trainingShortcut.versionInfo.haveNew && (
+                    {trainingShortcut.state === 'updating' && (
                       <TorrentProgress
-                        id={'TRAINING_TAR'}
+                        id={'TRAINING_COURSE'}
                         version={trainingShortcut.versionInfo.latestVersion}
                       />
                     )}
                   </div>
                   <div className="feature-button-container">
-                    {((trainingShortcut.state !== 'not_install' &&
-                      !trainingShortcut.versionInfo.haveNew) ||
-                      trainingShortcut.state === 'not_install') && (
+                    {!(
+                      (trainingShortcut.state === 'stopped' ||
+                        trainingShortcut.state === 'updating') &&
+                      trainingShortcut.versionInfo.haveNew
+                    ) && (
                       <Button
                         className="feature-button"
                         block
@@ -775,7 +778,8 @@ export default function Hello() {
                           : '开始'}
                       </Button>
                     )}
-                    {trainingShortcut.state !== 'not_install' &&
+                    {(trainingShortcut.state === 'stopped' ||
+                      trainingShortcut.state === 'updating') &&
                       trainingShortcut.versionInfo.haveNew && (
                         <Button
                           className="feature-button"
