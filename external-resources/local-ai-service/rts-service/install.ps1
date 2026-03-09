@@ -4,20 +4,24 @@
   预期结束码 0 返回值 success 解压成功
  #>
 
-# RTS Service Repo 的代码下载地址
+# RTS Service Repo download URL
 $zipUrl = "https://codeload.github.com/ai-learning-assistant-dev/ai-learning-assistant-rtc-backend/zip/refs/heads/shiftonetothree_dev"
-# 命名下载的文件名
 $zipFile = "repo.zip"
-<# 
-  Comment：
-    这个路径这么写的预期行为是希望解压到脚本所在位置 
- #>
-$extractedDir = "ai-learning-assistant-rtc-backend-shiftonetothree_dev"
+
+# Service directory name (shortened to avoid Windows 260 char path limit)
+# Original: ai-learning-assistant-rtc-backend-shiftonetothree_dev (52 chars)
+# Shortened: rtc-backend (11 chars) - saves 41 chars per path level
+# GitHub: https://github.com/ai-learning-assistant-dev/ai-learning-assistant-rtc-backend
+$originalDir = "ai-learning-assistant-rtc-backend-shiftonetothree_dev"
+$extractedDir = "rtc-backend"
 
 # 设定Hugging Face国内镜像以解决RTS依赖安装过程中的网络问题
 $env:HF_ENDPOINT = "https://hf-mirror.com"   
-# # Windows 下避免符号链接问题
-$env:HF_HUB_DISABLE_SYMLINKS = "1"           
+# Windows 下避免符号链接问题
+$env:HF_HUB_DISABLE_SYMLINKS = "1"
+# Force Python to use UTF-8 encoding for stdout/stderr (fix garbled Chinese)
+$env:PYTHONIOENCODING = "utf-8"
+$env:PYTHONUTF8 = "1"
 
 # 输出进度信息的函数
 function Write-Progress-Json {
@@ -162,6 +166,13 @@ try {
     Write-Host "Unzipping..." -ForegroundColor Yellow
     Expand-Archive -Path $zipFile -DestinationPath . -Force
     Write-Host "Unziped" -ForegroundColor Green
+    
+    # Rename extracted directory to short name (avoid Windows path limit)
+    if (Test-Path $originalDir) {
+      Write-Host "Renaming $originalDir -> $extractedDir" -ForegroundColor Cyan
+      Rename-Item -Path $originalDir -NewName $extractedDir -Force
+    }
+    
     Write-Progress-Json -Percent 55 -Stage "extract_done" -Message "Code extraction complete"
     Set-Location $extractedDir
     # 修正需要国内源的包地址

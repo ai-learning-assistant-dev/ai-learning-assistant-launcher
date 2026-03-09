@@ -4,12 +4,15 @@
   预期结束码 0 返回值 success 解压成功
  #>
 
-$extractedDir = "ai-learning-assistant-rtc-backend-shiftonetothree_dev"
+# Service directory name (must match install.ps1)
+# Original: ai-learning-assistant-rtc-backend-shiftonetothree_dev (52 chars)
+# Shortened: rtc-backend (11 chars) - saves 41 chars per path level
+$extractedDir = "rtc-backend"
 $statusFile = "$PSScriptRoot\service-status.json"
 
 # 设定Hugging Face国内镜像以解决RTS依赖安装过程中的网络问题
 $env:HF_ENDPOINT = "https://hf-mirror.com"   
-# # Windows 下避免符号链接问题
+# Windows 下避免符号链接问题
 $env:HF_HUB_DISABLE_SYMLINKS = "1"
 
 # 输出进度信息的函数
