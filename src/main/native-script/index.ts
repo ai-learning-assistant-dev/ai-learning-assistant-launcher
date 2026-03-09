@@ -221,7 +221,6 @@ const trainingFrontendPath = path.join(
   'external-resources',
   'native-training-front-tmp',
 );
-const trainingFrontendDistPath = path.join(trainingFrontendPath, 'dist');
 
 export async function installService(
   serviceName: NativeServiceName,
@@ -251,24 +250,19 @@ export async function installService(
     );
 
     console.debug('开始编译程序');
-    await commandLine.exec('bun install && bun build:bun', [], {
+    await commandLine.exec('bun install', [], {
       shell: true,
       logger: loggerFactory(serviceName),
       cwd: trainingServerSourcePath,
     });
 
     await gitClone(
-      'https://gitee.com/shiftonetothree/ai-learning-assistant-training-front.git',
+      'https://gitee.com/shiftonetothree/ai-learning-assistant-training-front-dist.git',
       trainingFrontendPath,
-      'main',
+      'master',
     );
-    await commandLine.exec('bun install && bun tsc -b && bun vite build', [], {
-      shell: true,
-      logger: loggerFactory(serviceName),
-      cwd: trainingFrontendPath,
-    });
 
-    cpSync(trainingFrontendDistPath, trainingServerSourcePublicPath, {
+    cpSync(trainingFrontendPath, trainingServerSourcePublicPath, {
       recursive: true,
     });
 
@@ -329,7 +323,7 @@ export async function startService(
     if (info.state !== 'running') {
       const tokenSource = new CancellationTokenSourceImpl();
       commandLine.exec(
-        `set PORT=${TRAINING_PORT} && set "ALA_LLM_CONFIG_PATH=${llmConfigPath}" && bun start`,
+        `set PORT=${TRAINING_PORT} && set "ALA_LLM_CONFIG_PATH=${llmConfigPath}" && bun dev`,
         [],
         {
           shell: true,
