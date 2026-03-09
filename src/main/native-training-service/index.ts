@@ -155,7 +155,7 @@ export async function updateCourseTrainingService() {
     const coursePath = path.join(torrent.path, torrent.files[0].name);
     console.debug('将课程导入到学科培训');
     const tokenSource = new CancellationTokenSourceImpl();
-    commandLine.exec(
+    await commandLine.exec(
       `bun db:import:course "${coursePath}" --base-url=http://localhost:7100`,
       [],
       {
