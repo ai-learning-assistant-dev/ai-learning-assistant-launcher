@@ -3,40 +3,40 @@ import { message } from 'antd';
 
 export type RtsOperation = 'install' | 'run' | 'stop' | null;
 
-// 英文消息到中文的翻译映射
+// 英文消息到中文的翻译映射（面向普通用户的友好提示）
 const messageTranslations: Record<string, string> = {
-  // run.ps1 messages
-  'Checking uv package manager...': '检查 uv 包管理器...',
-  'uv not found, please install first': 'uv 未找到，请先执行安装',
-  'uv found': 'uv 已找到',
-  'Starting service process...': '正在启动服务进程...',
-  'Waiting for service to start...': '等待服务启动...',
-  'Process exited unexpectedly': '进程异常退出',
-  'RTS service started': 'RTS 服务已启动',
-  'Service start timeout': '服务启动超时',
-  'Entering service directory...': '进入服务目录...',
-  'Checking and syncing dependencies...': '检查并同步依赖...',
+  // run.ps1 messages - 启动服务相关
+  'Checking uv package manager...': '正在检查运行环境...',
+  'uv not found, please install first': '运行环境未就绪，请先点击安装',
+  'uv found': '运行环境已就绪',
+  'Starting service process...': '正在启动语音服务...',
+  'Waiting for service to start...': '语音服务正在初始化...',
+  'Process exited unexpectedly': '服务启动异常，请重试',
+  'RTS service started': '语音服务已启动',
+  'Service start timeout': '服务启动超时，请检查网络后重试',
+  'Entering service directory...': '正在准备服务环境...',
+  'Checking and syncing dependencies...': '正在检查必要组件...',
   'Dependency sync may have issues, continuing...':
-    '依赖同步可能有问题，继续启动...',
-  'Dependencies check complete': '依赖检查完成',
-  // install.ps1 messages
-  'uv installed': 'uv 已安装',
-  'Installing uv package manager...': '正在安装 uv 包管理器...',
-  'uv installation complete': 'uv 安装完成',
+    '部分组件可能需要更新，继续启动...',
+  'Dependencies check complete': '组件检查完成',
+  // install.ps1 messages - 安装服务相关
+  'uv installed': '运行环境已就绪',
+  'Installing uv package manager...': '正在安装运行环境...',
+  'uv installation complete': '运行环境安装完成',
   'uv install may have issues, trying to continue...':
-    'uv 安装可能有问题，继续尝试...',
-  'Code package exists, skipping download': '代码包已存在，跳过下载',
-  'Downloading RTS code package...': '正在下载 RTS 代码包...',
-  'Code package download complete': '代码包下载完成',
-  'Code already extracted, skipping': '代码已解压，跳过',
-  'Updating config files...': '更新配置文件...',
-  'Config update complete': '配置更新完成',
-  'Extracting code package...': '正在解压代码包...',
-  'Code extraction complete': '代码解压完成',
-  'Installation complete': '安装完成',
-  'Dependencies synced, skipping': '依赖已同步，跳过',
-  'Syncing dependencies...': '开始同步依赖环境...',
-  'Dependencies sync complete': '依赖同步完成',
+    '环境安装可能不完整，尝试继续...',
+  'Code package exists, skipping download': '服务文件已存在，跳过下载',
+  'Downloading RTS code package...': '正在下载语音服务组件...',
+  'Code package download complete': '语音服务组件下载完成',
+  'Code already extracted, skipping': '服务已准备就绪',
+  'Updating config files...': '正在配置服务...',
+  'Config update complete': '服务配置完成',
+  'Extracting code package...': '正在解压服务文件...',
+  'Code extraction complete': '服务文件解压完成',
+  'Installation complete': '安装完成，可以启动服务了',
+  'Dependencies synced, skipping': '必要组件已就绪',
+  'Syncing dependencies...': '正在下载必要组件（首次可能需要几分钟）...',
+  'Dependencies sync complete': '必要组件准备完成',
 };
 
 // 翻译消息函数（支持动态参数）
@@ -50,25 +50,21 @@ function translateMessage(msg: string): string {
     /^Waiting for service ready\.\.\. \((\d+)s\)$/,
   );
   if (waitingMatch) {
-    return `等待服务就绪... (${waitingMatch[1]}秒)`;
+    return `语音服务启动中，请稍候... (已等待${waitingMatch[1]}秒)`;
   }
   // 模型加载消息
   if (msg.startsWith('Loading models:')) {
-    const detail = msg.replace('Loading models:', '').trim();
-    // 截取前60个字符避免显示过长
-    const shortDetail =
-      detail.length > 60 ? detail.substring(0, 60) + '...' : detail;
-    return `模型加载中: ${shortDetail}`;
+    return '正在加载语音识别模型，首次启动可能需要几分钟...';
   }
   // 错误消息匹配
   if (msg.startsWith('Start failed:')) {
-    return msg.replace('Start failed:', '启动失败:');
+    return '服务启动失败，请检查网络连接后重试';
   }
   if (msg.startsWith('Download failed:')) {
-    return msg.replace('Download failed:', '下载失败:');
+    return '下载失败，请检查网络连接后重试';
   }
   if (msg.startsWith('Installation failed:')) {
-    return msg.replace('Installation failed:', '安装失败:');
+    return '安装失败，请检查网络连接或磁盘空间后重试';
   }
   return msg;
 }
