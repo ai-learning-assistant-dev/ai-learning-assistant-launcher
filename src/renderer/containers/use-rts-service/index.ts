@@ -101,6 +101,8 @@ export function useRtsService(): UseRtsServiceReturn {
 
   // 使用 ref 来跟踪当前操作，避免闭包问题
   const operationRef = useRef<RtsOperation>(null);
+  // 使用操作ID来追踪每次操作，防止旧操作的finally覆盖新操作的状态
+  const operationIdRef = useRef<number>(0);
 
   // 刷新 RTS 状态
   const refreshRtsStatus = useCallback(async () => {
@@ -117,6 +119,8 @@ export function useRtsService(): UseRtsServiceReturn {
 
   // RTS 安装
   const installRts = useCallback(async () => {
+    // 分配新的操作ID
+    const currentOpId = ++operationIdRef.current;
     setRtsLoading(true);
     setRtsOperation('install');
     operationRef.current = 'install';
@@ -126,6 +130,13 @@ export function useRtsService(): UseRtsServiceReturn {
     try {
       const res = await window.mainHandle.installRTSServiceHandle();
       console.log('install RTS service result:', res);
+
+      // 只有当前操作ID匹配时才更新状态
+      if (operationIdRef.current !== currentOpId) {
+        console.log('install: 操作已被新操作取代，跳过状态更新');
+        return;
+      }
+
       setRtsProgress(100);
       setRtsStageMessage('安装完成');
 
@@ -137,21 +148,27 @@ export function useRtsService(): UseRtsServiceReturn {
         await refreshRtsStatus();
       }
     } catch (error) {
+      if (operationIdRef.current !== currentOpId) return;
       message.error('安装失败：' + error);
       setRtsStageMessage('安装失败');
     } finally {
-      setRtsLoading(false);
-      setRtsOperation(null);
-      operationRef.current = null;
-      setTimeout(() => {
-        setRtsProgress(0);
-        setRtsStageMessage('');
-      }, 1000);
+      // 只有当前操作ID匹配时才重置loading状态
+      if (operationIdRef.current === currentOpId) {
+        setRtsLoading(false);
+        setRtsOperation(null);
+        operationRef.current = null;
+        setTimeout(() => {
+          setRtsProgress(0);
+          setRtsStageMessage('');
+        }, 1000);
+      }
     }
   }, [refreshRtsStatus]);
 
   // RTS 启动
   const runRts = useCallback(async () => {
+    // 分配新的操作ID
+    const currentOpId = ++operationIdRef.current;
     setRtsLoading(true);
     setRtsOperation('run');
     operationRef.current = 'run';
@@ -161,6 +178,13 @@ export function useRtsService(): UseRtsServiceReturn {
     try {
       const res = await window.mainHandle.runRTSServiceHandle();
       console.log('run RTS service result: ', res);
+
+      // 只有当前操作ID匹配时才更新状态
+      if (operationIdRef.current !== currentOpId) {
+        console.log('run: 操作已被新操作取代，跳过状态更新');
+        return;
+      }
+
       setRtsProgress(100);
       setRtsStageMessage('服务已启动');
 
@@ -172,21 +196,27 @@ export function useRtsService(): UseRtsServiceReturn {
       await new Promise((resolve) => setTimeout(resolve, 2000));
       await refreshRtsStatus();
     } catch (error) {
+      if (operationIdRef.current !== currentOpId) return;
       message.error('启动失败：' + error);
       setRtsStageMessage('启动失败');
     } finally {
-      setRtsLoading(false);
-      setRtsOperation(null);
-      operationRef.current = null;
-      setTimeout(() => {
-        setRtsProgress(0);
-        setRtsStageMessage('');
-      }, 1000);
+      // 只有当前操作ID匹配时才重置loading状态
+      if (operationIdRef.current === currentOpId) {
+        setRtsLoading(false);
+        setRtsOperation(null);
+        operationRef.current = null;
+        setTimeout(() => {
+          setRtsProgress(0);
+          setRtsStageMessage('');
+        }, 1000);
+      }
     }
   }, [refreshRtsStatus]);
 
   // RTS 停止
   const stopRts = useCallback(async () => {
+    // 分配新的操作ID
+    const currentOpId = ++operationIdRef.current;
     setRtsLoading(true);
     setRtsOperation('stop');
     operationRef.current = 'stop';
@@ -203,6 +233,14 @@ export function useRtsService(): UseRtsServiceReturn {
 
     try {
       const res = await window.mainHandle.stopRTSServiceHandle();
+
+      // 只有当前操作ID匹配时才更新状态
+      if (operationIdRef.current !== currentOpId) {
+        console.log('stop: 操作已被新操作取代，跳过状态更新');
+        clearInterval(progressInterval);
+        return;
+      }
+
       setRtsProgress(100);
       setRtsStageMessage('服务已停止');
 
@@ -212,17 +250,22 @@ export function useRtsService(): UseRtsServiceReturn {
 
       await refreshRtsStatus();
     } catch (error) {
+      clearInterval(progressInterval);
+      if (operationIdRef.current !== currentOpId) return;
       message.error('停止失败：' + error);
       setRtsStageMessage('停止失败');
     } finally {
       clearInterval(progressInterval);
-      setRtsLoading(false);
-      setRtsOperation(null);
-      operationRef.current = null;
-      setTimeout(() => {
-        setRtsProgress(0);
-        setRtsStageMessage('');
-      }, 1000);
+      // 只有当前操作ID匹配时才重置loading状态
+      if (operationIdRef.current === currentOpId) {
+        setRtsLoading(false);
+        setRtsOperation(null);
+        operationRef.current = null;
+        setTimeout(() => {
+          setRtsProgress(0);
+          setRtsStageMessage('');
+        }, 1000);
+      }
     }
   }, [refreshRtsStatus]);
 

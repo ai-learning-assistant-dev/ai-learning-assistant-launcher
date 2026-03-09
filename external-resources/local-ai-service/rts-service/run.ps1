@@ -14,6 +14,9 @@ $statusFile = "$PSScriptRoot\service-status.json"
 $env:HF_ENDPOINT = "https://hf-mirror.com"   
 # Windows 下避免符号链接问题
 $env:HF_HUB_DISABLE_SYMLINKS = "1"
+# Force Python to use UTF-8 encoding for stdout/stderr (fix garbled Chinese)
+$env:PYTHONIOENCODING = "utf-8"
+$env:PYTHONUTF8 = "1"
 
 # 输出进度信息的函数
 function Write-Progress-Json {
@@ -36,7 +39,6 @@ function Write-Progress-Json {
 function Test-PathLength {
     $scriptPath = $PSScriptRoot
     $pathLength = $scriptPath.Length
-    Write-Host "Current script path: $scriptPath (length: $pathLength)" -ForegroundColor Cyan
     if ($pathLength -gt 200) {
         $errorMsg = "安装路径过长（当前 $pathLength 个字符，上限 200 个字符），spacy/kokoro 加载 DLL 时会因 Windows 260 字符限制失败。请将启动器移动到较短路径，例如 D:\ALA\"
         Write-Host "ERROR: $errorMsg" -ForegroundColor Red
@@ -52,11 +54,10 @@ function Test-PathLength {
 }
 Test-PathLength
 
-# Print python.exe path length
+# Print python.exe path length (for path limit check)
 function Print-PythonPathLength {
     $pythonPath = "$PSScriptRoot\$extractedDir\.venv\Scripts\python.exe"
     $pathLength = $pythonPath.Length
-    Write-Host "Python executable path: $pythonPath (length: $pathLength)" -ForegroundColor Cyan
     Write-Output "PYTHON_PATH_INFO: $pythonPath (length: $pathLength)"
 }
 Print-PythonPathLength
@@ -93,7 +94,6 @@ if (-not $uvPath) {
     Write-Progress-Json -Percent 0 -Stage "error" -Message "uv not found, please install first"
     exit 1
 }
-Write-Host "Found uv at: $uvPath" -ForegroundColor Green
 Write-Progress-Json -Percent 10 -Stage "uv_found" -Message "uv found"    
 
 function Write-Status {
@@ -159,46 +159,11 @@ function Start-FlaskNonBlock {
     # Record starting status with actual PID (not 0)
     Write-Status -Status 'starting' -service_PID $proc.Id
     Write-Progress-Json -Percent 45 -Stage "wait_port" -Message "Waiting for service to start..."
-
-    # Track log file position for incremental reading
-    $lastErrLine = 0
-    $lastOutLine = 0
     
     # Poll port to confirm service started (optimized: shorter intervals)
     $ok = $false
     for ($i = 1; $i -le $MaxRetry; $i++) {
         Start-Sleep -Seconds 2
-        
-        # Read and display new log content (model loading progress)
-        if (Test-Path $LogErr) {
-            $errLines = @(Get-Content $LogErr -ErrorAction SilentlyContinue)
-            if ($errLines.Count -gt $lastErrLine) {
-                for ($lineIdx = $lastErrLine; $lineIdx -lt $errLines.Count; $lineIdx++) {
-                    $line = $errLines[$lineIdx]
-                    if ($line -and $line.Trim()) {
-                        Write-Host "  [LOG] $line" -ForegroundColor Cyan
-                        # Detect model loading keywords and send progress
-                        if ($line -match "(?i)(download|loading|model|torch|cuda|weights|checkpoint)") {
-                            Write-Progress-Json -Percent 50 -Stage "loading" -Message "Loading models: $line"
-                        }
-                    }
-                }
-                $lastErrLine = $errLines.Count
-            }
-        }
-        
-        if (Test-Path $LogOut) {
-            $outLines = @(Get-Content $LogOut -ErrorAction SilentlyContinue)
-            if ($outLines.Count -gt $lastOutLine) {
-                for ($lineIdx = $lastOutLine; $lineIdx -lt $outLines.Count; $lineIdx++) {
-                    $line = $outLines[$lineIdx]
-                    if ($line -and $line.Trim()) {
-                        Write-Host "  [OUT] $line" -ForegroundColor Gray
-                    }
-                }
-                $lastOutLine = $outLines.Count
-            }
-        }
         
         # Check if process is still running (more reliable than HasExited)
         $currentProc = Get-Process -Id $proc.Id -ErrorAction SilentlyContinue
@@ -217,14 +182,15 @@ function Start-FlaskNonBlock {
         if ($tcp) {
             Write-Host "Port $Port is now listening" -ForegroundColor Green
             $ok = $true
-            Write-Status -Status 'running' -service_PID $tcp.OwningProcess
+            # 取第一个连接的PID（可能有IPv4和IPv6多个连接）
+            $owningPid = if ($tcp -is [array]) { $tcp[0].OwningProcess } else { $tcp.OwningProcess }
+            Write-Status -Status 'running' -service_PID $owningPid
             Write-Progress-Json -Percent 100 -Stage "running" -Message "RTS service started"
             break
         }
-        # Progress indicator every 10 retries (20 seconds)
-        if ($i % 10 -eq 0) {
+        # Progress indicator every 15 retries (30 seconds)
+        if ($i % 15 -eq 0) {
             $elapsedSec = [int]($i * 2)
-            Write-Host "Still waiting for port $Port... ($i/$MaxRetry retries, ${elapsedSec}s elapsed)" -ForegroundColor Yellow
             # Update status to show still starting
             Write-Status -Status 'starting' -service_PID $proc.Id
             # 计算进度: 45% -> 90% 的范围内随着重试次数增加
@@ -252,20 +218,15 @@ function Start-FlaskNonBlock {
 }
 
 try {
-    Write-Host "Try to run flask service." -ForegroundColor Yellow
     Write-Progress-Json -Percent 15 -Stage "enter_dir" -Message "Entering service directory..."
     Set-Location $extractedDir
     
     # 确保依赖已正确安装（使用 CPU 版本的 torch）
     Write-Progress-Json -Percent 20 -Stage "sync_deps" -Message "Checking and syncing dependencies..."
-    Write-Host "Ensuring dependencies are installed..." -ForegroundColor Yellow
     $syncResult = & $uvPath sync --extra cpu 2>&1
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "Warning: uv sync returned non-zero exit code" -ForegroundColor Yellow
-        Write-Host $syncResult -ForegroundColor Gray
         Write-Progress-Json -Percent 30 -Stage "sync_warning" -Message "Dependency sync may have issues, continuing..."
     } else {
-        Write-Host "Dependencies OK" -ForegroundColor Green
         Write-Progress-Json -Percent 35 -Stage "sync_done" -Message "Dependencies check complete"
     }
     

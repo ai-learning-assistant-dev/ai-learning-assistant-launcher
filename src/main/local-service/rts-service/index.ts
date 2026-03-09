@@ -13,6 +13,26 @@ import {
   RTSProgressInfo,
 } from './type-info';
 
+// 日志前缀标签
+const LOG_TAG = '[RTS-Service]';
+
+// 格式化时间戳
+function timestamp(): string {
+  return new Date().toISOString().substring(11, 23);
+}
+
+// 统一日志函数
+function logInfo(message: string, ...args: unknown[]): void {
+  console.log(`${timestamp()} ${LOG_TAG} ${message}`, ...args);
+}
+
+function logError(message: string, ...args: unknown[]): void {
+  console.error(`${timestamp()} ${LOG_TAG} ERROR: ${message}`, ...args);
+}
+
+// 缓存上次状态，避免重复日志
+let lastLoggedStatus = '';
+
 export default function init(ipcMain: IpcMain): void {
   ipcHandle(ipcMain, getRTSServiceStatusHandle, getRTSServiceStatus);
   ipcHandle(ipcMain, installRTSServiceHandle, installRTSService);
@@ -82,19 +102,25 @@ export async function getRTSServiceStatus(): Promise<string> {
       ],
       { encoding: 'utf8' },
     );
-    console.log('getRTSServiceStatus ', stdout);
+
     const status = extractStatus(stdout);
+    // 只在状态变化时打印日志
+    if (status !== lastLoggedStatus) {
+      logInfo('RTS服务状态:', status);
+      lastLoggedStatus = status;
+    }
     return status;
   } catch (e: any) {
-    // 把 PowerShell 的具体错误打印出来
-    console.error('PS exit code:', e.code);
-    console.error('PS stderr:', e.stderr?.toString());
-    console.error('PS stdout:', e.stdout?.toString());
+    logError('获取RTS状态失败:', e.message);
     return 'unknown';
   }
 }
-// TODO install
+// 安装RTS服务
 export async function installRTSService(): Promise<string> {
+  logInfo('========== 开始安装RTS服务 ==========');
+  logInfo('PowerShell脚本目录:', psDir);
+  const startTime = Date.now();
+
   return new Promise((resolve) => {
     const child = spawn(
       'powershell',
@@ -118,37 +144,57 @@ export async function installRTSService(): Promise<string> {
       const lines = text.split('\n');
       for (const line of lines) {
         const trimmed = line.trim();
+        if (!trimmed) continue;
+
         const progress = parseProgressLine(trimmed, 'install');
         if (progress) {
-          console.log('Install progress:', progress);
+          logInfo(
+            '安装进度:',
+            `${progress.percent}% - ${progress.stage} - ${progress.message}`,
+          );
           sendProgressToRenderer(progress);
         }
       }
     });
 
     child.stderr.on('data', (data: Buffer) => {
-      stderrData += data.toString();
+      const text = data.toString();
+      stderrData += text;
     });
 
     child.on('close', (code) => {
-      console.log('install RTS Service result,', stdoutData.trim());
-      if (code !== 0) {
-        console.error('install exit code:', code);
-        console.error('install stderr:', stderrData);
-      }
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      logInfo('========== 安装完成 ==========');
+      logInfo('耗时:', `${elapsed}秒`);
+      logInfo('退出码:', code);
+
+      // 打印最终结果摘要
       const status = extractStatus(stdoutData);
+      logInfo('安装结果:', status);
+
+      if (code !== 0) {
+        logError('安装失败，退出码非零:', code);
+        if (stderrData) {
+          logError('stderr摘要:', stderrData.substring(0, 500));
+        }
+      }
+
       resolve(status || 'unknown');
     });
 
     child.on('error', (err) => {
-      console.error('install error:', err.message);
+      logError('安装进程启动失败:', err.message);
       resolve('unknown');
     });
   });
 }
 
-// TODO run
+// 启动RTS服务
 export async function runRTSService(): Promise<string> {
+  logInfo('========== 开始启动RTS服务 ==========');
+  logInfo('PowerShell脚本目录:', psDir);
+  const startTime = Date.now();
+
   return new Promise((resolve) => {
     const child = spawn(
       'powershell',
@@ -167,16 +213,16 @@ export async function runRTSService(): Promise<string> {
       const lines = text.split('\n');
       for (const line of lines) {
         const trimmed = line.trim();
-        // Print python.exe path length info
+        if (!trimmed) continue;
+
+        // 检查 Python 路径长度是否超限
         if (trimmed.startsWith('PYTHON_PATH_INFO:')) {
-          console.log('[RTS]', trimmed);
-          // Parse path length and check Windows limit (260 chars)
           const match = trimmed.match(/\(length:\s*(\d+)\)/);
           if (match) {
             const pathLength = parseInt(match[1], 10);
             if (pathLength > 260) {
               const errorMsg = `python.exe 路径过长（当前 ${pathLength} 个字符，上限 260 个字符），可能导致 Windows 加载 DLL 失败。请将启动器移动到较短路径，例如 D:\\ALA\\`;
-              console.error('[RTS] Path too long:', pathLength);
+              logError('路径过长:', pathLength);
               sendProgressToRenderer({
                 type: 'progress',
                 percent: 0,
@@ -187,49 +233,67 @@ export async function runRTSService(): Promise<string> {
             }
           }
         }
+
         const progress = parseProgressLine(trimmed, 'run');
         if (progress) {
-          console.log('Run progress:', progress);
+          logInfo(
+            '启动进度:',
+            `${progress.percent}% - ${progress.stage} - ${progress.message}`,
+          );
           sendProgressToRenderer(progress);
         }
       }
     });
 
     child.stderr.on('data', (data: Buffer) => {
-      stderrData += data.toString();
+      const text = data.toString();
+      stderrData += text;
     });
 
     child.on('close', (code) => {
-      if (code !== 0) {
-        console.error('run exit code:', code);
-        console.error('run stderr:', stderrData);
-      }
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      logInfo('========== 启动完成 ==========');
+      logInfo('耗时:', `${elapsed}秒`);
+      logInfo('退出码:', code);
+
       const status = extractStatus(stdoutData);
+      logInfo('启动结果:', status);
+
+      if (code !== 0) {
+        logError('启动失败，退出码非零:', code);
+        if (stderrData) {
+          logError('stderr摘要:', stderrData.substring(0, 500));
+        }
+      }
       resolve(status || 'unknown');
     });
 
     child.on('error', (err) => {
-      console.error('run error:', err.message);
+      logError('启动进程失败:', err.message);
       resolve('unknown');
     });
   });
 }
 
-// TODO stop
+// 停止RTS服务
 export async function stopRTSService(): Promise<string> {
+  logInfo('停止RTS服务...');
+  const startTime = Date.now();
+
   try {
     const { stdout } = await exec(
       'powershell',
       ['-ExecutionPolicy', 'Bypass', '-Command', `cd "${psDir}"; .\\stop.ps1`],
       { encoding: 'utf8' },
     );
+
     const status = extractStatus(stdout);
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    logInfo('停止完成:', status, `(${elapsed}秒)`);
+
     return status; // "success"
   } catch (e: any) {
-    console.error('stop failed:', e.message);
-    console.error('stop exit code:', e.code);
-    console.error('stop stderr:', e.stderr?.toString());
-    console.error('stop stdout:', e.stdout?.toString());
+    logError('停止服务失败:', e.message);
     return 'unknown';
   }
 }

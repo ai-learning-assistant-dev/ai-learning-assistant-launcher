@@ -41,19 +41,15 @@ function Write-Progress-Json {
 }
 
 function Sync-UvEnvironment {
-  Write-Host "Checking uv env and try sync." -ForegroundColor Yellow
   # 如果 lock 文件存在，跳过同步 
   if(Test-Path "uv.lock"){
-    Write-Host "uv.lock existed, no need sync." -ForegroundColor Yellow
     Write-Progress-Json -Percent 95 -Stage "sync_skip" -Message "Dependencies synced, skipping"
     return
   }
 
   Write-Progress-Json -Percent 70 -Stage "sync_start" -Message "Syncing dependencies..."
-  Write-Host "Running uv sync..." -ForegroundColor Yellow
   uv sync --extra cu128
   if ($LASTEXITCODE -eq 0) {
-    Write-Host "uv sync completed successfully." -ForegroundColor Green
     Write-Progress-Json -Percent 95 -Stage "sync_done" -Message "Dependencies sync complete"
     Write-Output "success"
   }
@@ -103,11 +99,9 @@ function Update-SpacyModelUrl {
 Write-Progress-Json -Percent 5 -Stage "check_uv" -Message "Checking uv package manager..."
 $uv = Get-Command -Name uv -ErrorAction SilentlyContinue
 if ($uv) {
-  Write-Host "uv installed, path: $($uv.Source)"
   Write-Progress-Json -Percent 10 -Stage "uv_found" -Message "uv installed"
 }
 else {
-  Write-Warning "uv not found, ready to install..."
   Write-Progress-Json -Percent 8 -Stage "install_uv" -Message "Installing uv package manager..."
 
   # 通过官方脚本安装
@@ -120,25 +114,20 @@ else {
   # 再次检查
   $uv = Get-Command -Name uv -ErrorAction SilentlyContinue
   if ($uv) {
-    Write-Host "uv installed, path: $($uv.Source)"
     Write-Progress-Json -Percent 10 -Stage "uv_installed" -Message "uv installation complete"
   }
   else {
-    Write-Warning "uv still not found after installation"
     Write-Progress-Json -Percent 10 -Stage "uv_warning" -Message "uv install may have issues, trying to continue..."
   }
 }
 
 try {
   if (Test-Path $zipFile) { 
-    Write-Host "Zip file already exists. Skipping download." -ForegroundColor Cyan
     Write-Progress-Json -Percent 35 -Stage "download_skip" -Message "Code package exists, skipping download"
   }
   else {
     Write-Progress-Json -Percent 15 -Stage "download_start" -Message "Downloading RTS code package..."
-    Write-Host "Downloading RTS code zip..." -ForegroundColor Yellow
     Invoke-WebRequest -Uri $zipUrl -OutFile $zipFile
-    Write-Host "Download done" -ForegroundColor Green
     Write-Progress-Json -Percent 35 -Stage "download_done" -Message "Code package download complete"
   }
 }
@@ -150,33 +139,26 @@ catch {
 
 try {
   if (Test-Path $extractedDir) {
-    Write-Host "Code is unzipped..." -ForegroundColor Green
     Write-Progress-Json -Percent 55 -Stage "extract_skip" -Message "Code already extracted, skipping"
     Set-Location $extractedDir
     # 修正需要国内源的包地址
-    Write-Host "Edit uv config for download" -ForegroundColor Yellow
     Write-Progress-Json -Percent 60 -Stage "config_update" -Message "Updating config files..."
     Update-SpacyModelUrl
     Write-Progress-Json -Percent 65 -Stage "config_done" -Message "Config update complete"
     Sync-UvEnvironment 
   }
   else {
-    Write-Host "Folder doesn't exist: $extractedDir" -ForegroundColor Red
     Write-Progress-Json -Percent 40 -Stage "extract_start" -Message "Extracting code package..."
-    Write-Host "Unzipping..." -ForegroundColor Yellow
     Expand-Archive -Path $zipFile -DestinationPath . -Force
-    Write-Host "Unziped" -ForegroundColor Green
     
     # Rename extracted directory to short name (avoid Windows path limit)
     if (Test-Path $originalDir) {
-      Write-Host "Renaming $originalDir -> $extractedDir" -ForegroundColor Cyan
       Rename-Item -Path $originalDir -NewName $extractedDir -Force
     }
     
     Write-Progress-Json -Percent 55 -Stage "extract_done" -Message "Code extraction complete"
     Set-Location $extractedDir
     # 修正需要国内源的包地址
-    Write-Host "Edit uv config for download" -ForegroundColor Yellow
     Write-Progress-Json -Percent 60 -Stage "config_update" -Message "Updating config files..."
     Update-SpacyModelUrl
     Write-Progress-Json -Percent 65 -Stage "config_done" -Message "Config update complete"

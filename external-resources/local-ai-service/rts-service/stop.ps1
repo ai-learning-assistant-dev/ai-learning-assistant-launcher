@@ -49,9 +49,9 @@ if (Test-Path $statusFile) {
     if ($st.pid -eq 0 -or -not $st.pid) {
         Write-Host "No PID found, nothing to kill." -ForegroundColor Yellow
     } else {
-        taskkill /PID $st.pid /T /F 2>$null
+        # Suppress taskkill output to avoid garbled Chinese characters
+        $null = taskkill /PID $st.pid /T /F 2>&1
         Write-Status -Status 'stopped' -service_PID $null
-        Write-Host "Service stopped (PID $($st.pid))" -ForegroundColor Green
     }
 } else {
     Write-Host "Status file not found, nothing to kill." -ForegroundColor Yellow
