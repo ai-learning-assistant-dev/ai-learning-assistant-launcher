@@ -19,6 +19,13 @@
     "id": "TRAINING_COURSE",
     "name": "学科培训课程数据",
     "versions": {
+      "2.0.5": {
+        "magnet": "magnet:?xt=urn:btih:937e6e1ff9e5094f6deb527bfe32e88e86bfded5&dn=all-3%E6%97%A0%E6%B1%BD%E4%BF%AE.zip&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=wss%3A%2F%2F114.66.58.95%3A17853%2Fannounce&tr=ws%3A%2F%2F121.40.137.135%3A8200",
+        "comment": "第三个版本",
+        "require": {
+          "TRAINING_TAR": "^2.0.0"
+        }
+      },
       "2.0.4": {
         "magnet": "magnet:?xt=urn:btih:823f72d52b299bff2507c00eb19d7ba456c43a23&dn=course.json&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=wss%3A%2F%2F114.66.58.95%3A17853%2Fannounce&tr=ws%3A%2F%2F121.40.137.135%3A8200",
         "comment": "第二个版本",
