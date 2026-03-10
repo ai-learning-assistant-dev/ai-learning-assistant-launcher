@@ -23,7 +23,7 @@ $env:HF_HUB_DISABLE_SYMLINKS = "1"
 $env:PYTHONIOENCODING = "utf-8"
 $env:PYTHONUTF8 = "1"
 
-# 输出进度信息的函数
+# 输出进度信息的函数（强制刷新缓冲区）
 function Write-Progress-Json {
     param(
         [int]$Percent,
@@ -37,7 +37,9 @@ function Write-Progress-Json {
         message = $Message
     }
     $json = $progressObj | ConvertTo-Json -Compress
-    Write-Output "PROGRESS:$json"
+    # 使用 [Console]::Write 确保立即输出，避免缓冲延迟
+    [Console]::WriteLine("PROGRESS:$json")
+    [Console]::Out.Flush()
 }
 
 function Sync-UvEnvironment {
@@ -76,7 +78,8 @@ function Update-SpacyModelUrl {
   $pattern = '(?sm)(^\s*en-core-web-sm\s*=\s*\[.*?\n\s*\])'
   $match = [regex]::Match($content, $pattern)
   if (-not $match.Success) {
-    Write-Host "en-core-web-sm block not found, no change made" -ForegroundColor Yellow
+    [Console]::WriteLine("en-core-web-sm block not found, no change made")
+    [Console]::Out.Flush()
     return
   }
 
@@ -85,14 +88,16 @@ function Update-SpacyModelUrl {
   $newBlock = $oldBlock -replace '(https?://[^"\s]+)', $NewUrl
 
   if ($oldBlock -ceq $newBlock) {
-    Write-Host "en-core-web-sm address already OK" -ForegroundColor Gray
+    [Console]::WriteLine("en-core-web-sm address already OK")
+    [Console]::Out.Flush()
     return
   }
 
   # 写回文件
   $newContent = $content.Replace($oldBlock, $newBlock)
   Set-Content -Path $TomlPath -Value $newContent -NoNewline
-  Write-Host "Updated en-core-web-sm download address → $NewUrl" -ForegroundColor Green
+  [Console]::WriteLine("Updated en-core-web-sm download address -> $NewUrl")
+  [Console]::Out.Flush()
 }
 
 # 检查 uv 是否存在
@@ -132,7 +137,8 @@ try {
   }
 }
 catch {
-  Write-Host "Download failed: $($_.Exception.Message)" -ForegroundColor Red
+  [Console]::WriteLine("Download failed: $($_.Exception.Message)")
+  [Console]::Out.Flush()
   Write-Progress-Json -Percent 15 -Stage "download_error" -Message "Download failed: $($_.Exception.Message)"
   # exit 1
 }
@@ -179,7 +185,8 @@ try {
   # exit 0                   
 }
 catch {
-  Write-Host "zip the code failed" -ForegroundColor Red
+  [Console]::WriteLine("zip the code failed")
+  [Console]::Out.Flush()
   Write-Progress-Json -Percent 0 -Stage "error" -Message "Installation failed: $($_.Exception.Message)"
   Write-Output "error"
 }

@@ -18,7 +18,7 @@ $env:HF_HUB_DISABLE_SYMLINKS = "1"
 $env:PYTHONIOENCODING = "utf-8"
 $env:PYTHONUTF8 = "1"
 
-# 输出进度信息的函数
+# 输出进度信息的函数（强制刷新缓冲区）
 function Write-Progress-Json {
     param(
         [int]$Percent,
@@ -32,33 +32,45 @@ function Write-Progress-Json {
         message = $Message
     }
     $json = $progressObj | ConvertTo-Json -Compress
-    Write-Output "PROGRESS:$json"
+    # 使用 [Console]::Write 确保立即输出，避免缓冲延迟
+    [Console]::WriteLine("PROGRESS:$json")
+    [Console]::Out.Flush()
 }
 
 # 路径长度检测：超过200字符时报错并退出
 function Test-PathLength {
+    Write-Progress-Json -Percent 2 -Stage "check_path" -Message "Checking installation path length..."
     $scriptPath = $PSScriptRoot
     $pathLength = $scriptPath.Length
+    [Console]::WriteLine("Installation path: $scriptPath (length: $pathLength)")
+    [Console]::Out.Flush()
     if ($pathLength -gt 200) {
         $errorMsg = "安装路径过长（当前 $pathLength 个字符，上限 200 个字符），spacy/kokoro 加载 DLL 时会因 Windows 260 字符限制失败。请将启动器移动到较短路径，例如 D:\ALA\"
-        Write-Host "ERROR: $errorMsg" -ForegroundColor Red
+        [Console]::WriteLine("ERROR: $errorMsg")
+        [Console]::Out.Flush()
         $progressObj = @{
             type    = 'progress'
             percent = 0
             stage   = 'path_error'
             message = $errorMsg
         }
-        Write-Output "PROGRESS:$($progressObj | ConvertTo-Json -Compress)"
+        [Console]::WriteLine("PROGRESS:$($progressObj | ConvertTo-Json -Compress)")
+        [Console]::Out.Flush()
         exit 1
     }
+    Write-Progress-Json -Percent 3 -Stage "path_ok" -Message "Path length check passed"
 }
 Test-PathLength
 
 # Print python.exe path length (for path limit check)
 function Print-PythonPathLength {
+    Write-Progress-Json -Percent 4 -Stage "check_python_path" -Message "Checking Python path..."
     $pythonPath = "$PSScriptRoot\$extractedDir\.venv\Scripts\python.exe"
     $pathLength = $pythonPath.Length
-    Write-Output "PYTHON_PATH_INFO: $pythonPath (length: $pathLength)"
+    [Console]::WriteLine("Python path: $pythonPath (length: $pathLength)")
+    [Console]::Out.Flush()
+    [Console]::WriteLine("PYTHON_PATH_INFO: $pythonPath (length: $pathLength)")
+    [Console]::Out.Flush()
 }
 Print-PythonPathLength
 
@@ -90,10 +102,13 @@ function Find-UvPath {
 
 $uvPath = Find-UvPath
 if (-not $uvPath) {
-    Write-Host "Error: uv not found. Please run install.ps1 first." -ForegroundColor Red
+    [Console]::WriteLine("Error: uv not found. Please run install.ps1 first.")
+    [Console]::Out.Flush()
     Write-Progress-Json -Percent 0 -Stage "error" -Message "uv not found, please install first"
     exit 1
 }
+[Console]::WriteLine("uv found at: $uvPath")
+[Console]::Out.Flush()
 Write-Progress-Json -Percent 10 -Stage "uv_found" -Message "uv found"    
 
 function Write-Status {
@@ -151,10 +166,15 @@ function Start-FlaskNonBlock {
     if (Test-Path $LogErr) { Remove-Item $LogErr -Force -ErrorAction SilentlyContinue }
     
     Write-Progress-Json -Percent 40 -Stage "start_process" -Message "Starting service process..."
+    [Console]::WriteLine("Starting Flask service with uv...")
+    [Console]::Out.Flush()
     $proc = Start-Process -FilePath $uvPath -ArgumentList "run", ".\main.py" `
         -PassThru -NoNewWindow `
         -RedirectStandardOutput $LogOut `
         -RedirectStandardError  $LogErr
+
+    [Console]::WriteLine("Service process started with PID: $($proc.Id)")
+    [Console]::Out.Flush()
 
     # Record starting status with actual PID (not 0)
     Write-Status -Status 'starting' -service_PID $proc.Id
@@ -171,8 +191,9 @@ function Start-FlaskNonBlock {
             # Read error log for debugging
             if (Test-Path $LogErr) {
                 $errContent = Get-Content $LogErr -Tail 10 -ErrorAction SilentlyContinue
-                Write-Host "Process exited prematurely. Last 10 lines of flask.err:" -ForegroundColor Yellow
-                $errContent | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+                [Console]::WriteLine("Process exited prematurely. Last 10 lines of flask.err:")
+                $errContent | ForEach-Object { [Console]::WriteLine("  $_") }
+                [Console]::Out.Flush()
             }
             Write-Progress-Json -Percent 45 -Stage "process_exit" -Message "Process exited unexpectedly"
             break 
@@ -180,21 +201,24 @@ function Start-FlaskNonBlock {
         
         $tcp = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue
         if ($tcp) {
-            Write-Host "Port $Port is now listening" -ForegroundColor Green
+            [Console]::WriteLine("Port $Port is now listening")
+            [Console]::Out.Flush()
             $ok = $true
             # 取第一个连接的PID（可能有IPv4和IPv6多个连接）
             $owningPid = if ($tcp -is [array]) { $tcp[0].OwningProcess } else { $tcp.OwningProcess }
+            [Console]::WriteLine("Service running with PID: $owningPid")
+            [Console]::Out.Flush()
             Write-Status -Status 'running' -service_PID $owningPid
             Write-Progress-Json -Percent 100 -Stage "running" -Message "RTS service started"
             break
         }
-        # Progress indicator every 15 retries (30 seconds)
-        if ($i % 15 -eq 0) {
+        # Progress indicator every 10 seconds (5 retries * 2s)
+        if ($i % 5 -eq 0) {
             $elapsedSec = [int]($i * 2)
             # Update status to show still starting
             Write-Status -Status 'starting' -service_PID $proc.Id
-            # 计算进度: 45% -> 90% 的范围内随着重试次数增加
-            $progressPercent = 45 + [int](($i / $MaxRetry) * 45)
+            # 计算进度: 45% -> 95% 的范围内随着重试次数增加
+            $progressPercent = 45 + [int](($i / $MaxRetry) * 50)
             $waitMsg = "Waiting for service ready... (${elapsedSec}s)"
             Write-Progress-Json -Percent $progressPercent -Stage "waiting" -Message $waitMsg
         }
@@ -202,12 +226,14 @@ function Start-FlaskNonBlock {
 
     # 结果判定
     if (-not $ok) {
-        Write-Host "Service failed to start within timeout" -ForegroundColor Red
+        [Console]::WriteLine("Service failed to start within timeout")
+        [Console]::Out.Flush()
         # Read error log for debugging
         if (Test-Path $LogErr) {
             $errContent = Get-Content $LogErr -Tail 20 -ErrorAction SilentlyContinue
-            Write-Host "Last 20 lines of flask.err:" -ForegroundColor Yellow
-            $errContent | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+            [Console]::WriteLine("Last 20 lines of flask.err:")
+            $errContent | ForEach-Object { [Console]::WriteLine("  $_") }
+            [Console]::Out.Flush()
         }
         taskkill /PID $proc.Id /T /F 2>$null
         Write-Status -Status 'error' -ErrorMsg "Service failed to start within timeout" -service_PID $null
@@ -219,15 +245,25 @@ function Start-FlaskNonBlock {
 
 try {
     Write-Progress-Json -Percent 15 -Stage "enter_dir" -Message "Entering service directory..."
+    [Console]::WriteLine("Entering service directory: $extractedDir")
+    [Console]::Out.Flush()
     Set-Location $extractedDir
     
     # 确保依赖已正确安装（使用 CPU 版本的 torch）
     Write-Progress-Json -Percent 20 -Stage "sync_deps" -Message "Checking and syncing dependencies..."
+    [Console]::WriteLine("Running uv sync --extra cpu...")
+    [Console]::Out.Flush()
     $syncResult = & $uvPath sync --extra cpu 2>&1
+    [Console]::WriteLine("uv sync output: $syncResult")
+    [Console]::Out.Flush()
     if ($LASTEXITCODE -ne 0) {
         Write-Progress-Json -Percent 30 -Stage "sync_warning" -Message "Dependency sync may have issues, continuing..."
+        [Console]::WriteLine("Warning: uv sync exited with code $LASTEXITCODE")
+        [Console]::Out.Flush()
     } else {
         Write-Progress-Json -Percent 35 -Stage "sync_done" -Message "Dependencies check complete"
+        [Console]::WriteLine("Dependencies synced successfully")
+        [Console]::Out.Flush()
     }
     
     $success = Start-FlaskNonBlock
@@ -238,7 +274,8 @@ try {
     Write-Output "success"
 }
 catch {
-    Write-Host "Running with something wrong: $($_.Exception.Message)" -ForegroundColor Red
+    [Console]::WriteLine("Running with something wrong: $($_.Exception.Message)")
+    [Console]::Out.Flush()
     Write-Status -Status 'error' -ErrorMsg $_.Exception.Message -service_PID $null
     Write-Progress-Json -Percent 0 -Stage "error" -Message "Start failed: $($_.Exception.Message)"
     exit 1

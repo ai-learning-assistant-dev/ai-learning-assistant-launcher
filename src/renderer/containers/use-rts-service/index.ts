@@ -6,6 +6,9 @@ export type RtsOperation = 'install' | 'run' | 'stop' | null;
 // 英文消息到中文的翻译映射（面向普通用户的友好提示）
 const messageTranslations: Record<string, string> = {
   // run.ps1 messages - 启动服务相关
+  'Checking installation path length...': '正在检查安装路径...',
+  'Path length check passed': '安装路径检查通过',
+  'Checking Python path...': '正在检查Python环境...',
   'Checking uv package manager...': '正在检查运行环境...',
   'uv not found, please install first': '运行环境未就绪，请先点击安装',
   'uv found': '运行环境已就绪',
