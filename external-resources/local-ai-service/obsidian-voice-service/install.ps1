@@ -2,9 +2,9 @@
   单独测试：powershell -ExecutionPolicy Bypass .\install.ps1
 #>
 
-$zipUrl = "https://codeload.github.com/ai-learning-assistant-dev/ai-learning-assistant-voice-backend/zip/refs/heads/main"
+$zipUrl = "https://codeload.github.com/shenyaoguan/ai-learning-assistant-voice-backend/zip/refs/heads/shenyaoguan_dev"
 $zipFile = "repo.zip"
-$extractedDir = "ai-learning-assistant-voice-backend-main"
+$extractedDir = "ai-learning-assistant-voice-backend-shenyaoguan_dev"
 
 function Find-UvPath {
     $uvCmd = Get-Command uv -ErrorAction SilentlyContinue
