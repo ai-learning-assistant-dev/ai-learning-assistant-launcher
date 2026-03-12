@@ -69,6 +69,11 @@ const getWebTorrent = async () => {
     { urls: 'stun:learning.panchuantech.cn:19244' },
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:121.40.137.135:3478' },
+    {
+      urls: 'turn:121.40.137.135:3478',
+      username: 'alalauncher',
+      credential: 'x9dfniubh18df',
+    },
   ];
   // try {
   //   const ac = new AbortController();
