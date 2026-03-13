@@ -2,11 +2,12 @@
   单独测试：powershell -ExecutionPolicy Bypass .\get-service-status.ps1
 #>
 
-$extractedDir = "ai-learning-assistant-voice-backend-main"
+$extractedDir = "ai-learning-assistant-voice-backend-shenyaoguan_dev"
 $statusFile = "$PSScriptRoot\service-status.json"
 $port = 8001
+$backendDir = Join-Path $PSScriptRoot $extractedDir
 
-if (-not (Test-Path $extractedDir)) {
+if (-not (Test-Path $backendDir)) {
     Write-Output "not_installed"
     exit 0
 }

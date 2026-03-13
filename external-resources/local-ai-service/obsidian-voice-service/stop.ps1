@@ -3,6 +3,10 @@
 #>
 
 $statusFile = "$PSScriptRoot\service-status.json"
+$extractedDir = "ai-learning-assistant-voice-backend-shenyaoguan_dev"
+$backendDir = Join-Path $PSScriptRoot $extractedDir
+$stopScript = Join-Path $backendDir "scripts\stop_windows.ps1"
+$port = 8001
 
 function Write-Status {
     param(
@@ -21,7 +25,10 @@ function Write-Status {
 }
 
 try {
-    if (Test-Path $statusFile) {
+    if (Test-Path $stopScript) {
+        & powershell -NoProfile -ExecutionPolicy Bypass -File $stopScript -Port $port
+    }
+    elseif (Test-Path $statusFile) {
         $st = Get-Content $statusFile -Raw | ConvertFrom-Json
         if ($st.pid) {
             taskkill /PID $st.pid /T /F 2>$null
@@ -34,6 +41,6 @@ try {
 }
 catch {
     Write-Status -Status 'error' -ServicePid $null -ErrorMsg $_.Exception.Message
-    Write-Output "error"
+    Write-Output "error: $($_.Exception.Message)"
     exit 1
 }

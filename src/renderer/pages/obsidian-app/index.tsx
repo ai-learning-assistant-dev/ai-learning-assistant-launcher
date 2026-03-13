@@ -18,6 +18,7 @@ export default function ObsidianApp() {
   const {
     voiceState,
     voiceLoading,
+    voiceOperation,
     installVoiceService,
     runVoiceService,
     stopVoiceService,
@@ -100,7 +101,11 @@ export default function ObsidianApp() {
             (voiceState === 'not_installed' || !voiceState) && (
               <Button
                 key="install-voice-service"
-                loading={voiceLoading}
+                loading={
+                  voiceLoading &&
+                  voiceOperation === 'install' &&
+                  voiceState === 'starting'
+                }
                 onClick={installVoiceService}
               >
                 安装语音服务
@@ -110,7 +115,11 @@ export default function ObsidianApp() {
               <Button
                 key="run-voice-service"
                 type="primary"
-                loading={voiceLoading}
+                loading={
+                  voiceLoading &&
+                  voiceOperation === 'run' &&
+                  voiceState === 'starting'
+                }
                 onClick={runVoiceService}
               >
                 启动语音服务
@@ -120,7 +129,11 @@ export default function ObsidianApp() {
               <Button
                 key="stop-voice-service"
                 danger
-                loading={voiceLoading}
+                loading={
+                  voiceLoading &&
+                  voiceOperation === 'stop' &&
+                  voiceState === 'starting'
+                }
                 onClick={stopVoiceService}
               >
                 停止语音服务
@@ -128,7 +141,7 @@ export default function ObsidianApp() {
             ),
             <Button
               key="refresh-voice-service"
-              loading={voiceLoading}
+              loading={voiceLoading && voiceState === 'starting'}
               onClick={refreshVoiceStatus}
             >
               刷新状态
