@@ -5,6 +5,8 @@
 $zipUrl = "https://codeload.github.com/shenyaoguan/ai-learning-assistant-voice-backend/zip/refs/heads/shenyaoguan_dev"
 $zipFile = "repo.zip"
 $extractedDir = "ai-learning-assistant-voice-backend-shenyaoguan_dev"
+$legacyExtractedDir = "ai-learning-assistant-voice-backend-main"
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 function Find-UvPath {
     $uvCmd = Get-Command uv -ErrorAction SilentlyContinue
@@ -43,24 +45,37 @@ function Ensure-Uv {
 
 $uvPath = Ensure-Uv
 if (-not $uvPath) {
-    Write-Output "error"
+    Write-Output "error: uv not found after installation attempt"
     exit 1
 }
 
 try {
-    if (-not (Test-Path $zipFile)) {
-        Invoke-WebRequest -Uri $zipUrl -OutFile $zipFile
+    Set-Location $scriptDir
+
+    if (Test-Path $zipFile) {
+        Remove-Item -Path $zipFile -Force
     }
 
+    if (Test-Path $legacyExtractedDir) {
+        Remove-Item -Path $legacyExtractedDir -Recurse -Force
+    }
+
+    if (Test-Path $extractedDir) {
+        Remove-Item -Path $extractedDir -Recurse -Force
+    }
+
+    Invoke-WebRequest -Uri $zipUrl -OutFile $zipFile
+    Expand-Archive -Path $zipFile -DestinationPath . -Force
+
     if (-not (Test-Path $extractedDir)) {
-        Expand-Archive -Path $zipFile -DestinationPath . -Force
+        throw "Expected extracted directory '$extractedDir' was not found after expanding zip."
     }
 
     Set-Location $extractedDir
     & $uvPath sync
 
     if ($LASTEXITCODE -ne 0) {
-        Write-Output "error"
+        Write-Output "error: uv sync failed with exit code $LASTEXITCODE"
         exit 1
     }
 
@@ -68,6 +83,9 @@ try {
     exit 0
 }
 catch {
-    Write-Output "error"
+    Write-Output "error: $($_.Exception.Message)"
+    if ($_.ScriptStackTrace) {
+        Write-Output $_.ScriptStackTrace
+    }
     exit 1
 }
