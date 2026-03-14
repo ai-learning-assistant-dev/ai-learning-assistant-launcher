@@ -175,6 +175,8 @@ export async function updateCourseTrainingService() {
         JSON.stringify({ version: latestVersion.version }, null, 2),
       );
       console.debug('成功将课程导入到学科培训');
+    } catch (e) {
+      console.warn(e);
     } finally {
       await stopService('NATIVE_TRAINING');
     }
