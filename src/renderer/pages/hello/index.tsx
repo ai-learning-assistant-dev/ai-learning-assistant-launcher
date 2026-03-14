@@ -26,6 +26,7 @@ import { LeftOutlined, RightOutlined } from '@ant-design/icons';
 import { useNativeTrainingServiceShortcut } from '../../containers/use-native-training-service-shortcut';
 import { useLogContainer } from '../../containers/backup';
 import { useVM } from '../../containers/use-vm';
+import { useRtsService } from '../../containers/use-rts-service';
 import { TorrentProgress } from '../../containers/torrent-progress';
 import { TerminalLogScreen } from '../../containers/terminal-log-screen';
 
@@ -51,6 +52,20 @@ export default function Hello() {
     showRebootModal,
     vTReady,
   } = useVM();
+
+  // 使用 RTS 服务 hook
+  const {
+    rtsState,
+    rtsLoading,
+    rtsProgress,
+    rtsOperation,
+    rtsStageMessage,
+    rtsErrorMessage,
+    clearRtsError,
+    installRts,
+    runRts,
+    stopRts,
+  } = useRtsService();
 
   useEffect(() => {
     const cancel = setupBackupListener();
@@ -643,6 +658,124 @@ export default function Hello() {
                         <span className="button-text">卸载Podman</span>
                       </Button>
                     </Popconfirm>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* RTS 服务区域 */}
+            <div className="rts-section">
+              <div className="rts-container">
+                <div className="rts-wrapper">
+                  <div className="rts-content-wrapper">
+                    <div className="rts-header">
+                      <img
+                        className="rts-logo"
+                        src={toolsIcon}
+                        alt="RTS Logo"
+                      />
+                      <span className="rts-title">RTS</span>
+                    </div>
+                    <p className="rts-description">
+                      实时语音服务，为工具箱(本地化)提供语音识别和语音合成功能
+                    </p>
+                    <div className="rts-status-container">
+                      <span
+                        className={`rts-status-badge ${
+                          rtsState === 'running'
+                            ? 'running'
+                            : rtsState === 'error'
+                              ? 'error'
+                              : rtsState === 'starting'
+                                ? 'starting'
+                                : rtsState === 'stopped'
+                                  ? 'stopped'
+                                  : ''
+                        }`}
+                      >
+                        {rtsState === 'running'
+                          ? '运行中'
+                          : rtsState === 'error'
+                            ? '错误'
+                            : rtsState === 'starting'
+                              ? '启动中'
+                              : rtsState === 'stopped'
+                                ? '已停止'
+                                : rtsState === 'not_installed'
+                                  ? '未安装'
+                                  : '检测中...'}
+                      </span>
+                    </div>
+                  </div>
+                  {/* 路径过长错误提示 */}
+                  {rtsErrorMessage && (
+                    <div className="rts-error-message">
+                      <div className="rts-error-content">
+                        <span className="rts-error-icon">⚠️</span>
+                        <span className="rts-error-text">
+                          {rtsErrorMessage}
+                        </span>
+                      </div>
+                      <button
+                        className="rts-error-close"
+                        onClick={clearRtsError}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
+                  <div className="rts-buttons-wrapper">
+                    {rtsLoading && rtsProgress > 0 && (
+                      <div className="rts-progress-inline">
+                        <Progress
+                          percent={rtsProgress}
+                          size="small"
+                          showInfo={true}
+                          status={rtsProgress === 100 ? 'success' : 'active'}
+                          format={(percent) => `${percent}%`}
+                        />
+                        {rtsStageMessage && (
+                          <span className="rts-loading-hint">
+                            {rtsStageMessage}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {/* 安装按钮：未安装或状态未知时显示 */}
+                    {(!rtsState ||
+                      rtsState === '' ||
+                      rtsState === 'not_installed') && (
+                      <Button
+                        className="rts-button install"
+                        onClick={installRts}
+                        loading={rtsLoading && rtsOperation === 'install'}
+                        disabled={rtsLoading && rtsOperation !== 'install'}
+                      >
+                        <span className="button-text">安装</span>
+                      </Button>
+                    )}
+                    {/* 启动按钮：已停止或错误时显示 */}
+                    {(rtsState === 'stopped' || rtsState === 'error') && (
+                      <Button
+                        className="rts-button run"
+                        onClick={runRts}
+                        loading={rtsLoading && rtsOperation === 'run'}
+                        disabled={rtsLoading && rtsOperation !== 'run'}
+                      >
+                        <span className="button-text">启动</span>
+                      </Button>
+                    )}
+                    {/* 停止按钮：运行中或启动中时显示 */}
+                    {(rtsState === 'running' || rtsState === 'starting') && (
+                      <Button
+                        className="rts-button uninstall"
+                        onClick={stopRts}
+                        loading={rtsLoading && rtsOperation === 'stop'}
+                        disabled={rtsLoading && rtsOperation !== 'stop'}
+                      >
+                        <span className="button-text">停止</span>
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>

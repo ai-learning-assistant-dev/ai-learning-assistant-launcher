@@ -1,0 +1,192 @@
+﻿<# 
+  Comment：
+    单独测试该脚本：powershell -ExecutionPolicy Bypass .\install.ps1
+  预期结束码 0 返回值 success 解压成功
+ #>
+
+# RTS Service Repo download URL
+$zipUrl = "https://codeload.github.com/ai-learning-assistant-dev/ai-learning-assistant-rtc-backend/zip/refs/heads/shiftonetothree_dev"
+$zipFile = "repo.zip"
+
+# Service directory name (shortened to avoid Windows 260 char path limit)
+# Original: ai-learning-assistant-rtc-backend-shiftonetothree_dev (52 chars)
+# Shortened: rtc-backend (11 chars) - saves 41 chars per path level
+# GitHub: https://github.com/ai-learning-assistant-dev/ai-learning-assistant-rtc-backend
+$originalDir = "ai-learning-assistant-rtc-backend-shiftonetothree_dev"
+$extractedDir = "rtc-backend"
+
+# 设定Hugging Face国内镜像以解决RTS依赖安装过程中的网络问题
+$env:HF_ENDPOINT = "https://hf-mirror.com"   
+# Windows 下避免符号链接问题
+$env:HF_HUB_DISABLE_SYMLINKS = "1"
+# Force Python to use UTF-8 encoding for stdout/stderr (fix garbled Chinese)
+$env:PYTHONIOENCODING = "utf-8"
+$env:PYTHONUTF8 = "1"
+
+# 输出进度信息的函数（强制刷新缓冲区）
+function Write-Progress-Json {
+    param(
+        [int]$Percent,
+        [string]$Stage,
+        [string]$Message
+    )
+    $progressObj = @{
+        type = 'progress'
+        percent = $Percent
+        stage = $Stage
+        message = $Message
+    }
+    $json = $progressObj | ConvertTo-Json -Compress
+    # 使用 [Console]::Write 确保立即输出，避免缓冲延迟
+    [Console]::WriteLine("PROGRESS:$json")
+    [Console]::Out.Flush()
+}
+
+function Sync-UvEnvironment {
+  # 如果 lock 文件存在，跳过同步 
+  if(Test-Path "uv.lock"){
+    Write-Progress-Json -Percent 95 -Stage "sync_skip" -Message "Dependencies synced, skipping"
+    return
+  }
+
+  Write-Progress-Json -Percent 70 -Stage "sync_start" -Message "Syncing dependencies..."
+  uv sync --extra cu128
+  if ($LASTEXITCODE -eq 0) {
+    Write-Progress-Json -Percent 95 -Stage "sync_done" -Message "Dependencies sync complete"
+    Write-Output "success"
+  }
+  else {
+    Write-Error "uv sync failed!"
+  }
+}
+
+# 显式指定 pyproject.toml 中的 en-core-web-sm 下载地址
+function Update-SpacyModelUrl {
+  param(
+    [string]$TomlPath = "pyproject.toml",
+    [string]$NewUrl = "https://ghfast.top/https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl"
+  )
+
+  if (-not (Test-Path $TomlPath)) {
+    Write-Warning "Did not found $TomlPath, Skip URL edit"
+    return
+  }
+
+  $content = Get-Content $TomlPath -Raw
+
+  # 用正则把整个 en-core-web-sm 数组抓出来（含任意缩进、换行、空格）
+  $pattern = '(?sm)(^\s*en-core-web-sm\s*=\s*\[.*?\n\s*\])'
+  $match = [regex]::Match($content, $pattern)
+  if (-not $match.Success) {
+    [Console]::WriteLine("en-core-web-sm block not found, no change made")
+    [Console]::Out.Flush()
+    return
+  }
+
+  $oldBlock = $match.Value
+  # 把里面 URL 部分替换成新地址（保留其余格式）
+  $newBlock = $oldBlock -replace '(https?://[^"\s]+)', $NewUrl
+
+  if ($oldBlock -ceq $newBlock) {
+    [Console]::WriteLine("en-core-web-sm address already OK")
+    [Console]::Out.Flush()
+    return
+  }
+
+  # 写回文件
+  $newContent = $content.Replace($oldBlock, $newBlock)
+  Set-Content -Path $TomlPath -Value $newContent -NoNewline
+  [Console]::WriteLine("Updated en-core-web-sm download address -> $NewUrl")
+  [Console]::Out.Flush()
+}
+
+# 检查 uv 是否存在
+Write-Progress-Json -Percent 5 -Stage "check_uv" -Message "Checking uv package manager..."
+$uv = Get-Command -Name uv -ErrorAction SilentlyContinue
+if ($uv) {
+  Write-Progress-Json -Percent 10 -Stage "uv_found" -Message "uv installed"
+}
+else {
+  Write-Progress-Json -Percent 8 -Stage "install_uv" -Message "Installing uv package manager..."
+
+  # 通过官方脚本安装
+  powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+  # 因为正常来说需要重新启动命令行才能刷新系统环境
+  # 并不清楚为什么两类路径需要拼接才能发挥作用，但是可行
+  $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
+  [System.Environment]::GetEnvironmentVariable("Path", "User")
+  # 再次检查
+  $uv = Get-Command -Name uv -ErrorAction SilentlyContinue
+  if ($uv) {
+    Write-Progress-Json -Percent 10 -Stage "uv_installed" -Message "uv installation complete"
+  }
+  else {
+    Write-Progress-Json -Percent 10 -Stage "uv_warning" -Message "uv install may have issues, trying to continue..."
+  }
+}
+
+try {
+  if (Test-Path $zipFile) { 
+    Write-Progress-Json -Percent 35 -Stage "download_skip" -Message "Code package exists, skipping download"
+  }
+  else {
+    Write-Progress-Json -Percent 15 -Stage "download_start" -Message "Downloading RTS code package..."
+    Invoke-WebRequest -Uri $zipUrl -OutFile $zipFile
+    Write-Progress-Json -Percent 35 -Stage "download_done" -Message "Code package download complete"
+  }
+}
+catch {
+  [Console]::WriteLine("Download failed: $($_.Exception.Message)")
+  [Console]::Out.Flush()
+  Write-Progress-Json -Percent 15 -Stage "download_error" -Message "Download failed: $($_.Exception.Message)"
+  # exit 1
+}
+
+try {
+  if (Test-Path $extractedDir) {
+    Write-Progress-Json -Percent 55 -Stage "extract_skip" -Message "Code already extracted, skipping"
+    Set-Location $extractedDir
+    # 修正需要国内源的包地址
+    Write-Progress-Json -Percent 60 -Stage "config_update" -Message "Updating config files..."
+    Update-SpacyModelUrl
+    Write-Progress-Json -Percent 65 -Stage "config_done" -Message "Config update complete"
+    Sync-UvEnvironment 
+  }
+  else {
+    Write-Progress-Json -Percent 40 -Stage "extract_start" -Message "Extracting code package..."
+    Expand-Archive -Path $zipFile -DestinationPath . -Force
+    
+    # Rename extracted directory to short name (avoid Windows path limit)
+    if (Test-Path $originalDir) {
+      Rename-Item -Path $originalDir -NewName $extractedDir -Force
+    }
+    
+    Write-Progress-Json -Percent 55 -Stage "extract_done" -Message "Code extraction complete"
+    Set-Location $extractedDir
+    # 修正需要国内源的包地址
+    Write-Progress-Json -Percent 60 -Stage "config_update" -Message "Updating config files..."
+    Update-SpacyModelUrl
+    Write-Progress-Json -Percent 65 -Stage "config_done" -Message "Config update complete"
+    Sync-UvEnvironment 
+  }
+  
+  # Create initial status file after install success
+  $statusFile = "$PSScriptRoot\service-status.json"
+  @{
+      status = 'stopped'
+      pid    = $null
+      stamp  = [datetime]::Now.ToString('o')
+      error  = $null
+  } | ConvertTo-Json -Compress | Set-Content -Path $statusFile -Encoding UTF8 -Force
+  
+  Write-Progress-Json -Percent 100 -Stage "complete" -Message "Installation complete"
+  Write-Output "success"   
+  # exit 0                   
+}
+catch {
+  [Console]::WriteLine("zip the code failed")
+  [Console]::Out.Flush()
+  Write-Progress-Json -Percent 0 -Stage "error" -Message "Installation failed: $($_.Exception.Message)"
+  Write-Output "error"
+}

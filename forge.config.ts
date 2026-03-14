@@ -34,6 +34,7 @@ const config: ForgeConfig = {
        */
       devContentSecurityPolicy: `default-src 'self' 'unsafe-inline' data:;script-src 'self' 'unsafe-inline' 'unsafe-eval';connect-src 'self' ws://127.0.0.1:8000 ws://121.40.137.135:8200;`,
       mainConfig,
+      port: 30120,
       renderer: {
         config: rendererConfig,
         entryPoints: [

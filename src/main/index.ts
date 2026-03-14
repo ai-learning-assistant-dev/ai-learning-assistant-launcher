@@ -14,6 +14,7 @@ import initExternalUrl from './external-url';
 import { setupJointBuildHandlers, setupWindowCloseHandler, isTrayEnabled } from './joint-build';
 import initDLC from './dlc';
 import initLauncherUpdate from './launcher-update';
+import initRTSService from './local-service/rts-service';
 import path from 'node:path';
 import { appPath, autoAdaptEncodingForWindows } from './exec';
 import { logDeviceInfo } from './logger/log-device-info';
@@ -83,6 +84,7 @@ initExternalUrl(ipcMain);
 setupJointBuildHandlers(ipcMain);
 initDLC(ipcMain);
 initLauncherUpdate(ipcMain);
+initRTSService(ipcMain);
 updateTemplate();
 
 const createWindow = async () => {

@@ -54,6 +54,13 @@ import {
   updateCourseNativeTrainingServiceHandle,
 } from './native-training-service/type-info';
 import { NativeServiceInfo } from './native-script/type-info';
+import {
+  getRTSServiceStatusHandle,
+  runRTSServiceHandle,
+  stopRTSServiceHandle,
+  rtsProgressChannel,
+  RTSProgressInfo,
+} from './local-service/rts-service/type-info';
 
 const electronHandler = {
   ipcRenderer: {
@@ -215,6 +222,18 @@ const mainHandle = {
   pauseWebtorrentHandle: async (url: string) => {
     return ipcInvoke(pauseWebtorrentHandle, url);
   },
+  installRTSServiceHandle: async (): Promise<string> => {
+    return ipcInvoke('installRTSService');
+  },
+  getRTSServiceStatusHandle: async (): Promise<string> => {
+    return ipcInvoke(getRTSServiceStatusHandle);
+  },
+  runRTSServiceHandle: async (): Promise<string> => {
+    return ipcInvoke(runRTSServiceHandle);
+  },
+  stopRTSServiceHandle: async (): Promise<string> => {
+    return ipcInvoke(stopRTSServiceHandle);
+  },
   removeWebtorrentHandle: async (url: string) => {
     return ipcInvoke(removeWebtorrentHandle, url);
   },
@@ -258,6 +277,16 @@ const mainHandle = {
       uploadSpeed: number;
       activeTorrents: number;
     }>(getUploadStatsHandle);
+  },
+  // RTS 进度事件监听
+  onRtsProgress: (callback: (progress: RTSProgressInfo) => void) => {
+    const handler = (_event: IpcRendererEvent, progress: RTSProgressInfo) => {
+      callback(progress);
+    };
+    ipcRenderer.on(rtsProgressChannel, handler);
+    return () => {
+      ipcRenderer.removeListener(rtsProgressChannel, handler);
+    };
   },
 };
 
