@@ -16,7 +16,6 @@ import heroImage from './Frame 2.png';
 import welcomeImage from './Welcome.png';
 import qrCodeImage from './QR_code_image.png';
 import subjectIcon from './subject_icon.png';
-import wslLogo from './wslLogo.png';
 // 新增导入Frame 3和Frame 8图片
 import frame3 from './Frame 3.png';
 import frame8 from './Frame 8.png';
@@ -25,7 +24,6 @@ import './index.scss';
 import { LeftOutlined, RightOutlined } from '@ant-design/icons';
 import { useNativeTrainingServiceShortcut } from '../../containers/use-native-training-service-shortcut';
 import { useLogContainer } from '../../containers/backup';
-import { useVM } from '../../containers/use-vm';
 import { useRtsService } from '../../containers/use-rts-service';
 import { TorrentProgress } from '../../containers/torrent-progress';
 import { TerminalLogScreen } from '../../containers/terminal-log-screen';
@@ -38,20 +36,6 @@ export default function Hello() {
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [showTerminalLog, setShowTerminalLog] = useState(false);
-
-  const {
-    isWSLInstalled,
-    podmanChecking,
-    needResintallPodman,
-    wslVersion,
-    wslChecking,
-    wslLoading,
-    wslOperation,
-    handleCmdAction,
-    isPodmanInstalled,
-    showRebootModal,
-    vTReady,
-  } = useVM();
 
   // 使用 RTS 服务 hook
   const {
@@ -420,18 +404,6 @@ export default function Hello() {
     }
   };
 
-  const wslStatusText = () => {
-    if (!vTReady) {
-      return '请在BIOS开启虚拟化';
-    } else {
-      if (isWSLInstalled) {
-        return `已安装 ${wslVersion ? `(${wslVersion.split('\n')[0]})` : ''}`;
-      } else {
-        return '未安装';
-      }
-    }
-  };
-
   return (
     <div className="hello-root" ref={containerRef}>
       <div
@@ -497,171 +469,6 @@ export default function Hello() {
                 </div>
               </div>
             )}
-
-            {/* WSL功能区域 */}
-            <div className="wsl-section">
-              <div className="wsl-container">
-                <div className="wsl-wrapper">
-                  <div className="wsl-content-wrapper">
-                    <div className="wsl-header">
-                      <img className="wsl-logo" src={wslLogo} alt="WSL Logo" />
-                      <span className="wsl-title">WSL</span>
-                    </div>
-                    <p className="wsl-description">
-                      工具箱和学科培训的依赖项，请先启用wsl，安装podman，再使用工具箱和学科培训
-                    </p>
-                    <div className="wsl-status-container">
-                      {wslChecking ? (
-                        <Button
-                          type="default"
-                          className="wsl-status-button"
-                          loading={true}
-                        >
-                          检查中...
-                        </Button>
-                      ) : (
-                        <Button
-                          type="primary"
-                          className={`wsl-status-button ${vTReady && isWSLInstalled ? 'installed' : 'not-installed'}`}
-                        >
-                          {wslStatusText()}
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                  <div className="wsl-buttons-wrapper">
-                    <Popconfirm
-                      title="启动WSL"
-                      description="确认启用WSL吗？启用完成后可能需要重启计算机才能生效。"
-                      onConfirm={() => handleCmdAction('install', 'WSL')}
-                      okText="启用"
-                      cancelText="取消"
-                    >
-                      <Button
-                        className="wsl-button install"
-                        loading={
-                          wslLoading &&
-                          wslOperation.action === 'install' &&
-                          wslOperation.service === 'WSL'
-                        }
-                        disabled={
-                          !vTReady ||
-                          wslChecking ||
-                          isWSLInstalled ||
-                          (wslLoading &&
-                            !(
-                              wslOperation.action === 'install' &&
-                              wslOperation.service === 'WSL'
-                            ))
-                        }
-                      >
-                        <span className="button-text">启用WSL</span>
-                      </Button>
-                    </Popconfirm>
-                    <Popconfirm
-                      title="升级WSL"
-                      description={
-                        <div>
-                          <div>您当前的WSL版本是 {wslVersion || '未知'}</div>
-                          <div>确认升级WSL吗？</div>
-                        </div>
-                      }
-                      onConfirm={() => handleCmdAction('update', 'WSL')}
-                      okText="升级"
-                      cancelText="取消"
-                    >
-                      <Button
-                        className="wsl-button upgrade"
-                        loading={
-                          wslLoading &&
-                          wslOperation.action === 'update' &&
-                          wslOperation.service === 'WSL'
-                        }
-                        disabled={
-                          !isWSLInstalled ||
-                          wslChecking ||
-                          (wslLoading &&
-                            !(
-                              wslOperation.action === 'update' &&
-                              wslOperation.service === 'WSL'
-                            ))
-                        }
-                      >
-                        <span className="button-text">升级WSL</span>
-                      </Button>
-                    </Popconfirm>
-                    <Popconfirm
-                      title="安装Podman"
-                      description={
-                        <div>
-                          <div>
-                            {isPodmanInstalled
-                              ? '修改Podman位置'
-                              : '安装Podman'}
-                            可能需要5分钟时间，实际用时和你的磁盘读写速度有关。
-                          </div>
-                          <div style={{ color: 'red' }}>
-                            提示Docker用户：如果您的电脑上还有Docker软件，请您先手动关闭Docker软件前台和后台程序以避免Docker文件被损坏。安装完成后如果出现无法正常运行Docker的情况，请您重启电脑后再打开Docker。
-                          </div>
-                        </div>
-                      }
-                      onConfirm={() => handleCmdAction('move', 'podman')}
-                      okText="安装"
-                      cancelText="取消"
-                    >
-                      <Button
-                        className="wsl-button change-path"
-                        loading={
-                          podmanChecking ||
-                          (wslOperation.action === 'move' &&
-                            wslOperation.service === 'podman')
-                        }
-                        disabled={
-                          !isWSLInstalled ||
-                          wslChecking ||
-                          (wslLoading &&
-                            !(
-                              wslOperation.action === 'move' &&
-                              wslOperation.service === 'podman'
-                            ))
-                        }
-                      >
-                        <span className="button-text">
-                          {isPodmanInstalled ? '修改Podman位置' : '安装Podman'}
-                        </span>
-                      </Button>
-                    </Popconfirm>
-                    <Popconfirm
-                      title="卸载Podman"
-                      description="你确定要卸载Podman吗？卸载后再次安装会需要很长时间！"
-                      onConfirm={() => handleCmdAction('remove', 'podman')}
-                      okText="确认卸载"
-                      cancelText="取消"
-                    >
-                      <Button
-                        className="wsl-button uninstall"
-                        loading={
-                          wslLoading &&
-                          wslOperation.action === 'remove' &&
-                          wslOperation.service === 'podman'
-                        }
-                        disabled={
-                          !isWSLInstalled ||
-                          wslChecking ||
-                          (wslLoading &&
-                            !(
-                              wslOperation.action === 'remove' &&
-                              wslOperation.service === 'podman'
-                            ))
-                        }
-                      >
-                        <span className="button-text">卸载Podman</span>
-                      </Button>
-                    </Popconfirm>
-                  </div>
-                </div>
-              </div>
-            </div>
 
             {/* RTS 服务区域 */}
             <div className="rts-section">
@@ -826,12 +633,7 @@ export default function Hello() {
                   </div>
                   <div className="feature-button-container">
                     <NavLink to="/ai-service" style={{ width: '100%' }}>
-                      <Button
-                        className="feature-button"
-                        block
-                        size="large"
-                        disabled={!isPodmanInstalled || wslLoading}
-                      >
+                      <Button className="feature-button" block size="large">
                         开始
                       </Button>
                     </NavLink>
@@ -1029,33 +831,6 @@ export default function Hello() {
         <p className="qr-description">
           扫描二维码加入QQ群，关于AI学习助手，在群中提出你的任何疑问，会有专业人员解答
         </p>
-      </Modal>
-      <Modal open={showRebootModal} footer={false} closable={false}>
-        已经成功打开windows系统自带WSL组件，需要重启电脑才能进行后续操作，请确保你保存了所有的文件后手动重启电脑
-      </Modal>
-      <Modal open={needResintallPodman} footer={false} closable={false}>
-        检测到您使用过启动器V1版，新版启动器需要卸载启动器V1版的Podman组件，然后重新安装Podman才能正常使用语音功能，请卸载Podman组件
-        <br />
-        <Button
-          className="wsl-button uninstall"
-          loading={
-            wslLoading &&
-            wslOperation.action === 'remove' &&
-            wslOperation.service === 'podman'
-          }
-          disabled={
-            !isWSLInstalled ||
-            wslChecking ||
-            (wslLoading &&
-              !(
-                wslOperation.action === 'remove' &&
-                wslOperation.service === 'podman'
-              ))
-          }
-          onClick={() => handleCmdAction('remove', 'podman')}
-        >
-          <span className="button-text">卸载Podman</span>
-        </Button>
       </Modal>
     </div>
   );
