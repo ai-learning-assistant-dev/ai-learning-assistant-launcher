@@ -16,7 +16,16 @@ import { ipcHandle } from '../ipc-util';
 import WebTorrent, * as allExports from 'webtorrent';
 import path from 'path';
 import { appPath } from '../exec';
-import fs, { existsSync, mkdirSync, readFileSync, unlinkSync } from 'fs';
+import fs, {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync,
+} from 'fs';
+import { promises as fsPromises } from 'fs';
+import http from 'http';
+import https from 'https';
 import { compare } from 'semver';
 import { WEBTORRENT_CONFIG } from '../webtorrent-config';
 
@@ -147,6 +156,13 @@ export default async function init(ipcMain: IpcMain) {
   ipcHandle(ipcMain, getUploadStatsHandle, async (_event) => getUploadStats());
   // 检查种子文件和对应的实际文件，如果有文件，就添加到webtorrent中
   await restoreTorrentsFromFiles();
+
+  // 尝试更新DLC索引文件，失败时只记录错误日志，不向外抛出异常
+  try {
+    await updateDLCIndex();
+  } catch (error) {
+    console.error('更新DLC索引失败:', error);
+  }
 }
 
 export async function startWebtorrent(magnet: string) {
@@ -164,9 +180,11 @@ export async function startWebtorrent(magnet: string) {
       mkdirSync(filePath, { recursive: true });
     }
     if (torrent) {
-      torrent.on('metadata', () => {
+      const onMetadata = () => {
+        torrent.removeListener('metadata', onMetadata);
         saveTorrentFile(filePath, torrent);
-      });
+      }
+      torrent.on('metadata', onMetadata);
       console.debug('种子文件已经存在，继续下载');
       torrent.resume();
       return { success: true, infoHash: torrent.infoHash };
@@ -529,17 +547,22 @@ export async function waitTorrentDone(id: DLCId, version: string) {
     }, checkInterval);
 
     // 同时监听种子的事件
-    torrent.on('done', () => {
+    const onDone = () => {
+      torrent.removeListener('done', onDone);
       clearInterval(intervalId);
       console.debug(`种子 ${torrent.name} 下载完成（通过事件监听）`);
       resolve(torrent);
-    });
+    };
 
-    torrent.on('error', (err) => {
+    torrent.on('done', onDone);
+    const onError = (err) => {
+      torrent.removeListener('error', onError);
       clearInterval(intervalId);
       const errorMessage = typeof err === 'string' ? err : err.message;
       reject(new Error(`种子下载出错: ${errorMessage}`));
-    });
+    };
+
+    torrent.on('error', onError);
   });
 }
 
@@ -719,3 +742,64 @@ export function getUploadStats(): {
     activeTorrents,
   };
 }
+
+const DLC_INDEX_URL = 'https://learning.panchuantech.cn/dlc/index.json';
+
+/** 从远程服务器更新DLC索引文件 */
+export async function updateDLCIndex(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const request = https.get(DLC_INDEX_URL, (response) => {
+      // 处理重定向
+      if (response.statusCode === 301 || response.statusCode === 302) {
+        const redirectUrl = response.headers.location;
+        if (redirectUrl) {
+          https.get(redirectUrl, handleResponse).on('error', reject);
+        } else {
+          reject(new Error('重定向URL为空'));
+        }
+        return;
+      }
+
+      handleResponse(response);
+    });
+
+    function handleResponse(response: http.IncomingMessage) {
+      if (response.statusCode !== 200) {
+        reject(
+          new Error(`下载DLC索引失败，HTTP状态码: ${response.statusCode}`),
+        );
+        return;
+      }
+
+      let data = '';
+      response.on('data', (chunk) => {
+        data += chunk;
+      });
+
+      response.on('end', async () => {
+        try {
+          // 验证JSON格式是否正确
+          JSON.parse(data);
+
+          // 确保目录存在
+          const dir = path.dirname(dlcIndexPath);
+          if (!existsSync(dir)) {
+            mkdirSync(dir, { recursive: true });
+          }
+
+          // 异步写入文件，避免文件死锁
+          await fsPromises.writeFile(dlcIndexPath, data, 'utf8');
+          console.debug('DLC索引文件更新成功');
+          resolve();
+        } catch (error) {
+          reject(new Error(`解析DLC索引JSON失败: ${error}`));
+        }
+      });
+
+      response.on('error', reject);
+    }
+
+    request.on('error', reject);
+  });
+}
+

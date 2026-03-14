@@ -154,24 +154,30 @@ export async function updateCourseTrainingService() {
     );
     const coursePath = path.join(torrent.path, torrent.files[0].name);
     console.debug('将课程导入到学科培训');
-    const tokenSource = new CancellationTokenSourceImpl();
-    await commandLine.exec(
-      `bun db:import:course "${coursePath}" --base-url=http://localhost:7100`,
-      [],
-      {
-        shell: true,
-        encoding: 'utf8',
-        logger: loggerFactory('NATIVE_TRAINING'),
-        cwd: trainingServerSourcePath,
-        token: tokenSource.token,
-      },
-    );
-    // 留下版本标记
-    writeFileSync(
-      courseVersionMark,
-      JSON.stringify({ version: latestVersion.version }, null, 2),
-    );
-    console.debug('成功将课程导入到学科培训');
+    await stopService('NATIVE_TRAINING');
+    await startService('NATIVE_TRAINING');
+    try {
+      const tokenSource = new CancellationTokenSourceImpl();
+      await commandLine.exec(
+        `bun db:import:course "${coursePath}" --base-url=http://localhost:7100`,
+        [],
+        {
+          shell: true,
+          encoding: 'utf8',
+          logger: loggerFactory('NATIVE_TRAINING'),
+          cwd: trainingServerSourcePath,
+          token: tokenSource.token,
+        },
+      );
+      // 留下版本标记
+      writeFileSync(
+        courseVersionMark,
+        JSON.stringify({ version: latestVersion.version }, null, 2),
+      );
+      console.debug('成功将课程导入到学科培训');
+    } finally {
+      await stopService('NATIVE_TRAINING');
+    }
     try {
       trainingWindow.reload();
     } catch (e) {
