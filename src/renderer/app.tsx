@@ -46,6 +46,7 @@ function TrayNavigationHandler() {
   return null;
 }
 import P2PTest from './pages/p2p-test';
+import NativeAiService from './pages/native-ai-service';
 
 export default function App() {
   return (
@@ -56,6 +57,7 @@ export default function App() {
         <Routes>
           <Route path="/joint-build" element={<JointBuild />} />
           <Route path="/ai-service" element={<AiService />} />
+          <Route path="/native-ai-service" element={<NativeAiService />} />
           <Route path="/lm-service" element={<LMService />} />
           <Route path="/llm-api-config" element={<LLMConfig />} />
           <Route path="/hello" element={<Hello />} />

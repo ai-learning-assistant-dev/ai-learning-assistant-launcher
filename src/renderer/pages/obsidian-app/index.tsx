@@ -13,15 +13,6 @@ export default function ObsidianApp() {
     obsidianVaultConfig,
     action: configsAction,
   } = useConfigs();
-  const {
-    voiceState,
-    voiceLoading,
-    voiceOperation,
-    installVoiceService,
-    runVoiceService,
-    stopVoiceService,
-    refreshVoiceStatus,
-  } = useObsidianVoiceService();
 
   const [downloading, setDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
@@ -308,63 +299,6 @@ export default function ObsidianApp() {
           <List.Item.Meta
             title="使用本地安装包"
             description="如果您已经下载了Obsidian安装包，可以直接使用本地安装"
-          />
-        </List.Item>
-        <List.Item
-          actions={[
-            (voiceState === 'not_installed' || !voiceState) && (
-              <Button
-                key="install-voice-service"
-                loading={
-                  voiceLoading &&
-                  voiceOperation === 'install' &&
-                  voiceState === 'starting'
-                }
-                onClick={installVoiceService}
-              >
-                安装语音服务
-              </Button>
-            ),
-            voiceState !== 'running' && (
-              <Button
-                key="run-voice-service"
-                type="primary"
-                loading={
-                  voiceLoading &&
-                  voiceOperation === 'run' &&
-                  voiceState === 'starting'
-                }
-                onClick={runVoiceService}
-              >
-                启动语音服务
-              </Button>
-            ),
-            (voiceState === 'running' || voiceState === 'starting') && (
-              <Button
-                key="stop-voice-service"
-                danger
-                loading={
-                  voiceLoading &&
-                  voiceOperation === 'stop' &&
-                  voiceState === 'starting'
-                }
-                onClick={stopVoiceService}
-              >
-                停止语音服务
-              </Button>
-            ),
-            <Button
-              key="refresh-voice-service"
-              loading={voiceLoading && voiceState === 'starting'}
-              onClick={refreshVoiceStatus}
-            >
-              刷新状态
-            </Button>,
-          ].filter((item) => item)}
-        >
-          <List.Item.Meta
-            title="Obsidian Voice Service"
-            description={`服务状态：${voiceState || 'unknown'}（端口 8001）`}
           />
         </List.Item>
       </List>
