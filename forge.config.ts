@@ -94,6 +94,16 @@ const config: ForgeConfig = {
           );
         });
       }
+
+      // 复制 icons 到 resources 目录（用于托盘图标）
+      const iconsRules = [path.join(__dirname, 'icons', '**')];
+      try {
+        await cpy(iconsRules, path.join(buildPath, 'resources', 'icons'));
+        console.debug('icons 复制成功');
+      } catch (e) {
+        console.error('icons 复制失败:', e);
+      }
+
       // DLC内的大文件不打到包内
       bigFileSuffix.forEach((suffix) => {
         copyRules.push(
