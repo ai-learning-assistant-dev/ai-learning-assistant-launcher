@@ -12,6 +12,7 @@ import {
   rtsProgressChannel,
   RTSProgressInfo,
 } from './type-info';
+import { appPath } from '../../exec';
 
 // 日志前缀标签
 const LOG_TAG = '[RTS-Service]';
@@ -40,9 +41,11 @@ export default function init(ipcMain: IpcMain): void {
   ipcHandle(ipcMain, stopRTSServiceHandle, stopRTSService);
 }
 
-const psDir = path.resolve(
-  __dirname,
-  '../../external-resources/local-ai-service/rts-service',
+const psDir = path.join(
+  appPath,
+  'external-resources',
+  'local-ai-service',
+  'rts-service',
 );
 
 // Extract last non-empty line from stdout (filter out debug output)

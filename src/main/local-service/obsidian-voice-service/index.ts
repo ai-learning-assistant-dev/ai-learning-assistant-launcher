@@ -10,6 +10,7 @@ import {
   runObsidianVoiceServiceHandle,
   stopObsidianVoiceServiceHandle,
 } from './type-info';
+import { appPath } from '../../exec';
 
 export default function init(ipcMain: IpcMain): void {
   ipcHandle(
@@ -26,9 +27,11 @@ export default function init(ipcMain: IpcMain): void {
   ipcHandle(ipcMain, stopObsidianVoiceServiceHandle, stopObsidianVoiceService);
 }
 
-const psDir = path.resolve(
-  __dirname,
-  '../../external-resources/local-ai-service/obsidian-voice-service',
+const psDir = path.join(
+  appPath,
+  'external-resources',
+  'local-ai-service',
+  'obsidian-voice-service',
 );
 
 export async function getObsidianVoiceServiceStatus(): Promise<string> {

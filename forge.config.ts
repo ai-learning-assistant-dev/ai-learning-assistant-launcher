@@ -104,6 +104,53 @@ const config: ForgeConfig = {
         console.error('icons 复制失败:', e);
       }
 
+      // 复制local-ai-service内所有的ps1脚本
+      try {
+        await cpy(
+          [
+            path.join(
+              __dirname,
+              'external-resources',
+              'local-ai-service',
+              'rts-service',
+              '*.ps1',
+            ),
+          ],
+          path.join(
+            buildPath,
+            'external-resources',
+            'local-ai-service',
+            'rts-service',
+          ),
+        );
+      } catch (e) {
+        console.error(e);
+        throw e;
+      }
+
+      try {
+        await cpy(
+          [
+            path.join(
+              __dirname,
+              'external-resources',
+              'local-ai-service',
+              'obsidian-voice-service',
+              '*.ps1',
+            ),
+          ],
+          path.join(
+            buildPath,
+            'external-resources',
+            'local-ai-service',
+            'obsidian-voice-service',
+          ),
+        );
+      } catch (e) {
+        console.error(e);
+        throw e;
+      }
+
       // DLC内的大文件不打到包内
       bigFileSuffix.forEach((suffix) => {
         copyRules.push(
