@@ -75,6 +75,9 @@ import {
 } from './local-service/obsidian-voice-service/type-info';
 
 const electronHandler = {
+  // 系统信息
+  platform: process.platform, // 'win32' | 'darwin' | 'linux'
+  arch: process.arch, // 'x64' | 'arm64' | etc.
   ipcRenderer: {
     sendMessage<A extends AllAction, S extends AllService>(
       channel: Channels,

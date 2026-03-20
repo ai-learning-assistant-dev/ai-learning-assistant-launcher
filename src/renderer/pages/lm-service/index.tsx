@@ -77,10 +77,18 @@ export default function LMService() {
   const [latestVersion, setLatestVersion] = useState<string | null>(null);
   const [downloadSpeed, setDownloadSpeed] = useState(0);
 
+  // 获取当前系统平台和架构，生成对应的下载链接
+  // windows + x64 => win32/x64
+  // windows + ARM64 => win32/arm64
+  // macOS => darwin/arm64
+  const { platform, arch } = window.electron;
+  const downloadPlatform = platform === 'darwin' ? 'darwin' : 'win32';
+  const downloadArch = platform === 'darwin' ? 'arm64' : arch; // macOS 目前主要用 arm64
+
   // LM Studio 下载源列表（按优先级排序）
   const LM_STUDIO_DOWNLOAD_URLS = [
-    'https://lm-studio.cn/download/latest/win32/x64',
-    'https://lmstudio.ai/download/latest/win32/x64',
+    `https://lm-studio.cn/download/latest/${downloadPlatform}/${downloadArch}`,
+    `https://lmstudio.ai/download/latest/${downloadPlatform}/${downloadArch}`,
   ];
   const LM_STUDIO_VERSION = '0.3.15'; // 默认版本号，实际版本从文件名获取
 
