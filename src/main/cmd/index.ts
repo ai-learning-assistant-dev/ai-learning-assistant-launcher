@@ -9,7 +9,7 @@ import {
 } from '../configs';
 import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 import path from 'node:path';
-import { statSync } from 'node:fs';
+import fs from 'node:fs';
 import {
   ensurePodmanWorks,
   getPodmanCli,
@@ -149,7 +149,6 @@ async function installFromP2POrFallback(
 
   try {
     // 首先直接在 DLC 目录下检查是否有已下载的 exe 文件（不使用版本号子目录）
-    const fs = await import('fs');
     const dlcDir = path.join(appPath, 'external-resources', 'dlc', dlcKey);
 
     console.debug(`[${logPrefix}] 检查 DLC 目录: ${dlcDir}`);
@@ -751,7 +750,7 @@ export async function isObsidianInstall() {
   try {
     obsidianPath = replaceVarInPath(obsidianPath);
     console.debug('getObsidianConfig', obsidianPath);
-    const stat = statSync(obsidianPath);
+    const stat = fs.statSync(obsidianPath);
     if (stat.isFile()) {
       return true;
     } else {

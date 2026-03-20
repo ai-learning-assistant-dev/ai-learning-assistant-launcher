@@ -20,7 +20,9 @@ export default function ObsidianApp() {
   const [latestVersion, setLatestVersion] = useState<string | null>(null);
   const [downloadSpeed, setDownloadSpeed] = useState(0);
 
-  const OBSIDIAN_VERSION = '1.12.4'; // 默认版本号，实际版本从文件名获取
+  // TODO: 硬编码的默认版本号，实际版本从下载后的文件名中动态提取
+  // 未来可考虑从后端配置或远程接口获取最新版本号
+  const OBSIDIAN_VERSION = '1.12.4';
   // Obsidian HTTPS 下载源列表（按优先级排序）
   const OBSIDIAN_DOWNLOAD_URLS = [
     `https://kkgithub.com/obsidianmd/obsidian-releases/releases/download/v${OBSIDIAN_VERSION}/Obsidian-${OBSIDIAN_VERSION}.exe`,
@@ -64,7 +66,6 @@ export default function ObsidianApp() {
 
       if (fileCheck.exists) {
         // 本地已有下载好的文件，从文件名提取版本号
-        console.debug('Obsidian 安装包已存在:', fileCheck.filePath);
         const extractedVersion = extractVersionFromFilename(fileCheck.filePath);
         setLatestVersion(extractedVersion || OBSIDIAN_VERSION);
         setIsDownloadComplete(true);

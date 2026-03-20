@@ -90,7 +90,9 @@ export default function LMService() {
     `https://lm-studio.cn/download/latest/${downloadPlatform}/${downloadArch}`,
     `https://lmstudio.ai/download/latest/${downloadPlatform}/${downloadArch}`,
   ];
-  const LM_STUDIO_VERSION = '0.3.15'; // 默认版本号，实际版本从文件名获取
+  // TODO: 硬编码的默认版本号，实际版本从下载后的文件名中动态提取
+  // 未来可考虑从后端配置或远程接口获取最新版本号
+  const LM_STUDIO_VERSION = '0.3.15';
 
   // 从 LM Studio 文件名中提取版本号
   // 文件名格式: LM-Studio-0.4.7-4-x64.exe -> 提取 0.4.7
@@ -128,7 +130,6 @@ export default function LMService() {
 
       if (fileCheck.exists) {
         // 本地已有下载好的文件，从文件名提取版本号
-        console.debug('LM Studio 安装包已存在:', fileCheck.filePath);
         const extractedVersion = extractVersionFromFilename(fileCheck.filePath);
         setLatestVersion(extractedVersion || LM_STUDIO_VERSION);
         setIsDownloadComplete(true);

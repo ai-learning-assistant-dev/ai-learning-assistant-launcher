@@ -910,14 +910,19 @@ export async function startHttpsDownload(
   return { success: false, error: '所有下载源都失败' };
 }
 
+// 最大重定向次数
+const MAX_REDIRECTS = 5;
+
 /**
  * 从单个 URL 下载文件
+ * @param redirectCount 当前重定向次数，用于防止循环重定向导致栈溢出
  */
 function downloadFromUrl(
   dlcId: DLCId,
   url: string,
   downloadDir: string,
   version: string,
+  redirectCount = 0,
 ): Promise<{ success: boolean; filePath?: string }> {
   return new Promise((resolve, reject) => {
     const protocol = url.startsWith('https://') ? https : http;
@@ -960,8 +965,24 @@ function downloadFromUrl(
       if (response.statusCode === 301 || response.statusCode === 302) {
         const redirectUrl = response.headers.location;
         if (redirectUrl) {
-          console.debug(`[HTTPS Download] 重定向到: ${redirectUrl}`);
-          downloadFromUrl(dlcId, redirectUrl, downloadDir, version)
+          if (redirectCount >= MAX_REDIRECTS) {
+            reject(
+              new Error(
+                `超过最大重定向次数限制 (${MAX_REDIRECTS})，可能存在循环重定向`,
+              ),
+            );
+            return;
+          }
+          console.debug(
+            `[HTTPS Download] 重定向到: ${redirectUrl} (${redirectCount + 1}/${MAX_REDIRECTS})`,
+          );
+          downloadFromUrl(
+            dlcId,
+            redirectUrl,
+            downloadDir,
+            version,
+            redirectCount + 1,
+          )
             .then(resolve)
             .catch(reject);
         } else {
@@ -1014,7 +1035,22 @@ function downloadFromUrl(
         // 检查是否被取消
         if (httpsDownloadState[dlcId]?.status === 'cancelled') {
           request.destroy();
-          fileStream.close();
+          fileStream.close(() => {
+            // 删除临时文件，避免下次错误触发断点续传
+            if (existsSync(tempFilePath)) {
+              try {
+                unlinkSync(tempFilePath);
+                console.debug(
+                  `[HTTPS Download] 取消下载，已删除临时文件: ${tempFilePath}`,
+                );
+              } catch (err) {
+                console.warn(
+                  `[HTTPS Download] 删除临时文件失败: ${tempFilePath}`,
+                  err,
+                );
+              }
+            }
+          });
           return;
         }
 
@@ -1094,6 +1130,25 @@ export function cancelHttpsDownload(dlcId: DLCId): { success: boolean } {
   if (request) {
     request.destroy();
     activeHttpsRequests.delete(dlcId);
+  }
+
+  // 清理临时文件，避免下次错误触发断点续传
+  const downloadDir = path.join(appPath, 'external-resources', 'dlc', dlcId);
+  if (existsSync(downloadDir)) {
+    try {
+      const files = fs.readdirSync(downloadDir);
+      for (const file of files) {
+        if (file.endsWith('.downloading')) {
+          const tempFilePath = path.join(downloadDir, file);
+          unlinkSync(tempFilePath);
+          console.debug(
+            `[HTTPS Download] 取消下载，已删除临时文件: ${tempFilePath}`,
+          );
+        }
+      }
+    } catch (err) {
+      console.warn(`[HTTPS Download] 清理临时文件失败:`, err);
+    }
   }
 
   return { success: true };
