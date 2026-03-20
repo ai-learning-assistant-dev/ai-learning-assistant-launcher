@@ -143,15 +143,66 @@ async function installFromP2POrFallback(
 ): Promise<boolean> {
   const { dlcKey, installerArgs, logPrefix, fallbackInstallerPath } = options;
 
+  console.debug(`[${logPrefix}] ========== 开始安装流程 ==========`);
+  console.debug(`[${logPrefix}] dlcKey: ${dlcKey}`);
+  console.debug(`[${logPrefix}] appPath: ${appPath}`);
+
   try {
-    // 首先检查是否有P2P下载的文件
+    // 首先直接在 DLC 目录下检查是否有已下载的 exe 文件（不使用版本号子目录）
+    const fs = await import('fs');
+    const dlcDir = path.join(appPath, 'external-resources', 'dlc', dlcKey);
+
+    console.debug(`[${logPrefix}] 检查 DLC 目录: ${dlcDir}`);
+    console.debug(`[${logPrefix}] DLC 目录是否存在: ${fs.existsSync(dlcDir)}`);
+
+    if (fs.existsSync(dlcDir)) {
+      const allItems = fs.readdirSync(dlcDir);
+      console.debug(
+        `[${logPrefix}] DLC 目录下的所有项目: ${JSON.stringify(allItems)}`,
+      );
+
+      // 直接在 DLC 目录下查找 exe 文件
+      const exeFile = allItems.find(
+        (f: string) => f.endsWith('.exe') && !f.endsWith('.downloading'),
+      );
+      console.debug(`[${logPrefix}] 直接找到的 exe 文件: ${exeFile}`);
+
+      if (exeFile) {
+        const exePath = path.join(dlcDir, exeFile);
+        console.debug(`[${logPrefix}] 准备执行安装包: ${exePath}`);
+        console.debug(`[${logPrefix}] 文件是否存在: ${fs.existsSync(exePath)}`);
+
+        if (fs.existsSync(exePath)) {
+          const stats = fs.statSync(exePath);
+          console.debug(`[${logPrefix}] 文件大小: ${stats.size} bytes`);
+
+          return await executeWithRetry({
+            exePath,
+            args: installerArgs,
+            logPrefix,
+          });
+        }
+      } else {
+        console.debug(`[${logPrefix}] DLC 目录下未直接找到 .exe 文件`);
+      }
+    } else {
+      console.debug(`[${logPrefix}] DLC 目录不存在`);
+    }
+
+    // 如果 HTTPS 下载目录没有文件，尝试从 P2P 下载（保留旧逻辑兼容）
+    console.debug(`[${logPrefix}] 尝试 P2P 下载路径...`);
     const { getDLCFromDLCIndex, destroyWebtorrentForInstall } = await import(
       '../dlc'
     );
     const dlcInfo = getDLCFromDLCIndex(dlcKey);
+    console.debug(
+      `[${logPrefix}] DLC 索引信息: ${dlcInfo ? '已找到' : '未找到'}`,
+    );
 
     if (dlcInfo) {
       const latestVersion = Object.keys(dlcInfo.versions).sort().pop();
+      console.debug(`[${logPrefix}] P2P DLC 最新版本: ${latestVersion}`);
+
       if (latestVersion) {
         const versionInfo = dlcInfo.versions[latestVersion];
 
@@ -178,13 +229,22 @@ async function installFromP2POrFallback(
           latestVersion,
         );
 
-        const fs = await import('fs');
+        console.debug(`[${logPrefix}] P2P 下载路径: ${downloadPath}`);
+        console.debug(
+          `[${logPrefix}] P2P 路径是否存在: ${fs.existsSync(downloadPath)}`,
+        );
+
         if (fs.existsSync(downloadPath)) {
           const files = fs.readdirSync(downloadPath);
+          console.debug(
+            `[${logPrefix}] P2P 目录中的文件: ${JSON.stringify(files)}`,
+          );
+
           const exeFile = files.find((f: string) => f.endsWith('.exe'));
 
           if (exeFile) {
             const exePath = path.join(downloadPath, exeFile);
+            console.debug(`[${logPrefix}] 准备从 P2P 路径执行: ${exePath}`);
             return await executeWithRetry({
               exePath,
               args: installerArgs,
@@ -195,19 +255,20 @@ async function installFromP2POrFallback(
       }
     }
   } catch (error) {
-    console.error(`[${logPrefix}] 尝试使用P2P下载包失败，使用默认方式:`, error);
+    console.error(`[${logPrefix}] 尝试使用下载包失败，使用默认方式:`, error);
   }
 
   // 降级到原有的本地安装包方式
-  const result = await commandLine.exec(
-    path.join(
-      appPath,
-      'external-resources',
-      'ai-assistant-backend',
-      fallbackInstallerPath,
-    ),
-    installerArgs,
+  console.debug(`[${logPrefix}] ========== 降级到本地安装包 ==========`);
+  const fallbackPath = path.join(
+    appPath,
+    'external-resources',
+    'ai-assistant-backend',
+    fallbackInstallerPath,
   );
+  console.debug(`[${logPrefix}] Fallback 路径: ${fallbackPath}`);
+
+  const result = await commandLine.exec(fallbackPath, installerArgs);
   console.debug(`[${logPrefix}] 本地安装包执行结果:`, result);
   return true;
 }

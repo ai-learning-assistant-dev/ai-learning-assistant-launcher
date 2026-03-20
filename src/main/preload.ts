@@ -38,6 +38,11 @@ import {
   setUploadEnabledHandle,
   getUploadEnabledHandle,
   getUploadStatsHandle,
+  startHttpsDownloadHandle,
+  queryHttpsDownloadHandle,
+  cancelHttpsDownloadHandle,
+  checkHttpsDownloadFileHandle,
+  HttpsDownloadState,
 } from './dlc/type-info';
 import {
   checkLauncherUpdateHandle,
@@ -296,6 +301,32 @@ const mainHandle = {
       uploadSpeed: number;
       activeTorrents: number;
     }>(getUploadStatsHandle);
+  },
+  // HTTPS 多源下载
+  startHttpsDownloadHandle: async (
+    dlcId: DLCId,
+    urls: string[],
+    version: string,
+  ) => {
+    return ipcInvoke<{ success: boolean; error?: string }>(
+      startHttpsDownloadHandle,
+      dlcId,
+      urls,
+      version,
+    );
+  },
+  queryHttpsDownloadHandle: async () => {
+    return ipcInvoke<HttpsDownloadState>(queryHttpsDownloadHandle);
+  },
+  cancelHttpsDownloadHandle: async (dlcId: DLCId) => {
+    return ipcInvoke<{ success: boolean }>(cancelHttpsDownloadHandle, dlcId);
+  },
+  checkHttpsDownloadFileHandle: async (dlcId: DLCId, version: string) => {
+    return ipcInvoke<{ exists: boolean; filePath: string | null }>(
+      checkHttpsDownloadFileHandle,
+      dlcId,
+      version,
+    );
   },
   // RTS 进度事件监听
   onRtsProgress: (callback: (progress: RTSProgressInfo) => void) => {

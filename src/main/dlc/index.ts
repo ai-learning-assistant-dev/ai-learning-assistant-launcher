@@ -11,6 +11,12 @@ import {
   setUploadEnabledHandle,
   getUploadEnabledHandle,
   getUploadStatsHandle,
+  startHttpsDownloadHandle,
+  queryHttpsDownloadHandle,
+  cancelHttpsDownloadHandle,
+  checkHttpsDownloadFileHandle,
+  HttpsDownloadProgress,
+  HttpsDownloadState,
 } from './type-info';
 import { ipcHandle } from '../ipc-util';
 import WebTorrent, * as allExports from 'webtorrent';
@@ -22,8 +28,9 @@ import fs, {
   readFileSync,
   unlinkSync,
   writeFileSync,
+  promises as fsPromises,
 } from 'fs';
-import { promises as fsPromises } from 'fs';
+
 import http from 'http';
 import https from 'https';
 import { compare } from 'semver';
@@ -154,6 +161,25 @@ export default async function init(ipcMain: IpcMain) {
     getUploadEnabled(),
   );
   ipcHandle(ipcMain, getUploadStatsHandle, async (_event) => getUploadStats());
+  // HTTPS 多源下载
+  ipcHandle(
+    ipcMain,
+    startHttpsDownloadHandle,
+    async (_event, dlcId: DLCId, urls: string[], version: string) =>
+      startHttpsDownload(dlcId, urls, version),
+  );
+  ipcHandle(ipcMain, queryHttpsDownloadHandle, async (_event) =>
+    queryHttpsDownload(),
+  );
+  ipcHandle(ipcMain, cancelHttpsDownloadHandle, async (_event, dlcId: DLCId) =>
+    cancelHttpsDownload(dlcId),
+  );
+  ipcHandle(
+    ipcMain,
+    checkHttpsDownloadFileHandle,
+    async (_event, dlcId: DLCId, version: string) =>
+      checkHttpsDownloadFile(dlcId, version),
+  );
   // 检查种子文件和对应的实际文件，如果有文件，就添加到webtorrent中
   await restoreTorrentsFromFiles();
 
@@ -183,7 +209,7 @@ export async function startWebtorrent(magnet: string) {
       const onMetadata = () => {
         torrent.removeListener('metadata', onMetadata);
         saveTorrentFile(filePath, torrent);
-      }
+      };
       torrent.on('metadata', onMetadata);
       console.debug('种子文件已经存在，继续下载');
       torrent.resume();
@@ -803,3 +829,358 @@ export async function updateDLCIndex(): Promise<void> {
   });
 }
 
+// ==================== HTTPS 多源下载功能 ====================
+
+// HTTPS 下载状态存储
+const httpsDownloadState: HttpsDownloadState = {};
+
+// 当前活跃的下载请求（用于取消）
+const activeHttpsRequests: Map<string, http.ClientRequest> = new Map();
+
+/**
+ * 从多个 URL 中尝试下载文件
+ * 会按顺序尝试每个 URL，直到成功或全部失败
+ * 文件直接下载到 dlcId 目录下，不再使用版本号子目录
+ */
+export async function startHttpsDownload(
+  dlcId: DLCId,
+  urls: string[],
+  version: string,
+): Promise<{ success: boolean; error?: string }> {
+  if (!urls || urls.length === 0) {
+    return { success: false, error: '没有提供下载链接' };
+  }
+
+  // 初始化下载状态
+  httpsDownloadState[dlcId] = {
+    dlcId,
+    version,
+    progress: 0,
+    downloadedBytes: 0,
+    totalBytes: 0,
+    speed: 0,
+    status: 'downloading',
+  };
+
+  // 创建下载目录（不再包含版本号）
+  const downloadDir = path.join(appPath, 'external-resources', 'dlc', dlcId);
+
+  if (!existsSync(downloadDir)) {
+    mkdirSync(downloadDir, { recursive: true });
+  }
+
+  // 尝试从多个源下载
+  for (let i = 0; i < urls.length; i++) {
+    const url = urls[i];
+    console.debug(
+      `[HTTPS Download] 尝试下载源 ${i + 1}/${urls.length}: ${url}`,
+    );
+
+    try {
+      const result = await downloadFromUrl(dlcId, url, downloadDir, version);
+      if (result.success) {
+        httpsDownloadState[dlcId].status = 'completed';
+        httpsDownloadState[dlcId].progress = 1;
+        httpsDownloadState[dlcId].filePath = result.filePath;
+        console.debug(`[HTTPS Download] 下载成功: ${result.filePath}`);
+        return { success: true };
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.warn(`[HTTPS Download] 源 ${i + 1} 下载失败: ${errorMsg}`);
+
+      // 如果是用户取消的，直接返回
+      if (httpsDownloadState[dlcId]?.status === 'cancelled') {
+        return { success: false, error: '下载已取消' };
+      }
+
+      // 如果还有其他源，继续尝试
+      if (i < urls.length - 1) {
+        console.debug(`[HTTPS Download] 尝试下一个下载源...`);
+        // 重置进度以便下一个源重新开始
+        httpsDownloadState[dlcId].downloadedBytes = 0;
+        httpsDownloadState[dlcId].progress = 0;
+      }
+    }
+  }
+
+  // 所有源都失败了
+  httpsDownloadState[dlcId].status = 'error';
+  httpsDownloadState[dlcId].error = '所有下载源都失败';
+  return { success: false, error: '所有下载源都失败' };
+}
+
+/**
+ * 从单个 URL 下载文件
+ */
+function downloadFromUrl(
+  dlcId: DLCId,
+  url: string,
+  downloadDir: string,
+  version: string,
+): Promise<{ success: boolean; filePath?: string }> {
+  return new Promise((resolve, reject) => {
+    const protocol = url.startsWith('https://') ? https : http;
+
+    // 从 URL 中提取文件名，如果无法提取则使用默认名称
+    let fileName = path.basename(new URL(url).pathname);
+    if (!fileName || fileName === '' || !fileName.includes('.')) {
+      fileName = `${dlcId}-${version}.exe`;
+    }
+
+    const filePath = path.join(downloadDir, fileName);
+    const tempFilePath = filePath + '.downloading';
+
+    // 如果已存在完整的下载文件，直接返回成功
+    if (existsSync(filePath)) {
+      console.debug(`[HTTPS Download] 文件已存在: ${filePath}`);
+      resolve({ success: true, filePath });
+      return;
+    }
+
+    // 检查是否有未完成的下载，用于断点续传
+    let downloadedBytes = 0;
+    if (existsSync(tempFilePath)) {
+      const stats = fs.statSync(tempFilePath);
+      downloadedBytes = stats.size;
+      console.debug(
+        `[HTTPS Download] 发现未完成的下载，已下载 ${downloadedBytes} 字节`,
+      );
+    }
+
+    const options: https.RequestOptions = {
+      headers: {
+        'User-Agent': 'AI-Learning-Assistant-Launcher',
+        ...(downloadedBytes > 0 ? { Range: `bytes=${downloadedBytes}-` } : {}),
+      },
+    };
+
+    const request = protocol.get(url, options, (response) => {
+      // 处理重定向
+      if (response.statusCode === 301 || response.statusCode === 302) {
+        const redirectUrl = response.headers.location;
+        if (redirectUrl) {
+          console.debug(`[HTTPS Download] 重定向到: ${redirectUrl}`);
+          downloadFromUrl(dlcId, redirectUrl, downloadDir, version)
+            .then(resolve)
+            .catch(reject);
+        } else {
+          reject(new Error('重定向URL为空'));
+        }
+        return;
+      }
+
+      // 检查是否支持断点续传
+      const isPartialContent = response.statusCode === 206;
+      const contentLength = parseInt(
+        response.headers['content-length'] || '0',
+        10,
+      );
+
+      let totalBytes: number;
+      if (isPartialContent) {
+        // 从 Content-Range 头获取总大小
+        const contentRange = response.headers['content-range'];
+        if (contentRange) {
+          const match = contentRange.match(/\/(\d+)/);
+          totalBytes = match
+            ? parseInt(match[1], 10)
+            : downloadedBytes + contentLength;
+        } else {
+          totalBytes = downloadedBytes + contentLength;
+        }
+      } else {
+        totalBytes = contentLength;
+        downloadedBytes = 0; // 不支持断点续传，从头开始
+      }
+
+      httpsDownloadState[dlcId].totalBytes = totalBytes;
+
+      if (response.statusCode !== 200 && response.statusCode !== 206) {
+        reject(new Error(`HTTP 状态码: ${response.statusCode}`));
+        return;
+      }
+
+      // 打开文件用于写入
+      const writeFlags = isPartialContent ? 'a' : 'w';
+      const fileStream = fs.createWriteStream(tempFilePath, {
+        flags: writeFlags,
+      });
+
+      let lastTime = Date.now();
+      let lastBytes = downloadedBytes;
+
+      response.on('data', (chunk: Buffer) => {
+        // 检查是否被取消
+        if (httpsDownloadState[dlcId]?.status === 'cancelled') {
+          request.destroy();
+          fileStream.close();
+          return;
+        }
+
+        downloadedBytes += chunk.length;
+
+        // 计算下载速度（每秒更新一次）
+        const now = Date.now();
+        const timeDiff = now - lastTime;
+        if (timeDiff >= 1000) {
+          const bytesDiff = downloadedBytes - lastBytes;
+          httpsDownloadState[dlcId].speed = Math.round(
+            (bytesDiff / timeDiff) * 1000,
+          );
+          lastTime = now;
+          lastBytes = downloadedBytes;
+        }
+
+        // 更新进度
+        httpsDownloadState[dlcId].downloadedBytes = downloadedBytes;
+        if (totalBytes > 0) {
+          httpsDownloadState[dlcId].progress = downloadedBytes / totalBytes;
+        }
+      });
+
+      response.pipe(fileStream);
+
+      fileStream.on('finish', () => {
+        fileStream.close();
+        // 下载完成，重命名临时文件
+        try {
+          if (existsSync(filePath)) {
+            unlinkSync(filePath);
+          }
+          fs.renameSync(tempFilePath, filePath);
+          resolve({ success: true, filePath });
+        } catch (err) {
+          reject(err);
+        }
+      });
+
+      fileStream.on('error', (err) => {
+        fileStream.close();
+        reject(err);
+      });
+    });
+
+    // 保存请求以便取消
+    activeHttpsRequests.set(dlcId, request);
+
+    request.on('error', (err) => {
+      activeHttpsRequests.delete(dlcId);
+      reject(err);
+    });
+
+    request.on('close', () => {
+      activeHttpsRequests.delete(dlcId);
+    });
+  });
+}
+
+/**
+ * 查询 HTTPS 下载状态
+ */
+export function queryHttpsDownload(): HttpsDownloadState {
+  return { ...httpsDownloadState };
+}
+
+/**
+ * 取消 HTTPS 下载
+ */
+export function cancelHttpsDownload(dlcId: DLCId): { success: boolean } {
+  if (httpsDownloadState[dlcId]) {
+    httpsDownloadState[dlcId].status = 'cancelled';
+  }
+
+  const request = activeHttpsRequests.get(dlcId);
+  if (request) {
+    request.destroy();
+    activeHttpsRequests.delete(dlcId);
+  }
+
+  return { success: true };
+}
+
+/**
+ * 检查 HTTPS 下载是否已完成
+ */
+export function isHttpsDownloadComplete(dlcId: DLCId): boolean {
+  const state = httpsDownloadState[dlcId];
+  return state?.status === 'completed' && state?.progress >= 1;
+}
+
+/**
+ * 获取 HTTPS 下载的文件路径
+ */
+export function getHttpsDownloadFilePath(
+  dlcId: DLCId,
+  version: string,
+): string | null {
+  const state = httpsDownloadState[dlcId];
+  if (state?.filePath) {
+    return state.filePath;
+  }
+
+  // 尝试从目录中查找已下载的文件
+  const downloadDir = path.join(
+    appPath,
+    'external-resources',
+    'dlc',
+    dlcId,
+    version,
+  );
+
+  if (existsSync(downloadDir)) {
+    const files = fs.readdirSync(downloadDir);
+    const exeFile = files.find(
+      (f) => f.endsWith('.exe') && !f.endsWith('.downloading'),
+    );
+    if (exeFile) {
+      return path.join(downloadDir, exeFile);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * 检查指定 DLC 是否已有下载完成的文件
+ * @returns 如果已有下载好的文件，返回文件路径；否则返回 null
+ */
+export function checkHttpsDownloadFile(
+  dlcId: DLCId,
+  version: string,
+): { exists: boolean; filePath: string | null } {
+  // 直接在 dlcId 目录下查找，不再使用版本号子目录
+  const downloadDir = path.join(appPath, 'external-resources', 'dlc', dlcId);
+
+  console.debug(`[checkHttpsDownloadFile] 检查目录: ${downloadDir}`);
+
+  if (existsSync(downloadDir)) {
+    const files = fs.readdirSync(downloadDir);
+    console.debug(
+      `[checkHttpsDownloadFile] 目录中的文件: ${JSON.stringify(files)}`,
+    );
+
+    const exeFile = files.find(
+      (f) => f.endsWith('.exe') && !f.endsWith('.downloading'),
+    );
+    console.debug(`[checkHttpsDownloadFile] 找到的 exe 文件: ${exeFile}`);
+
+    if (exeFile) {
+      const filePath = path.join(downloadDir, exeFile);
+      // 更新下载状态为已完成
+      httpsDownloadState[dlcId] = {
+        dlcId,
+        version,
+        progress: 1,
+        downloadedBytes: 0,
+        totalBytes: 0,
+        speed: 0,
+        status: 'completed',
+        filePath,
+      };
+      return { exists: true, filePath };
+    }
+  }
+
+  return { exists: false, filePath: null };
+}

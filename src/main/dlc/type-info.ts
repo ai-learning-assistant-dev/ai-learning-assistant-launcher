@@ -19,6 +19,28 @@ export const getUploadEnabledHandle = `${channel}getUploadEnabled`;
 
 export const getUploadStatsHandle = `${channel}getUploadStats`;
 
+// HTTPS 多源下载相关
+export const startHttpsDownloadHandle = `${channel}httpsStart`;
+export const queryHttpsDownloadHandle = `${channel}httpsQuery`;
+export const cancelHttpsDownloadHandle = `${channel}httpsCancel`;
+export const checkHttpsDownloadFileHandle = `${channel}httpsCheckFile`;
+
+// HTTPS 下载进度信息
+export interface HttpsDownloadProgress {
+  dlcId: DLCId;
+  version: string;
+  progress: number; // 0-1
+  downloadedBytes: number;
+  totalBytes: number;
+  speed: number; // bytes/s
+  status: 'idle' | 'downloading' | 'completed' | 'error' | 'cancelled';
+  error?: string;
+  filePath?: string;
+}
+
+// HTTPS 下载状态存储（key 为 dlcId）
+export type HttpsDownloadState = Record<string, HttpsDownloadProgress>;
+
 export const dLCIds = [
   'PDF_TAR',
   'VOICE_TAR',
