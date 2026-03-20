@@ -46,12 +46,14 @@ import {
 } from './launcher-update/type-info';
 import {
   courseHaveNewVersionNativeTrainingServiceHandle,
+  haveNewVersionNativeTrainingServiceHandle,
   installNativeTrainingServiceHandle,
   logsNativeTrainingServiceHandle,
   queryNativeTrainingServiceHandle,
   removeNativeTrainingServiceHandle,
   startNativeTrainingServiceHandle,
   updateCourseNativeTrainingServiceHandle,
+  updateNativeTrainingServiceHandle,
 } from './native-training-service/type-info';
 import { NativeServiceInfo } from './native-script/type-info';
 import {
@@ -188,6 +190,16 @@ const mainHandle = {
       latestVersion: string;
       haveNew: boolean;
     }>(courseHaveNewVersionNativeTrainingServiceHandle);
+  },
+  updateNativeTrainingServiceHandle: async () => {
+    return ipcInvoke(updateNativeTrainingServiceHandle);
+  },
+  haveNewVersionNativeTrainingServiceHandle: async () => {
+    return ipcInvoke<{
+      currentVersion: string;
+      latestVersion: string;
+      haveNew: boolean;
+    }>(haveNewVersionNativeTrainingServiceHandle);
   },
   logsNativeTrainingServiceHandle: async () => {
     return ipcInvoke<{ imageId: string; logs: string }>(

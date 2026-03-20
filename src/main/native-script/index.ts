@@ -256,11 +256,18 @@ export async function installService(
       cwd: trainingServerSourcePath,
     });
 
-    await gitClone(
-      'https://gitee.com/shiftonetothree/ai-learning-assistant-training-front-dist.git',
-      trainingFrontendPath,
-      'master',
-    );
+    // 检查package.json文件是否存在
+    const packageJsonPath = path.join(trainingServerSourcePath, 'package.json');
+    if (existsSync(packageJsonPath)) {
+      const packageJsonContent = readFileSync(packageJsonPath, 'utf-8');
+      const packageJson = JSON.parse(packageJsonContent);
+      const frontendDistGit = packageJson.frontendDistGit;
+      await gitClone(
+        frontendDistGit.url,
+        trainingFrontendPath,
+        frontendDistGit.branch,
+      );
+    }
 
     cpSync(trainingFrontendPath, trainingServerSourcePublicPath, {
       recursive: true,

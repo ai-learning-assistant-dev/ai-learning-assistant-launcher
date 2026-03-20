@@ -267,6 +267,16 @@ export default function Hello() {
     setTrainingServiceStarting(true);
     setTrainingServiceRemoving(true);
     await trainingShortcut.updateCourse();
+    message.success('学科培训课程更新成功');
+    setTrainingServiceStarting(false);
+    setTrainingServiceRemoving(false);
+  };
+
+  const updateTrainingService = async () => {
+    setShowTerminalLog(true);
+    setTrainingServiceStarting(true);
+    setTrainingServiceRemoving(true);
+    await trainingShortcut.update();
     message.success('学科培训更新成功');
     setTrainingServiceStarting(false);
     setTrainingServiceRemoving(false);
@@ -550,13 +560,15 @@ export default function Hello() {
                       <p className="description-text">
                         AI辅助的学科知识培训，学员建档设立目标，帮助补齐技能知识短板。
                         {trainingShortcut.state !== 'not_install' &&
-                          `当前版本：${trainingShortcut.versionInfo.currentVersion}`}
+                          `当前版本：${trainingShortcut.courseVersionInfo.currentVersion}`}
                       </p>
                     </div>
                     {trainingShortcut.state === 'updating' && (
                       <TorrentProgress
                         id={'TRAINING_COURSE'}
-                        version={trainingShortcut.versionInfo.latestVersion}
+                        version={
+                          trainingShortcut.courseVersionInfo.latestVersion
+                        }
                       />
                     )}
                   </div>
@@ -564,7 +576,8 @@ export default function Hello() {
                     {!(
                       (trainingShortcut.state === 'stopped' ||
                         trainingShortcut.state === 'updating') &&
-                      trainingShortcut.versionInfo.haveNew
+                      (trainingShortcut.courseVersionInfo.haveNew ||
+                        trainingShortcut.programVersionInfo.haveNew)
                     ) && (
                       <Button
                         className="feature-button"
@@ -583,7 +596,8 @@ export default function Hello() {
                     )}
                     {(trainingShortcut.state === 'stopped' ||
                       trainingShortcut.state === 'updating') &&
-                      trainingShortcut.versionInfo.haveNew && (
+                      trainingShortcut.courseVersionInfo.haveNew &&
+                      !trainingShortcut.programVersionInfo.haveNew && (
                         <Button
                           className="feature-button"
                           block
@@ -592,6 +606,19 @@ export default function Hello() {
                           loading={trainingServiceRemoving}
                         >
                           更新课程
+                        </Button>
+                      )}
+                    {(trainingShortcut.state === 'stopped' ||
+                      trainingShortcut.state === 'updating') &&
+                      trainingShortcut.programVersionInfo.haveNew && (
+                        <Button
+                          className="feature-button"
+                          block
+                          size="large"
+                          onClick={updateTrainingService}
+                          loading={trainingServiceRemoving}
+                        >
+                          更新
                         </Button>
                       )}
                     {trainingShortcut.state !== 'not_install' && (
