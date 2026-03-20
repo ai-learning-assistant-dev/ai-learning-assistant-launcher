@@ -872,9 +872,6 @@ export async function startHttpsDownload(
   // 尝试从多个源下载
   for (let i = 0; i < urls.length; i++) {
     const url = urls[i];
-    console.debug(
-      `[HTTPS Download] 尝试下载源 ${i + 1}/${urls.length}: ${url}`,
-    );
 
     try {
       const result = await downloadFromUrl(dlcId, url, downloadDir, version);
@@ -882,7 +879,6 @@ export async function startHttpsDownload(
         httpsDownloadState[dlcId].status = 'completed';
         httpsDownloadState[dlcId].progress = 1;
         httpsDownloadState[dlcId].filePath = result.filePath;
-        console.debug(`[HTTPS Download] 下载成功: ${result.filePath}`);
         return { success: true };
       }
     } catch (error) {
@@ -896,7 +892,6 @@ export async function startHttpsDownload(
 
       // 如果还有其他源，继续尝试
       if (i < urls.length - 1) {
-        console.debug(`[HTTPS Download] 尝试下一个下载源...`);
         // 重置进度以便下一个源重新开始
         httpsDownloadState[dlcId].downloadedBytes = 0;
         httpsDownloadState[dlcId].progress = 0;
@@ -938,7 +933,6 @@ function downloadFromUrl(
 
     // 如果已存在完整的下载文件，直接返回成功
     if (existsSync(filePath)) {
-      console.debug(`[HTTPS Download] 文件已存在: ${filePath}`);
       resolve({ success: true, filePath });
       return;
     }
@@ -948,9 +942,6 @@ function downloadFromUrl(
     if (existsSync(tempFilePath)) {
       const stats = fs.statSync(tempFilePath);
       downloadedBytes = stats.size;
-      console.debug(
-        `[HTTPS Download] 发现未完成的下载，已下载 ${downloadedBytes} 字节`,
-      );
     }
 
     const options: https.RequestOptions = {
@@ -973,9 +964,6 @@ function downloadFromUrl(
             );
             return;
           }
-          console.debug(
-            `[HTTPS Download] 重定向到: ${redirectUrl} (${redirectCount + 1}/${MAX_REDIRECTS})`,
-          );
           downloadFromUrl(
             dlcId,
             redirectUrl,
@@ -1040,9 +1028,6 @@ function downloadFromUrl(
             if (existsSync(tempFilePath)) {
               try {
                 unlinkSync(tempFilePath);
-                console.debug(
-                  `[HTTPS Download] 取消下载，已删除临时文件: ${tempFilePath}`,
-                );
               } catch (err) {
                 console.warn(
                   `[HTTPS Download] 删除临时文件失败: ${tempFilePath}`,
@@ -1141,9 +1126,6 @@ export function cancelHttpsDownload(dlcId: DLCId): { success: boolean } {
         if (file.endsWith('.downloading')) {
           const tempFilePath = path.join(downloadDir, file);
           unlinkSync(tempFilePath);
-          console.debug(
-            `[HTTPS Download] 取消下载，已删除临时文件: ${tempFilePath}`,
-          );
         }
       }
     } catch (err) {
@@ -1207,18 +1189,12 @@ export function checkHttpsDownloadFile(
   // 直接在 dlcId 目录下查找，不再使用版本号子目录
   const downloadDir = path.join(appPath, 'external-resources', 'dlc', dlcId);
 
-  console.debug(`[checkHttpsDownloadFile] 检查目录: ${downloadDir}`);
-
   if (existsSync(downloadDir)) {
     const files = fs.readdirSync(downloadDir);
-    console.debug(
-      `[checkHttpsDownloadFile] 目录中的文件: ${JSON.stringify(files)}`,
-    );
 
     const exeFile = files.find(
       (f) => f.endsWith('.exe') && !f.endsWith('.downloading'),
     );
-    console.debug(`[checkHttpsDownloadFile] 找到的 exe 文件: ${exeFile}`);
 
     if (exeFile) {
       const filePath = path.join(downloadDir, exeFile);
