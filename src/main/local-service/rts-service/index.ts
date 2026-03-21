@@ -202,7 +202,13 @@ export async function runRTSService(): Promise<string> {
     const child = spawn(
       'powershell',
       ['-ExecutionPolicy', 'Bypass', '-Command', `cd "${psDir}"; .\\run.ps1`],
-      { shell: true },
+      {
+        shell: true,
+        env: {
+          ...process.env,
+          LLM_STREAM_URL: 'http://localhost:7100/api/ai-chat/chat/stream',
+        },
+      },
     );
 
     let stdoutData = '';
