@@ -12,7 +12,6 @@ import { loggerFactory } from '../terminal-log';
 import { existsSync, readFileSync, mkdirSync, rmSync, cpSync } from 'fs';
 import { CancellationTokenSourceImpl } from '../exec/cancellation-token';
 import http from 'http';
-import { getLatestVersion, startWebtorrent, waitTorrentDone } from '../dlc';
 import { llmConfigPath } from '../configs';
 import { queryTrainingConfig } from '../configs/training-config';
 
@@ -248,6 +247,7 @@ export async function monitorStateIsRuning(
   serviceName: NativeServiceName,
 ): Promise<void> {
   if (serviceName === 'NATIVE_TRAINING') {
+    let retryCounter = 30;
     console.debug('checking health', serviceName);
     return new Promise<void>((resolve, reject) => {
       const interval = setInterval(async () => {
@@ -263,6 +263,11 @@ export async function monitorStateIsRuning(
             }
           } else {
             // do nothing
+            if (retryCounter > 0) {
+              retryCounter--;
+            } else {
+              reject('服务超时还未启动');
+            }
           }
         } else {
           clearInterval(interval);
@@ -302,19 +307,30 @@ export async function startService(
     const trainingConfig = await queryTrainingConfig();
     if (info.state !== 'running') {
       const tokenSource = new CancellationTokenSourceImpl();
-      commandLine.exec(
-        `set PORT=${TRAINING_PORT} && set "ALA_LLM_CONFIG_PATH=${llmConfigPath}" && set "UNLOCK_ALL_SECTION=${trainingConfig.env.UNLOCK_ALL_SECTION}" && bun dev`,
-        [],
-        {
-          shell: true,
-          encoding: 'utf8',
-          logger: loggerFactory(serviceName),
-          cwd: trainingServerSourcePath,
-          token: tokenSource.token,
-        },
-      );
+      commandLine
+        .exec(
+          `set PORT=${TRAINING_PORT} && set "ALA_LLM_CONFIG_PATH=${llmConfigPath}" && set "UNLOCK_ALL_SECTION=${trainingConfig.env.UNLOCK_ALL_SECTION}" && bun dev`,
+          [],
+          {
+            shell: true,
+            encoding: 'utf8',
+            logger: loggerFactory(serviceName),
+            cwd: trainingServerSourcePath,
+            token: tokenSource.token,
+          },
+        )
+        .catch((e) => {
+          console.warn(e);
+          console.debug('学科培训服务停止了');
+        });
     }
-    await monitorStateIsRuning(serviceName);
+    try {
+      await monitorStateIsRuning(serviceName);
+    } catch (e) {
+      console.error(e);
+      await stopService(serviceName);
+    }
+
     return getServiceInfo(serviceName);
   }
   return { state: 'running', version: '1.0.0' };
