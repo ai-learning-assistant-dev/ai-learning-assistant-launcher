@@ -1,7 +1,4 @@
-import { execFile } from 'child_process';
-import { promisify } from 'util';
 import path from 'path';
-const exec = promisify(execFile);
 import { IpcMain } from 'electron';
 import { ipcHandle } from '../../ipc-util';
 import {
@@ -10,7 +7,11 @@ import {
   runObsidianVoiceServiceHandle,
   stopObsidianVoiceServiceHandle,
 } from './type-info';
-import { appPath } from '../../exec';
+import { appPath, Exec } from '../../exec';
+import { loggerFactory } from '../../terminal-log';
+
+const commandLine = new Exec();
+const terminalLogger = loggerFactory('NATIVE_OBSIDIAN_VOICE');
 
 export default function init(ipcMain: IpcMain): void {
   ipcHandle(
@@ -36,7 +37,7 @@ const psDir = path.join(
 
 export async function getObsidianVoiceServiceStatus(): Promise<string> {
   try {
-    const { stdout } = await exec(
+    const { stdout } = await commandLine.exec(
       'powershell',
       [
         '-ExecutionPolicy',
@@ -44,7 +45,7 @@ export async function getObsidianVoiceServiceStatus(): Promise<string> {
         '-Command',
         `cd "${psDir}"; .\\get-service-status.ps1`,
       ],
-      { encoding: 'utf8' },
+      { encoding: 'utf8', logger: terminalLogger },
     );
     return stdout.trim();
   } catch (e: any) {
@@ -56,7 +57,7 @@ export async function getObsidianVoiceServiceStatus(): Promise<string> {
 
 export async function installObsidianVoiceService(): Promise<string> {
   try {
-    const { stdout } = await exec(
+    const { stdout } = await commandLine.exec(
       'powershell',
       [
         '-ExecutionPolicy',
@@ -64,7 +65,7 @@ export async function installObsidianVoiceService(): Promise<string> {
         '-Command',
         `cd "${psDir}"; .\\install.ps1`,
       ],
-      { encoding: 'utf8' },
+      { encoding: 'utf8', logger: terminalLogger },
     );
     return stdout.trim();
   } catch (e: any) {
@@ -76,7 +77,7 @@ export async function installObsidianVoiceService(): Promise<string> {
 
 export async function runObsidianVoiceService(): Promise<string> {
   try {
-    const { stdout } = await exec(
+    const { stdout } = await commandLine.exec(
       'powershell',
       [
         '-ExecutionPolicy',
@@ -84,7 +85,7 @@ export async function runObsidianVoiceService(): Promise<string> {
         '-Command',
         `cd "${psDir}"; .\\run.ps1`,
       ],
-      { encoding: 'utf8' },
+      { encoding: 'utf8', logger: terminalLogger },
     );
     return stdout.trim();
   } catch (e: any) {
@@ -96,7 +97,7 @@ export async function runObsidianVoiceService(): Promise<string> {
 
 export async function stopObsidianVoiceService(): Promise<string> {
   try {
-    const { stdout } = await exec(
+    const { stdout } = await commandLine.exec(
       'powershell',
       [
         '-ExecutionPolicy',
@@ -104,7 +105,7 @@ export async function stopObsidianVoiceService(): Promise<string> {
         '-Command',
         `cd "${psDir}"; .\\stop.ps1`,
       ],
-      { encoding: 'utf8' },
+      { encoding: 'utf8', logger: terminalLogger },
     );
     return stdout.trim();
   } catch (e: any) {

@@ -11,8 +11,7 @@ import { useObsidianVoiceService } from '../../containers/use-obsidian-voice-ser
 import { Link } from 'react-router-dom';
 import { useRtsService } from '../../containers/use-rts-service';
 import './index.scss';
-
-import toolsIcon from './Tools_Icon.png';
+import { TerminalLogScreen } from '../../containers/terminal-log-screen';
 
 export default function NativeAiService() {
   const {
@@ -210,6 +209,16 @@ export default function NativeAiService() {
           </div>
         </List.Item>
       </List>
+      <TerminalLogScreen
+        id="native-ai-terminal-log"
+        cols={100}
+        rows={30}
+        style={{
+          width: 'calc(100% - 20px)',
+          marginTop: '16px',
+          height: '430px',
+        }}
+      />
     </div>
   );
 }
