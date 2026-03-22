@@ -27,6 +27,7 @@ import { useRtsService } from '../../containers/use-rts-service';
 import { TorrentProgress } from '../../containers/torrent-progress';
 import { TerminalLogScreen } from '../../containers/terminal-log-screen';
 import toolsIcon from './Tools_Icon.png';
+import Checkbox from 'antd/es/checkbox/Checkbox';
 
 export default function Hello() {
   const trainingShortcut = useNativeTrainingServiceShortcut();
@@ -561,6 +562,7 @@ export default function Hello() {
                         AI辅助的学科知识培训，学员建档设立目标，帮助补齐技能知识短板。
                         {trainingShortcut.state !== 'not_install' &&
                           `当前版本：${trainingShortcut.courseVersionInfo.currentVersion}`}
+                        <Checkbox>解锁所有课程</Checkbox>
                       </p>
                     </div>
                     {trainingShortcut.state === 'updating' && (

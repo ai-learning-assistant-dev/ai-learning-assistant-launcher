@@ -84,6 +84,7 @@ export function useNativeTrainingServiceShortcut() {
       serviceInfo.state = 'updating';
       await window.mainHandle.updateNativeTrainingServiceHandle();
     }
+    await queryServiceInfo();
   };
 
   const downloadLogs = async () => {
