@@ -110,7 +110,6 @@ export async function getRTSServiceStatus(): Promise<string> {
       ],
       {
         encoding: 'utf8',
-        logger: terminalLogger,
       },
     );
 

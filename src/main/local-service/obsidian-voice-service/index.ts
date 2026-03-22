@@ -45,7 +45,7 @@ export async function getObsidianVoiceServiceStatus(): Promise<string> {
         '-Command',
         `cd "${psDir}"; .\\get-service-status.ps1`,
       ],
-      { encoding: 'utf8', logger: terminalLogger },
+      { encoding: 'utf8' },
     );
     return stdout.trim();
   } catch (e: any) {
