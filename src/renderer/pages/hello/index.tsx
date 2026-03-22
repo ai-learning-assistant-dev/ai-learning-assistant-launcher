@@ -434,12 +434,18 @@ export default function Hello() {
         <div className="hello-container" ref={contentRef}>
           <div className="hello-content">
             {showTerminalLog ? (
-              <TerminalLogScreen
-                id="hello-terminal-log"
-                cols={100}
-                rows={20}
-                style={{ width: 'calc(100% - 20px)', marginTop: '16px' }}
-              />
+              <div className="hello-header">
+                <TerminalLogScreen
+                  id="hello-terminal-log"
+                  cols={100}
+                  rows={30}
+                  style={{
+                    width: 'calc(100%)',
+                    marginTop: '16px',
+                    height: '430px',
+                  }}
+                />
+              </div>
             ) : (
               <div className="hello-header">
                 <div className="header-content">
