@@ -14,6 +14,7 @@ import { CancellationTokenSourceImpl } from '../exec/cancellation-token';
 import http from 'http';
 import { getLatestVersion, startWebtorrent, waitTorrentDone } from '../dlc';
 import { llmConfigPath } from '../configs';
+import { queryTrainingConfig } from '../configs/training-config';
 
 const commandLine = new Exec();
 
@@ -298,10 +299,11 @@ export async function startService(
 ): Promise<NativeServiceInfo> {
   if (serviceName === 'NATIVE_TRAINING') {
     const info = await getServiceInfo(serviceName);
+    const trainingConfig = await queryTrainingConfig();
     if (info.state !== 'running') {
       const tokenSource = new CancellationTokenSourceImpl();
       commandLine.exec(
-        `set PORT=${TRAINING_PORT} && set "ALA_LLM_CONFIG_PATH=${llmConfigPath}" && bun dev`,
+        `set PORT=${TRAINING_PORT} && set "ALA_LLM_CONFIG_PATH=${llmConfigPath}" && set "UNLOCK_ALL_SECTION=${trainingConfig.env.UNLOCK_ALL_SECTION}" && bun dev`,
         [],
         {
           shell: true,

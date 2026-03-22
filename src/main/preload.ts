@@ -75,6 +75,11 @@ import {
   runObsidianVoiceServiceHandle,
   stopObsidianVoiceServiceHandle,
 } from './local-service/obsidian-voice-service/type-info';
+import {
+  queryNativeTrainingConfigHandle,
+  setNativeTrainingConfigHandle,
+  TrainingConfig,
+} from './configs/type-info';
 
 const electronHandler = {
   // 系统信息
@@ -176,6 +181,12 @@ const mainHandle = {
     return ipcInvoke<{ imageId: string; logs: string }>(
       logsTrainingServiceHandle,
     );
+  },
+  queryNativeTrainingConfigHandle: async () => {
+    return ipcInvoke<TrainingConfig>(queryNativeTrainingConfigHandle);
+  },
+  setNativeTrainingConfigHandle: async (config: TrainingConfig) => {
+    return ipcInvoke<TrainingConfig>(setNativeTrainingConfigHandle, config);
   },
   queryNativeTrainingServiceHandle: async () => {
     return ipcInvoke<NativeServiceInfo>(queryNativeTrainingServiceHandle);

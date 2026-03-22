@@ -8,7 +8,7 @@ import {
   Progress,
 } from 'antd';
 import { NavLink } from 'react-router-dom';
-import { useEffect, useState, useRef } from 'react'; // 添加 useRef 导入
+import { useEffect, useState, useRef, useCallback } from 'react'; // 添加 useRef 导入
 import obsidianLogo from './2023_Obsidian_logo.png';
 import llmIcon from './LLM_Icon.png';
 import heroImage from './Frame 2.png';
@@ -27,7 +27,8 @@ import { useRtsService } from '../../containers/use-rts-service';
 import { TorrentProgress } from '../../containers/torrent-progress';
 import { TerminalLogScreen } from '../../containers/terminal-log-screen';
 import toolsIcon from './Tools_Icon.png';
-import Checkbox from 'antd/es/checkbox/Checkbox';
+import Checkbox, { CheckboxChangeEvent } from 'antd/es/checkbox/Checkbox';
+import { TrainingConfig } from '../../../main/configs/type-info';
 
 export default function Hello() {
   const trainingShortcut = useNativeTrainingServiceShortcut();
@@ -401,6 +402,27 @@ export default function Hello() {
     }
   };
 
+  const [trainingConfig, setTrainingConfig] = useState<TrainingConfig | null>(
+    null,
+  );
+
+  useEffect(() => {
+    window.mainHandle
+      .queryNativeTrainingConfigHandle()
+      .then((res) => setTrainingConfig(res));
+  });
+
+  const handleTrainingConfigChange = useCallback(
+    async (e: CheckboxChangeEvent) => {
+      window.mainHandle.setNativeTrainingConfigHandle({
+        env: {
+          UNLOCK_ALL_SECTION: e.target.checked,
+        },
+      });
+    },
+    [],
+  );
+
   return (
     <div className="hello-root" ref={containerRef}>
       <div
@@ -562,7 +584,12 @@ export default function Hello() {
                         AI辅助的学科知识培训，学员建档设立目标，帮助补齐技能知识短板。
                         {trainingShortcut.state !== 'not_install' &&
                           `当前版本：${trainingShortcut.courseVersionInfo.currentVersion}`}
-                        <Checkbox>解锁所有课程</Checkbox>
+                        <Checkbox
+                          checked={trainingConfig?.env.UNLOCK_ALL_SECTION}
+                          onChange={handleTrainingConfigChange}
+                        >
+                          进行非线性学习
+                        </Checkbox>
                       </p>
                     </div>
                     {trainingShortcut.state === 'updating' && (
