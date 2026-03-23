@@ -14,7 +14,9 @@ import initTrainingService from './training-service';
 import initLogService from './backup';
 import initExternalUrl from './external-url';
 import initDLC from './dlc';
-import initLauncherUpdate from './launcher-update';
+import initLauncherUpdate, {
+  checkAndApplyPendingUpdate,
+} from './launcher-update';
 import path from 'node:path';
 import { appPath, autoAdaptEncodingForWindows } from './exec';
 import { logDeviceInfo } from './logger/log-device-info';
@@ -117,7 +119,18 @@ const createWindow = async () => {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.on('ready', createWindow);
+app.on('ready', async () => {
+  // 清理可能残留的更新配置（如果之前的更新失败）
+  // 注意：实际的文件替换由 PowerShell 脚本在主进程退出后执行
+  try {
+    await checkAndApplyPendingUpdate();
+  } catch (error) {
+    console.error('清理残留更新配置时出错:', error);
+  }
+
+  // 正常创建窗口
+  createWindow();
+});
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits
