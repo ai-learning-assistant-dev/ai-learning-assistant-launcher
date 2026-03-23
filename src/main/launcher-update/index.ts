@@ -34,7 +34,7 @@ import {
   access,
   constants,
 } from 'fs/promises';
-import { spawn } from 'child_process';
+import { spawn, execFile } from 'child_process';
 
 import packageJson from '../../../package.json';
 const currentVersion = packageJson.version;
@@ -105,6 +105,13 @@ function getUpdateTempDir(): string {
 const updateLogPath = path.join(appPath, 'launcher-update.log');
 const updateLogBackupPath = path.join(appPath, 'launcher-update.log.old');
 
+// PowerShell 脚本日志文件路径（与主日志放在同一目录，便于查看）
+const scriptLogPath = path.join(appPath, 'launcher-update-script.log');
+const scriptLogBackupPath = path.join(
+  appPath,
+  'launcher-update-script.log.old',
+);
+
 // 日志滚动配置
 const LOG_ROTATION_CONFIG = {
   MAX_SIZE_BYTES: 1 * 1024 * 1024, // 1MB
@@ -156,34 +163,46 @@ async function writeUpdateLog(
 }
 
 /**
- * 初始化日志文件（检查大小并执行滚动）
- * 当日志文件超过 MAX_SIZE_BYTES 时，将旧日志重命名为 .old 文件
+ * 对单个日志文件执行滚动
+ * @param logPath 日志文件路径
+ * @param backupPath 备份文件路径
  */
-async function initUpdateLog() {
+async function rotateLogFile(logPath: string, backupPath: string) {
   try {
-    // 检查日志文件是否存在及其大小
-    if (existsSync(updateLogPath)) {
-      const stats = await stat(updateLogPath);
+    if (existsSync(logPath)) {
+      const stats = await stat(logPath);
 
       if (stats.size >= LOG_ROTATION_CONFIG.MAX_SIZE_BYTES) {
         // 删除旧的备份文件（如果存在）
         try {
-          await unlink(updateLogBackupPath);
+          await unlink(backupPath);
         } catch {
           // 备份文件不存在，忽略
         }
 
         // 将当前日志重命名为备份
-        await rename(updateLogPath, updateLogBackupPath);
+        await rename(logPath, backupPath);
 
         console.log(
-          `[initUpdateLog] 日志文件已滚动，旧日志大小: ${(stats.size / 1024).toFixed(2)} KB`,
+          `[rotateLogFile] 日志文件已滚动: ${logPath}，旧日志大小: ${(stats.size / 1024).toFixed(2)} KB`,
         );
       }
     }
   } catch (err) {
-    console.error('[initUpdateLog] 日志滚动检查失败:', err);
+    console.error(`[rotateLogFile] 日志滚动检查失败 (${logPath}):`, err);
   }
+}
+
+/**
+ * 初始化日志文件（检查大小并执行滚动）
+ * 当日志文件超过 MAX_SIZE_BYTES 时，将旧日志重命名为 .old 文件
+ */
+async function initUpdateLog() {
+  // 滚动主日志文件
+  await rotateLogFile(updateLogPath, updateLogBackupPath);
+
+  // 滚动脚本日志文件
+  await rotateLogFile(scriptLogPath, scriptLogBackupPath);
 
   // 添加分隔符
   const separator = `
@@ -468,19 +487,23 @@ async function generatePowerShellUpdateScript(
   zipPath: string,
   appDir: string,
   version: string,
+  exePath: string,
 ): Promise<string> {
   const tempDir = path.join(app.getPath('userData'), 'update-temp');
   const scriptPath = path.join(tempDir, `update-${Date.now()}.ps1`);
-  const logPath = path.join(tempDir, `update-${Date.now()}.log`);
+  // 脚本日志文件放在 appPath 下，与主日志文件同目录，便于查看和管理
+  // 使用固定文件名，避免日志分散
+  const logPath = scriptLogPath;
 
   // 确保临时目录存在
   if (!existsSync(tempDir)) {
     mkdirSync(tempDir, { recursive: true });
   }
 
-  // 获取当前进程 ID
+  // 获取当前进程 ID 和可执行文件路径
   const currentPid = process.pid;
   const exeName = 'AI-Learning-Assistant-Launcher.exe';
+  const parentExePath = exePath.replace(/\\/g, '\\\\'); // 转义路径分隔符用于 PowerShell
 
   const scriptContent = `
 # PowerShell Update Script - UTF-8 Encoding
@@ -494,8 +517,20 @@ $AppDir = "${appDir.replace(/\\/g, '\\\\')}"
 $ExeName = "${exeName}"
 $Version = "${version}"
 $ParentPid = ${currentPid}
+$ParentExePath = "${parentExePath}"
 $MaxWaitSeconds = 60
 $MaxRenameRetries = 120  # Max rename retries (500ms each, up to 60 seconds)
+
+# 需要保留的日志文件模式（不会在更新时被删除）
+$PreserveLogPatterns = @(
+    "launcher-update.log",
+    "launcher-update.log.old",
+    "launcher-update-script.log",
+    "launcher-update-script.log.old",
+    "launcher.log",
+    "launcher.log.old",
+    "launcher.old.log"
+)
 
 function Write-Log {
     param([string]$Message)
@@ -503,6 +538,12 @@ function Write-Log {
     $logMessage = "[$timestamp] $Message"
     Write-Host $logMessage
     Add-Content -Path $LogFile -Value $logMessage -Encoding UTF8
+}
+
+# Initialize log file with separator (for distinguishing different update sessions)
+function Initialize-Log {
+    $separator = [char]10 + ("=" * 60) + [char]10 + "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] PowerShell Update Script Session Started" + [char]10 + ("=" * 60)
+    Add-Content -Path $LogFile -Value $separator -Encoding UTF8
 }
 
 # Polling rename function - Core method
@@ -555,14 +596,19 @@ function Remove-OldFiles {
 }
 
 try {
+    # Initialize log file with session separator
+    Initialize-Log
+    
     # ===== Self-Healing Phase: Ensure script has fully detached from parent process control =====
     Write-Log "========== Launcher Update Script Started =========="
+    Write-Log "Log file location: $LogFile"
     Write-Log "Script has entered execution phase (self-healing check)"
     Write-Log "Target Version: $Version"
     Write-Log "ZIP Path: $ZipPath"
     Write-Log "App Directory: $AppDir"
     Write-Log "Parent PID: $ParentPid"
     Write-Log "Update Strategy: Polling Rename + Temporary File Replacement"
+    Write-Log "Preserved log files: $($PreserveLogPatterns -join ', ')"
     
     # Initial wait: Ensure Electron main process completes exit sequence
     Write-Log "Initial delay: waiting for Electron to complete exit sequence..."
@@ -601,17 +647,85 @@ try {
         Write-Log "[Self-Healing] Exception during parent check (likely already exited): $($_.Exception.Message)"
     }
 
-    # ===== Formally wait for parent process to exit =====
+    # ===== Capture parent process identity to prevent PID reuse false positive =====
+    $ExpectedProcessName = "AI-Learning-Assistant-Launcher"
+    $ParentStartTime = $null
+    $ParentPath = $ParentExePath
+    try {
+        $initialParent = Get-Process -Id $ParentPid -ErrorAction SilentlyContinue
+        if ($null -ne $initialParent) {
+            $ParentStartTime = $initialParent.StartTime
+            # Also capture actual path from process as fallback
+            if ($null -eq $ParentPath -or $ParentPath -eq "") {
+                try {
+                    $ParentPath = $initialParent.Path
+                } catch {
+                    Write-Log "[WARN] Could not get process path: $($_.Exception.Message)"
+                }
+            }
+            Write-Log "Captured parent process identity - Name: $($initialParent.ProcessName), StartTime: $ParentStartTime, Path: $ParentPath"
+        }
+    } catch {
+        Write-Log "[WARN] Could not capture parent process identity: $($_.Exception.Message)"
+    }
+    
+    # ===== Formally wait for parent process to exit (with PID reuse protection) =====
     Write-Log "Waiting for main process to fully exit..."
     $waitCount = 0
+    $confirmedExit = $false
     while ($waitCount -lt $MaxWaitSeconds) {
         try {
             $proc = Get-Process -Id $ParentPid -ErrorAction SilentlyContinue
             if ($null -eq $proc) {
-                Write-Log "Main process confirmed exited"
+                # PID not found - process likely exited
+                Write-Log "Main process confirmed exited (PID not found)"
+                $confirmedExit = $true
                 break
             }
+                
+            # PID reuse protection: verify process identity matches expected parent
+            # If any identity attribute differs, it's a different process (PID reused)
+            $isSameProcess = $true
             
+            # 1. Check start time
+            if ($null -ne $ParentStartTime) {
+                try {
+                    $currentStartTime = $proc.StartTime
+                    if ($currentStartTime -ne $ParentStartTime) {
+                        $isSameProcess = $false
+                        Write-Log "[PID Reuse Detected] Start time mismatch - Expected: $ParentStartTime, Current: $currentStartTime"
+                    }
+                } catch {
+                    Write-Log "[WARN] Could not compare start times: $($_.Exception.Message)"
+                }
+            }
+            
+            # 2. Check process name
+            if ($proc.ProcessName -notlike "*$ExpectedProcessName*") {
+                $isSameProcess = $false
+                Write-Log "[PID Reuse Detected] Process name mismatch - Expected: $ExpectedProcessName, Current: $($proc.ProcessName)"
+            }
+            
+            # 3. Check executable path (most reliable identifier)
+            if ($null -ne $ParentPath -and $ParentPath -ne "") {
+                try {
+                    $currentPath = $proc.Path
+                    # Use case-insensitive comparison for Windows paths
+                    if ($currentPath -and $currentPath.ToLower() -ne $ParentPath.ToLower()) {
+                        $isSameProcess = $false
+                        Write-Log "[PID Reuse Detected] Executable path mismatch - Expected: $ParentPath, Current: $currentPath"
+                    }
+                } catch {
+                    Write-Log "[WARN] Could not compare executable paths: $($_.Exception.Message)"
+                }
+            }
+                
+            if (-not $isSameProcess) {
+                Write-Log "[PID Reuse] PID $ParentPid now belongs to a different process, original process has exited"
+                $confirmedExit = $true
+                break
+            }
+                
             # If still alive after 10 seconds, try force kill again
             if ($waitCount -eq 10) {
                 Write-Log "[Fallback] Process still alive after 10s, force killing..."
@@ -619,6 +733,7 @@ try {
             }
         } catch {
             Write-Log "Main process exited (exception detected)"
+            $confirmedExit = $true
             break
         }
         Start-Sleep -Seconds 1
@@ -627,10 +742,12 @@ try {
             Write-Log "Still waiting for main process to exit... ($waitCount seconds)"
         }
     }
-
-    if ($waitCount -ge $MaxWaitSeconds) {
-        Write-Log "[ERROR] Timeout waiting for main process to exit, proceeding anyway..."
-        # No longer exit 1, continue with update as it might be PID reuse false positive
+    
+    if (-not $confirmedExit -and $waitCount -ge $MaxWaitSeconds) {
+        Write-Log "[WARN] Timeout waiting for main process to exit, but proceeding with caution..."
+        # Add extra safety delay when timeout occurred
+        Write-Log "Adding extra 3-second safety delay due to timeout..."
+        Start-Sleep -Seconds 3
     }
 
     # ===== Polling rename critical files =====
@@ -721,9 +838,12 @@ try {
     # Files are now renamed to .old, safe to copy new files
     Write-Log "Starting to install new version..."
     
-    # Delete renamed .old files and other old files (preserve external-resources)
+    # Delete renamed .old files and other old files (preserve external-resources and log files)
     Write-Log "Cleaning up old version files..."
-    Get-ChildItem -Path $AppDir | Where-Object { $_.Name -ne "external-resources" } | ForEach-Object {
+    Get-ChildItem -Path $AppDir | Where-Object { 
+        $_.Name -ne "external-resources" -and 
+        $_.Name -notin $PreserveLogPatterns 
+    } | ForEach-Object {
         try {
             if ($_.PSIsContainer) {
                 Remove-Item -Path $_.FullName -Recurse -Force -ErrorAction Stop
@@ -965,6 +1085,7 @@ export async function installLauncherUpdate() {
       zipPath,
       appDir,
       version,
+      exePath,
     );
 
     // 验证脚本文件是否成功生成且可读
@@ -1000,10 +1121,19 @@ export async function installLauncherUpdate() {
     // -PassThru 返回进程对象以便获取 PID
     // 转义路径中的单引号
     const escapedScriptPath = scriptPath.replace(/'/g, "''");
-    const startProcessCommand = `
-      $p = Start-Process -FilePath 'powershell.exe' -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','${windowStyle}','-File','${escapedScriptPath}' -WindowStyle ${windowStyle} -PassThru;
-      Write-Output $p.Id;
-    `.trim();
+    // PID 文件路径，作为 stdout 管道的可靠回退
+    const pidFilePath = path.join(
+      app.getPath('userData'),
+      'update-temp',
+      'update-pid.txt',
+    );
+    const escapedPidFilePath = pidFilePath
+      .replace(/\\/g, '\\\\')
+      .replace(/'/g, "''");
+
+    // 单行命令，避免换行符导致 -Command 解析异常
+    // 同时将 PID 写入文件作为回退（stdout 管道在 detached 模式下不可靠）
+    const startProcessCommand = `$ErrorActionPreference='Stop'; $p = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','${windowStyle}','-File','${escapedScriptPath}') -WindowStyle ${windowStyle} -PassThru; $p.Id | Out-File -FilePath '${escapedPidFilePath}' -NoNewline -Encoding UTF8; Write-Output $p.Id`;
 
     const args = [
       '-NoProfile',
@@ -1020,69 +1150,103 @@ export async function installLauncherUpdate() {
         command: 'powershell.exe',
         startProcessCommand,
         windowStyle,
+        pidFilePath,
       },
     );
 
-    // 使用 spawn 同步等待获取新进程的 PID
-    const updateProcess = spawn('powershell.exe', args, {
-      detached: true,
-      stdio: ['ignore', 'pipe', 'pipe'], // 捕获 stdout 以获取 PID
-      windowsHide: true, // 启动器进程本身隐藏
-    });
-
-    // 检查进程是否成功启动
-    if (!updateProcess.pid) {
-      await writeUpdateLog(
-        'ERROR',
-        '[installLauncherUpdate] 启动器进程启动失败，未获取到 PID',
-      );
-      throw new Error('无法启动更新引导进程');
-    }
-
-    // 收集 stdout 输出以获取实际更新脚本的 PID
-    let stdoutData = '';
-    let stderrData = '';
-
-    updateProcess.stdout?.on('data', (data: Buffer) => {
-      stdoutData += data.toString();
-    });
-
-    updateProcess.stderr?.on('data', (data: Buffer) => {
-      stderrData += data.toString();
-    });
-
-    // 监听进程错误
-    updateProcess.on('error', async (err) => {
-      await writeUpdateLog('ERROR', '[installLauncherUpdate] 启动器进程出错', {
-        error: err.message,
-        stack: err.stack,
-      });
-    });
-
-    // 等待 Start-Process 命令完成并获取新进程 PID
-    await new Promise<void>((resolve, reject) => {
+    // ===== 使用 execFile 替代 spawn + pipe =====
+    // execFile 更可靠地捕获 stdout/stderr，避免 detached+pipe 组合的管道丢失问题
+    // 外层 PowerShell 只需运行 Start-Process 并返回 PID，不需要 detached
+    // 真正的脱离 Job Object 由内层 Start-Process 完成
+    const { stdout: stdoutData, stderr: stderrData } = await new Promise<{
+      stdout: string;
+      stderr: string;
+    }>((resolve, reject) => {
       const timeout = setTimeout(() => {
-        reject(new Error('启动更新进程超时'));
-      }, 10000);
+        reject(new Error('启动更新进程超时（15秒）'));
+      }, 15000);
 
-      updateProcess.on('close', (code) => {
-        clearTimeout(timeout);
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(new Error(`启动器进程退出码: ${code}, stderr: ${stderrData}`));
-        }
-      });
+      execFile(
+        'powershell.exe',
+        args,
+        {
+          timeout: 15000,
+          windowsHide: true,
+          encoding: 'utf8',
+        },
+        (error, stdout, stderr) => {
+          clearTimeout(timeout);
+          if (error) {
+            writeUpdateLog('ERROR', '[installLauncherUpdate] execFile 错误', {
+              message: error.message,
+              code: (error as any).code,
+              killed: (error as any).killed,
+              stdout,
+              stderr,
+            });
+            reject(error);
+          } else {
+            resolve({ stdout: stdout || '', stderr: stderr || '' });
+          }
+        },
+      );
+    });
+
+    await writeUpdateLog('DEBUG', '[installLauncherUpdate] PowerShell 输出', {
+      stdout: stdoutData.trim(),
+      stderr: stderrData.trim(),
     });
 
     // 解析输出获取新进程 PID
-    const launchedPid = parseInt(stdoutData.trim(), 10);
+    let launchedPid = parseInt(stdoutData.trim(), 10);
+
+    // 如果 stdout 解析失败，尝试从 PID 文件回退读取
+    if (isNaN(launchedPid) || launchedPid <= 0) {
+      await writeUpdateLog(
+        'WARN',
+        '[installLauncherUpdate] stdout 解析 PID 失败，尝试从文件回退读取',
+        { stdout: stdoutData, pidFilePath },
+      );
+      try {
+        if (existsSync(pidFilePath)) {
+          const pidFromFile = readFileSync(pidFilePath, 'utf-8').trim();
+          // 移除 UTF-8 BOM（如果存在）
+          const cleanPid = pidFromFile.replace(/^\uFEFF/, '');
+          launchedPid = parseInt(cleanPid, 10);
+          await writeUpdateLog(
+            'INFO',
+            '[installLauncherUpdate] 从文件回退读取 PID 成功',
+            { pid: launchedPid, raw: pidFromFile },
+          );
+        }
+      } catch (pidFileErr) {
+        await writeUpdateLog(
+          'ERROR',
+          '[installLauncherUpdate] 读取 PID 文件失败',
+          {
+            error:
+              pidFileErr instanceof Error
+                ? pidFileErr.message
+                : String(pidFileErr),
+          },
+        );
+      }
+    }
+
+    // 清理 PID 文件
+    try {
+      if (existsSync(pidFilePath)) {
+        unlinkSync(pidFilePath);
+      }
+    } catch {
+      // 忽略清理失败
+    }
 
     if (isNaN(launchedPid) || launchedPid <= 0) {
       await writeUpdateLog(
         'ERROR',
-        '[installLauncherUpdate] 无法获取更新脚本进程 PID',
-        { stdout: stdoutData, stderr: stderrData },
+        '[installLauncherUpdate] 无法获取更新脚本进程 PID（stdout 和文件回退均失败）',
+        { stdout: stdoutData, stderr: stderrData, pidFilePath },
       );
       throw new Error('无法获取更新脚本进程 PID');
     }
