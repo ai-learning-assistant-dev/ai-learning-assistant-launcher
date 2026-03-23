@@ -161,11 +161,17 @@ export async function updateCourseTrainingService() {
     console.debug('开始下载课程数据');
     const latestVersion = getLatestVersion('TRAINING_COURSE');
     await startWebtorrent(latestVersion.dlcInfo.magnet);
-    const torrent = await waitTorrentDone(
-      'TRAINING_COURSE',
-      latestVersion.version,
-    );
-    const coursePath = path.join(torrent.path, torrent.files[0].name);
+    let coursePath = '';
+    try {
+      const torrent = await waitTorrentDone(
+        'TRAINING_COURSE',
+        latestVersion.version,
+      );
+      coursePath = path.join(torrent.path, torrent.files[0].name);
+    } catch (e) {
+      console.error(e);
+      return { someData: 'data1' };
+    }
     console.debug('将课程导入到学科培训');
     await stopService('NATIVE_TRAINING');
     await startService('NATIVE_TRAINING');
