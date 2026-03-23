@@ -596,10 +596,26 @@ body{
           padding: 8px 0;
           gap: 10px;
           width: auto;
-          max-width: 300px;
+          max-width: 400px;
           min-height: 53px;
           flex: none;
           order: 1;
+          
+          .launcher-update-wrapper {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 8px;
+            background: linear-gradient(135deg, rgba(22, 119, 255, 0.1) 0%, rgba(22, 119, 255, 0.05) 100%);
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(22, 119, 255, 0.15);
+            
+            .ant-progress {
+              .ant-progress-inner {
+                background-color: rgba(22, 119, 255, 0.15);
+              }
+            }
+          }
           
           .status-indicator {
             box-sizing: border-box;
@@ -619,6 +635,24 @@ body{
             &:hover {
               background: #ff7875;
               transform: translateY(-2px);
+            }
+            
+            // 更新按钮使用蓝色
+            &.update-button {
+              background: #1677ff;
+              
+              &:hover {
+                background: #4096ff;
+              }
+              
+              &.download-complete {
+                background: linear-gradient(135deg, #52c41a 0%, #73d13d 100%);
+                animation: pulse-green 2s infinite;
+                
+                &:hover {
+                  background: linear-gradient(135deg, #73d13d 0%, #95de64 100%);
+                }
+              }
             }
             
             .log-text {
@@ -1106,6 +1140,18 @@ body{
     margin-top: 16px;
     font-size: 16px;
     color: #333;
+  }
+}
+
+@keyframes pulse-green {
+  0% {
+    box-shadow: 0 0 0 0 rgba(82, 196, 26, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(82, 196, 26, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(82, 196, 26, 0);
   }
 }
 

@@ -13,6 +13,12 @@ export const queryWebtorrentHandle = `${channel}query`;
 
 export const logsWebtorrentHandle = `${channel}logs`;
 
+export const setUploadEnabledHandle = `${channel}setUploadEnabled`;
+
+export const getUploadEnabledHandle = `${channel}getUploadEnabled`;
+
+export const getUploadStatsHandle = `${channel}getUploadStats`;
+
 export const dLCIds = [
   'PDF_TAR',
   'VOICE_TAR',
@@ -20,6 +26,9 @@ export const dLCIds = [
   'TRAINING_VOICE_TAR',
   'TRAINING_COURSE',
   'LMSTUDIO_WINDOWS',
+  'AI_LEARNING_ASSISTANT_LAUNCHER',
+  'OBSIDIAN_SETUP_EXE',
+  'LM_STUDIO_SETUP_EXE',
   'TEST_FILE',
 ] as const;
 

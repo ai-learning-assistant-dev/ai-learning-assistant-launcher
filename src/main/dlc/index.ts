@@ -8,6 +8,9 @@ import {
   DLCIndex,
   DLCId,
   OneDLCInfo,
+  setUploadEnabledHandle,
+  getUploadEnabledHandle,
+  getUploadStatsHandle,
 } from './type-info';
 import { ipcHandle } from '../ipc-util';
 import WebTorrent, * as allExports from 'webtorrent';
@@ -15,8 +18,48 @@ import path from 'path';
 import { appPath } from '../exec';
 import fs, { existsSync, mkdirSync, readFileSync, unlinkSync } from 'fs';
 import { compare } from 'semver';
+import { WEBTORRENT_CONFIG } from '../webtorrent-config';
 
 let client: WebTorrent.Instance | null = null;
+let uploadEnabled = true; // 默认开启上传
+
+// 上传配置文件路径
+const uploadConfigPath = path.join(
+  appPath,
+  'external-resources',
+  'dlc',
+  'upload-config.json',
+);
+
+// 读取上传配置
+function loadUploadConfig(): boolean {
+  try {
+    if (existsSync(uploadConfigPath)) {
+      const config = JSON.parse(readFileSync(uploadConfigPath, 'utf8'));
+      return config.uploadEnabled ?? true;
+    }
+  } catch (error) {
+    console.error('读取上传配置失败:', error);
+  }
+  return true;
+}
+
+// 保存上传配置
+function saveUploadConfig(enabled: boolean): void {
+  try {
+    const dir = path.dirname(uploadConfigPath);
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(
+      uploadConfigPath,
+      JSON.stringify({ uploadEnabled: enabled }, null, 2),
+    );
+  } catch (error) {
+    console.error('保存上传配置失败:', error);
+  }
+}
+
 const getWebTorrent = async () => {
   const WebTorrentClass: WebTorrent.WebTorrent =
     // @ts-ignore
@@ -59,7 +102,14 @@ const getWebTorrent = async () => {
 // };
 
 export default async function init(ipcMain: IpcMain) {
+  // 加载上传配置
+  uploadEnabled = loadUploadConfig();
+
   client = await getWebTorrent();
+
+  // 根据配置应用上传限制
+  applyUploadThrottle();
+
   ipcHandle(ipcMain, startWebtorrentHandle, async (_event, magnet: string) =>
     startWebtorrent(magnet),
   );
@@ -75,6 +125,13 @@ export default async function init(ipcMain: IpcMain) {
   ipcHandle(ipcMain, logsWebtorrentHandle, async (_event, magnet: string) =>
     logsWebtorrent(magnet),
   );
+  ipcHandle(ipcMain, setUploadEnabledHandle, async (_event, enabled: boolean) =>
+    setUploadEnabled(enabled),
+  );
+  ipcHandle(ipcMain, getUploadEnabledHandle, async (_event) =>
+    getUploadEnabled(),
+  );
+  ipcHandle(ipcMain, getUploadStatsHandle, async (_event) => getUploadStats());
   // 检查种子文件和对应的实际文件，如果有文件，就添加到webtorrent中
   await restoreTorrentsFromFiles();
 }
@@ -99,9 +156,9 @@ export async function startWebtorrent(magnet: string) {
       });
       console.debug('种子文件已经存在，继续下载');
       torrent.resume();
-      return torrent;
+      return { success: true, infoHash: torrent.infoHash };
     } else {
-      return client.add(
+      const newTorrent = client.add(
         magnet,
         {
           path: filePath,
@@ -114,9 +171,11 @@ export async function startWebtorrent(magnet: string) {
           saveTorrentFile(filePath, torrent);
         },
       );
+      return { success: true, infoHash: newTorrent.infoHash };
     }
   } else {
     console.warn('没找到链接对应的索引信息', magnet);
+    return { success: false, error: '没找到链接对应的索引信息' };
   }
 }
 
@@ -149,6 +208,35 @@ export async function pauseWebtorrent(magnet: string) {
   const torrent = await client.get(magnet);
   if (torrent) {
     torrent.pause();
+  }
+}
+
+/**
+ * 完全销毁种子并释放文件句柄
+ * 注意：这会关闭所有文件句柄，但不会删除已下载的文件
+ */
+export async function destroyWebtorrentForInstall(
+  magnet: string,
+): Promise<void> {
+  const torrent = await client.get(magnet);
+  if (torrent) {
+    return new Promise<void>((resolve) => {
+      let resolved = false;
+      const safeResolve = () => {
+        if (!resolved) {
+          resolved = true;
+          resolve();
+        }
+      };
+
+      torrent.pause();
+      torrent.destroy({ destroyStore: false }, safeResolve);
+
+      setTimeout(
+        safeResolve,
+        WEBTORRENT_CONFIG.TORRENT_DESTROY_CALLBACK_TIMEOUT,
+      );
+    });
   }
 }
 
@@ -387,8 +475,8 @@ export async function waitTorrentDone(id: DLCId, version: string) {
 
   // 轮询检查种子是否完成
   return new Promise<WebTorrent.Torrent>((resolve, reject) => {
-    const checkInterval = 1000; // 1秒检查一次
-    const maxAttempts = 3600; // 最多检查1小时（3600秒）
+    const checkInterval = WEBTORRENT_CONFIG.DOWNLOAD_CHECK_INTERVAL;
+    const maxAttempts = WEBTORRENT_CONFIG.DOWNLOAD_MAX_ATTEMPTS;
     let attempts = 0;
 
     const intervalId = setInterval(() => {
@@ -419,8 +507,8 @@ export async function waitTorrentDone(id: DLCId, version: string) {
         return;
       }
 
-      // 输出进度信息（可选，每10秒输出一次）
-      if (attempts % 10 === 0) {
+      // 输出进度信息（可选，每N秒输出一次）
+      if (attempts % WEBTORRENT_CONFIG.DOWNLOAD_PROGRESS_LOG_INTERVAL === 0) {
         console.debug(
           `种子 ${currentTorrent.name} 下载进度: ${(currentTorrent.progress * 100).toFixed(2)}%`,
         );
@@ -549,4 +637,72 @@ async function restoreTorrentsFromFiles() {
   } catch (error) {
     console.error('恢复种子过程中发生错误:', error);
   }
+}
+
+/** 应用上传限速设置 */
+function applyUploadThrottle(): void {
+  if (!client) return;
+
+  if (uploadEnabled) {
+    // 不限制上传速度 (-1 表示无限制)
+    client.throttleUpload(-1);
+    console.debug('上传已启用，不限速');
+  } else {
+    // 限制上传速度为 0（禁用上传）
+    client.throttleUpload(0);
+    console.debug('上传已禁用，限速为 0');
+  }
+}
+
+/** 设置上传开关 */
+export function setUploadEnabled(enabled: boolean): {
+  success: boolean;
+  enabled: boolean;
+} {
+  uploadEnabled = enabled;
+  saveUploadConfig(enabled);
+  applyUploadThrottle();
+  console.debug(`上传设置已更新: ${enabled ? '启用' : '禁用'}`);
+  return { success: true, enabled };
+}
+
+/** 获取上传开关状态 */
+export function getUploadEnabled(): { enabled: boolean } {
+  return { enabled: uploadEnabled };
+}
+
+/** 获取上传统计信息 */
+export function getUploadStats(): {
+  enabled: boolean;
+  totalUploaded: number;
+  uploadSpeed: number;
+  activeTorrents: number;
+} {
+  if (!client) {
+    return {
+      enabled: uploadEnabled,
+      totalUploaded: 0,
+      uploadSpeed: 0,
+      activeTorrents: 0,
+    };
+  }
+
+  let totalUploaded = 0;
+  let uploadSpeed = 0;
+  let activeTorrents = 0;
+
+  for (const torrent of client.torrents) {
+    totalUploaded += torrent.uploaded || 0;
+    uploadSpeed += torrent.uploadSpeed || 0;
+    if (torrent.progress === 1 && !torrent.paused) {
+      activeTorrents++;
+    }
+  }
+
+  return {
+    enabled: uploadEnabled,
+    totalUploaded,
+    uploadSpeed,
+    activeTorrents,
+  };
 }

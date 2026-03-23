@@ -29,7 +29,15 @@ import {
   removeWebtorrentHandle,
   startWebtorrentHandle,
   DLCId,
+  setUploadEnabledHandle,
+  getUploadEnabledHandle,
+  getUploadStatsHandle,
 } from './dlc/type-info';
+import {
+  checkLauncherUpdateHandle,
+  downloadLauncherUpdateHandle,
+  installLauncherUpdateHandle,
+} from './launcher-update/type-info';
 
 const electronHandler = {
   ipcRenderer: {
@@ -130,7 +138,9 @@ const mainHandle = {
     );
   },
   startWebtorrentHandle: async (url: string) => {
-    return ipcInvoke(startWebtorrentHandle, url);
+    return ipcInvoke<
+      { success: true; infoHash: string } | { success: false; error: string }
+    >(startWebtorrentHandle, url);
   },
   queryWebtorrentHandle: async () => {
     return ipcInvoke<DLCIndex>(queryWebtorrentHandle);
@@ -143,6 +153,44 @@ const mainHandle = {
   },
   logsWebtorrentHandle: async (url: string) => {
     return ipcInvoke(logsWebtorrentHandle, url);
+  },
+  checkLauncherUpdateHandle: async () => {
+    return ipcInvoke<{
+      currentVersion: string;
+      latestVersion: string;
+      haveNew: boolean;
+    }>(checkLauncherUpdateHandle);
+  },
+  downloadLauncherUpdateHandle: async () => {
+    return ipcInvoke<{
+      success: boolean;
+      version: string;
+      filePath: string;
+      isDev: boolean;
+    }>(downloadLauncherUpdateHandle);
+  },
+  installLauncherUpdateHandle: async () => {
+    return ipcInvoke<{
+      success: boolean;
+      message: string;
+    }>(installLauncherUpdateHandle);
+  },
+  setUploadEnabledHandle: async (enabled: boolean) => {
+    return ipcInvoke<{ success: boolean; enabled: boolean }>(
+      setUploadEnabledHandle,
+      enabled,
+    );
+  },
+  getUploadEnabledHandle: async () => {
+    return ipcInvoke<{ enabled: boolean }>(getUploadEnabledHandle);
+  },
+  getUploadStatsHandle: async () => {
+    return ipcInvoke<{
+      enabled: boolean;
+      totalUploaded: number;
+      uploadSpeed: number;
+      activeTorrents: number;
+    }>(getUploadStatsHandle);
   },
 };
 
