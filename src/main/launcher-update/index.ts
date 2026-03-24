@@ -14,25 +14,104 @@ import {
 import semver from 'semver';
 import path from 'path';
 import { appPath } from '../exec';
-import { existsSync, mkdirSync, rmSync } from 'fs';
+import {
+  existsSync,
+  mkdirSync,
+  rmSync,
+  realpathSync,
+  readFileSync,
+  writeFileSync,
+  unlinkSync,
+} from 'fs';
+
 import {
   readdir,
   writeFile,
   appendFile,
-  access,
-  rename,
   stat,
   unlink,
+  rename,
+  access,
   constants,
 } from 'fs/promises';
-import { spawn } from 'child_process';
+import { spawn, execFile } from 'child_process';
 
 import packageJson from '../../../package.json';
+import { setForceQuit } from '../joint-build';
 const currentVersion = packageJson.version;
+
+// ========== 两阶段更新配置 ==========
+/**
+ * 更新配置接口
+ * 用于在两阶段更新中传递更新状态
+ */
+interface UpdateConfig {
+  pendingUpdate: boolean;
+  updatePath: string;
+  version: string;
+  timestamp: number;
+}
+
+// 更新配置文件路径（存储在用户数据目录）
+const UPDATE_CONFIG_PATH = path.join(
+  app.getPath('userData'),
+  'update-config.json',
+);
+// 待更新的 ZIP 包路径
+const PENDING_UPDATE_PATH = path.join(
+  app.getPath('userData'),
+  'pending-update.zip',
+);
+
+/**
+ * 获取更新临时目录的完整路径
+ * 使用 realpathSync 将 Windows 8.3 短路径转换为完整路径
+ * 例如：C:\Users\ADMINI~1 -> C:\Users\Administrator
+ *
+ * 关键改进：
+ * 1. 创建目录后再进行 realpathSync（因为 realpathSync 要求路径存在）
+ * 2. 转换失败时抛出异常，而不是静默回落到短路径
+ * 3. 确保返回的路径始终为完整长路径
+ */
+function getUpdateTempDir(): string {
+  const baseTempDir = app.getPath('temp');
+
+  // 添加备用方案
+  const fallbackDir = path.join(app.getPath('userData'), 'update-temp');
+
+  try {
+    if (!existsSync(baseTempDir)) {
+      mkdirSync(baseTempDir, { recursive: true });
+    }
+
+    const fullBaseTempDir = realpathSync(baseTempDir);
+    const tempDir = path.join(fullBaseTempDir, 'launcher-update');
+
+    if (!existsSync(tempDir)) {
+      mkdirSync(tempDir, { recursive: true });
+    }
+
+    return realpathSync(tempDir);
+  } catch (err) {
+    // 使用备用目录
+    console.warn('[getUpdateTempDir] 使用备用目录', fallbackDir);
+    if (!existsSync(fallbackDir)) {
+      mkdirSync(fallbackDir, { recursive: true });
+    }
+    return fallbackDir;
+  }
+}
 
 // 更新日志文件路径
 const updateLogPath = path.join(appPath, 'launcher-update.log');
 const updateLogBackupPath = path.join(appPath, 'launcher-update.log.old');
+
+// PowerShell 脚本日志文件路径（与主日志放在同一目录，便于查看）
+const scriptLogPath = path.join(appPath, 'launcher-update-script.log');
+const scriptLogBackupPath = path.join(
+  appPath,
+  'launcher-update-script.log.old',
+);
 
 // 日志滚动配置
 const LOG_ROTATION_CONFIG = {
@@ -85,34 +164,46 @@ async function writeUpdateLog(
 }
 
 /**
- * 初始化日志文件（检查大小并执行滚动）
- * 当日志文件超过 MAX_SIZE_BYTES 时，将旧日志重命名为 .old 文件
+ * 对单个日志文件执行滚动
+ * @param logPath 日志文件路径
+ * @param backupPath 备份文件路径
  */
-async function initUpdateLog() {
+async function rotateLogFile(logPath: string, backupPath: string) {
   try {
-    // 检查日志文件是否存在及其大小
-    if (existsSync(updateLogPath)) {
-      const stats = await stat(updateLogPath);
+    if (existsSync(logPath)) {
+      const stats = await stat(logPath);
 
       if (stats.size >= LOG_ROTATION_CONFIG.MAX_SIZE_BYTES) {
         // 删除旧的备份文件（如果存在）
         try {
-          await unlink(updateLogBackupPath);
+          await unlink(backupPath);
         } catch {
           // 备份文件不存在，忽略
         }
 
         // 将当前日志重命名为备份
-        await rename(updateLogPath, updateLogBackupPath);
+        await rename(logPath, backupPath);
 
         console.log(
-          `[initUpdateLog] 日志文件已滚动，旧日志大小: ${(stats.size / 1024).toFixed(2)} KB`,
+          `[rotateLogFile] 日志文件已滚动: ${logPath}，旧日志大小: ${(stats.size / 1024).toFixed(2)} KB`,
         );
       }
     }
   } catch (err) {
-    console.error('[initUpdateLog] 日志滚动检查失败:', err);
+    console.error(`[rotateLogFile] 日志滚动检查失败 (${logPath}):`, err);
   }
+}
+
+/**
+ * 初始化日志文件（检查大小并执行滚动）
+ * 当日志文件超过 MAX_SIZE_BYTES 时，将旧日志重命名为 .old 文件
+ */
+async function initUpdateLog() {
+  // 滚动主日志文件
+  await rotateLogFile(updateLogPath, updateLogBackupPath);
+
+  // 滚动脚本日志文件
+  await rotateLogFile(scriptLogPath, scriptLogBackupPath);
 
   // 添加分隔符
   const separator = `
@@ -125,6 +216,96 @@ ${'='.repeat(60)}
   } catch {
     // 忽略错误
   }
+}
+
+/**
+ * 检查并清理残留的更新配置
+ * 在应用启动时调用，清理可能由于更新失败而残留的配置文件
+ *
+ * 注意：实际的文件替换操作由 PowerShell 脚本在主进程退出后执行
+ * 此函数仅用于清理残留配置，不会执行文件替换
+ *
+ * @returns 始终返回 false（不会触发重启）
+ */
+export async function checkAndApplyPendingUpdate(): Promise<boolean> {
+  // 初始化日志
+  await initUpdateLog();
+
+  await writeUpdateLog(
+    'INFO',
+    '[checkAndApplyPendingUpdate] 检查残留的更新配置...',
+  );
+
+  // 检查配置文件是否存在
+  if (!existsSync(UPDATE_CONFIG_PATH)) {
+    await writeUpdateLog(
+      'DEBUG',
+      '[checkAndApplyPendingUpdate] 没有残留的更新配置',
+    );
+    return false;
+  }
+
+  // 如果配置文件存在，说明之前的更新可能失败了，清理它
+  try {
+    const configContent = readFileSync(UPDATE_CONFIG_PATH, 'utf-8');
+    const config: UpdateConfig = JSON.parse(configContent);
+
+    await writeUpdateLog(
+      'WARN',
+      '[checkAndApplyPendingUpdate] 发现残留的更新配置，可能是之前更新失败',
+      {
+        version: config.version,
+        timestamp: config.timestamp,
+      },
+    );
+
+    // 清理配置文件
+    try {
+      unlinkSync(UPDATE_CONFIG_PATH);
+      await writeUpdateLog(
+        'INFO',
+        '[checkAndApplyPendingUpdate] 已清理残留配置文件',
+      );
+    } catch (err) {
+      await writeUpdateLog(
+        'WARN',
+        '[checkAndApplyPendingUpdate] 清理配置文件失败',
+        {
+          error: err instanceof Error ? err.message : String(err),
+        },
+      );
+    }
+
+    // 清理残留的更新包
+    if (existsSync(config.updatePath)) {
+      try {
+        unlinkSync(config.updatePath);
+        await writeUpdateLog(
+          'INFO',
+          '[checkAndApplyPendingUpdate] 已清理残留更新包',
+        );
+      } catch (err) {
+        await writeUpdateLog(
+          'WARN',
+          '[checkAndApplyPendingUpdate] 清理更新包失败',
+          {
+            error: err instanceof Error ? err.message : String(err),
+          },
+        );
+      }
+    }
+  } catch (error) {
+    await writeUpdateLog(
+      'ERROR',
+      '[checkAndApplyPendingUpdate] 清理残留配置时出错',
+      {
+        error: error instanceof Error ? error.message : String(error),
+      },
+    );
+  }
+
+  // 始终返回 false，让应用正常启动
+  return false;
 }
 
 export default async function init(ipcMain: IpcMain) {
@@ -144,7 +325,7 @@ export default async function init(ipcMain: IpcMain) {
  * 当已是最新版本时调用，清理之前更新留下的临时文件
  */
 async function cleanupUpdateTempDir() {
-  const tempDir = path.join(app.getPath('temp'), 'launcher-update');
+  const tempDir = getUpdateTempDir();
 
   try {
     if (existsSync(tempDir)) {
@@ -296,276 +477,493 @@ export async function downloadLauncherUpdate() {
   }
 }
 
+// 防止重复调用的标志
+let isInstallInProgress = false;
+
 /**
- * 生成自定义更新批处理脚本
- * 脚本功能：等待应用退出、解压更新包、校验完整性、备份旧版本、替换文件、恢复数据、启动新版本
- *
- * 安全策略：采用"解压 -> 校验 -> 备份 -> 替换"模式
- * 1. 先在临时目录完整解压并校验
- * 2. 校验失败则直接启动旧版本，不做任何修改
- * 3. 校验成功后备份整个旧版本目录
- * 4. 替换失败时可从备份恢复
+ * 生成 PowerShell 更新脚本
+ * 脚本功能：等待主进程退出 -> 解压更新包 -> 保留用户数据 -> 启动新版本
  */
-async function generateUpdateScript(
+async function generatePowerShellUpdateScript(
   zipPath: string,
   appDir: string,
-  tempDir: string,
-  newVersion: string,
+  version: string,
+  exePath: string,
 ): Promise<string> {
-  const scriptContent = `@echo off
-chcp 65001 >nul
-setlocal enabledelayedexpansion
-
-set "ZIP_PATH=${zipPath.replace(/\//g, '\\')}"
-set "APP_DIR=${appDir.replace(/\//g, '\\')}"
-set "TEMP_DIR=${tempDir.replace(/\//g, '\\')}"
-set "BACKUP_DIR=${tempDir.replace(/\//g, '\\')}\\external-resources-backup"
-set "APP_BACKUP_DIR=${tempDir.replace(/\//g, '\\')}\\app-backup"
-set "EXTRACT_DIR=${tempDir.replace(/\//g, '\\')}\\extracted"
-set "UPDATE_LOG=${tempDir.replace(/\//g, '\\')}\\update-script.log"
-
-:: 日志函数
-call :log "========== 更新脚本开始 =========="
-
-call :log "等待应用退出..."
-:waitloop
-tasklist /FI "IMAGENAME eq AI Learning Assistant Launcher.exe" 2>NUL | find /I "AI Learning Assistant Launcher.exe" >NUL
-if not errorlevel 1 (
-    timeout /t 1 /nobreak >nul
-    goto waitloop
-)
-
-call :log "应用已退出，开始更新..."
-
-:: ========== 阶段1: 准备和解压 ==========
-call :log "[阶段1] 准备临时目录..."
-if exist "%TEMP_DIR%" rd /s /q "%TEMP_DIR%" 2>nul
-mkdir "%TEMP_DIR%"
-mkdir "%EXTRACT_DIR%"
-
-call :log "[阶段1] 解压更新包到临时目录..."
-powershell -Command "try { Expand-Archive -Path '%ZIP_PATH%' -DestinationPath '%EXTRACT_DIR%' -Force -ErrorAction Stop; exit 0 } catch { Write-Host $_.Exception.Message; exit 1 }"
-if errorlevel 1 (
-    call :log "[错误] 解压失败！启动旧版本..."
-    goto :launch_old_version
-)
-
-:: 查找解压后的目录（ZIP 内可能有一层目录）
-set "SOURCE_DIR="
-for /d %%D in ("%EXTRACT_DIR%\\*") do set "SOURCE_DIR=%%D"
-if not defined SOURCE_DIR set "SOURCE_DIR=%EXTRACT_DIR%"
-
-call :log "[阶段1] 解压完成，源目录: %SOURCE_DIR%"
-
-:: ========== 阶段2: 校验解压完整性 ==========
-call :log "[阶段2] 校验更新包完整性..."
-
-:: 检查关键文件是否存在
-if not exist "%SOURCE_DIR%\\AI Learning Assistant Launcher.exe" (
-    call :log "[错误] 校验失败：主程序文件不存在！启动旧版本..."
-    goto :launch_old_version
-)
-
-if not exist "%SOURCE_DIR%\\resources" (
-    call :log "[错误] 校验失败：resources 目录不存在！启动旧版本..."
-    goto :launch_old_version
-)
-
-call :log "[阶段2] 校验通过，更新包完整"
-
-:: ========== 阶段3: 备份用户数据和旧版本 ==========
-call :log "[阶段3] 备份用户数据 external-resources..."
-if exist "%APP_DIR%\\external-resources" (
-    xcopy "%APP_DIR%\\external-resources" "%BACKUP_DIR%\\" /E /I /H /Y /Q >nul 2>&1
-    if errorlevel 1 (
-        call :log "[警告] 用户数据备份可能不完整"
-    ) else (
-        call :log "[阶段3] 用户数据备份完成"
-    )
-)
-
-call :log "[阶段3] 备份旧版本应用..."
-mkdir "%APP_BACKUP_DIR%" 2>nul
-xcopy "%APP_DIR%\\*" "%APP_BACKUP_DIR%\\" /E /I /H /Y /Q >nul 2>&1
-if errorlevel 1 (
-    call :log "[警告] 旧版本备份可能不完整，但继续更新"
-) else (
-    call :log "[阶段3] 旧版本备份完成"
-)
-
-:: ========== 阶段4: 替换文件 ==========
-call :log "[阶段4] 清理旧版本文件（保留 external-resources）..."
-for /d %%D in ("%APP_DIR%\\*") do (
-    if /I not "%%~nxD"=="external-resources" (
-        rd /s /q "%%D" 2>nul
-    )
-)
-for %%F in ("%APP_DIR%\\*") do (
-    del /f /q "%%F" 2>nul
-)
-
-call :log "[阶段4] 安装新版本..."
-xcopy "%SOURCE_DIR%\\*" "%APP_DIR%\\" /E /I /H /Y /Q >nul 2>&1
-if errorlevel 1 (
-    call :log "[错误] 复制新文件失败！尝试从备份恢复..."
-    goto :restore_from_backup
-)
-
-:: 验证安装结果
-if not exist "%APP_DIR%\\AI Learning Assistant Launcher.exe" (
-    call :log "[错误] 安装验证失败：主程序不存在！尝试从备份恢复..."
-    goto :restore_from_backup
-)
-
-call :log "[阶段4] 新版本安装完成"
-
-:: ========== 阶段5: 恢复用户数据 ==========
-call :log "[阶段5] 恢复用户数据..."
-if exist "%BACKUP_DIR%" (
-    xcopy "%BACKUP_DIR%\\*" "%APP_DIR%\\external-resources\\" /E /I /H /Y /Q >nul 2>&1
-    call :log "[阶段5] 用户数据恢复完成"
-)
-
-:: ========== 阶段6: 清理和启动 ==========
-call :log "[阶段6] 更新成功！清理临时文件..."
-:: 延迟删除临时目录，避免影响日志
-start /b cmd /c "timeout /t 5 /nobreak >nul & rd /s /q "%TEMP_DIR%" 2>nul"
-
-call :log "[阶段6] 启动新版本..."
-call :log "========== 更新脚本结束 =========="
-start "" "%APP_DIR%\\AI Learning Assistant Launcher.exe"
-exit
-
-:: ========== 错误处理: 从备份恢复 ==========
-:restore_from_backup
-call :log "[恢复] 开始从备份恢复旧版本..."
-if exist "%APP_BACKUP_DIR%\\AI Learning Assistant Launcher.exe" (
-    :: 清理可能的残留
-    for /d %%D in ("%APP_DIR%\\*") do rd /s /q "%%D" 2>nul
-    for %%F in ("%APP_DIR%\\*") do del /f /q "%%F" 2>nul
-    
-    :: 恢复备份
-    xcopy "%APP_BACKUP_DIR%\\*" "%APP_DIR%\\" /E /I /H /Y /Q >nul 2>&1
-    if exist "%APP_DIR%\\AI Learning Assistant Launcher.exe" (
-        call :log "[恢复] 旧版本恢复成功"
-        goto :launch_old_version
-    )
-)
-call :log "[恢复] 恢复失败，请手动重新安装应用"
-pause
-exit
-
-:: ========== 错误处理: 启动旧版本 ==========
-:launch_old_version
-call :log "[回退] 启动旧版本..."
-if exist "%APP_DIR%\\AI Learning Assistant Launcher.exe" (
-    start "" "%APP_DIR%\\AI Learning Assistant Launcher.exe"
-) else (
-    call :log "[错误] 旧版本也不存在，请手动重新安装"
-    pause
-)
-exit
-
-:: ========== 日志函数 ==========
-:log
-echo [%date% %time%] %~1
-echo [%date% %time%] %~1 >> "%UPDATE_LOG%" 2>nul
-exit /b 0
-`;
+  const tempDir = path.join(app.getPath('userData'), 'update-temp');
+  const scriptPath = path.join(tempDir, `update-${Date.now()}.ps1`);
+  // 脚本日志文件放在 appPath 下，与主日志文件同目录，便于查看和管理
+  // 使用固定文件名，避免日志分散
+  const logPath = scriptLogPath;
 
   // 确保临时目录存在
   if (!existsSync(tempDir)) {
     mkdirSync(tempDir, { recursive: true });
   }
 
-  const scriptPath = path.join(tempDir, 'update.bat');
-  await writeFile(scriptPath, scriptContent, { encoding: 'utf8' });
+  // 获取当前进程 ID 和可执行文件路径
+  const currentPid = process.pid;
+  const exeName = 'AI-Learning-Assistant-Launcher.exe';
+  const parentExePath = exePath.replace(/\\/g, '\\\\'); // 转义路径分隔符用于 PowerShell
 
-  await writeUpdateLog('INFO', '[generateUpdateScript] 更新脚本已生成', {
+  const scriptContent = `
+# PowerShell Update Script - UTF-8 Encoding
+# Using "Polling Rename + Temporary File Replacement" to ensure file handles are fully released
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$ErrorActionPreference = "Stop"
+
+$LogFile = "${logPath.replace(/\\/g, '\\\\')}"
+$ZipPath = "${zipPath.replace(/\\/g, '\\\\')}"
+$AppDir = "${appDir.replace(/\\/g, '\\\\')}"
+$ExeName = "${exeName}"
+$Version = "${version}"
+$ParentPid = ${currentPid}
+$ParentExePath = "${parentExePath}"
+$MaxWaitSeconds = 60
+$MaxRenameRetries = 120  # Max rename retries (500ms each, up to 60 seconds)
+
+# 需要保留的日志文件模式（不会在更新时被删除）
+$PreserveLogPatterns = @(
+    "launcher-update.log",
+    "launcher-update.log.old",
+    "launcher-update-script.log",
+    "launcher-update-script.log.old",
+    "launcher.log",
+    "launcher.log.old",
+    "launcher.old.log"
+)
+
+function Write-Log {
+    param([string]$Message)
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $logMessage = "[$timestamp] $Message"
+    Write-Host $logMessage
+    Add-Content -Path $LogFile -Value $logMessage -Encoding UTF8
+}
+
+# Initialize log file with separator (for distinguishing different update sessions)
+function Initialize-Log {
+    $separator = [char]10 + ("=" * 60) + [char]10 + "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] PowerShell Update Script Session Started" + [char]10 + ("=" * 60)
+    Add-Content -Path $LogFile -Value $separator -Encoding UTF8
+}
+
+# Polling rename function - Core method
+# If file can be renamed, it means we have control of the file (handle released)
+function Wait-FileUnlocked {
+    param(
+        [string]$FilePath,
+        [int]$MaxRetries = $MaxRenameRetries
+    )
+    
+    if (-not (Test-Path $FilePath)) {
+        return $true
+    }
+    
+    $oldPath = "$FilePath.old"
+    $retryCount = 0
+    
+    while ($retryCount -lt $MaxRetries) {
+        try {
+            # Try to rename file - This is an atomic operation
+            # If successful, it means file handle is fully released
+            Rename-Item -Path $FilePath -NewName "$($([System.IO.Path]::GetFileName($FilePath))).old" -Force -ErrorAction Stop
+            Write-Log "[Rename] Successfully renamed: $FilePath -> .old (Attempt $($retryCount + 1))"
+            return $true
+        } catch {
+            $retryCount++
+            if ($retryCount % 20 -eq 0) {
+                Write-Log "[Rename] Waiting for file unlock: $FilePath (Tried $retryCount times)"
+            }
+            Start-Sleep -Milliseconds 500
+        }
+    }
+    
+    Write-Log "[ERROR] File rename timeout: $FilePath"
+    return $false
+}
+
+# Clean up .old files
+function Remove-OldFiles {
+    param([string]$Directory)
+    
+    Get-ChildItem -Path $Directory -Filter "*.old" -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
+        try {
+            Remove-Item -Path $_.FullName -Force -ErrorAction Stop
+            Write-Log "[Cleanup] Deleted: $($_.FullName)"
+        } catch {
+            Write-Log "[WARN] Failed to delete .old file: $($_.FullName)"
+        }
+    }
+}
+
+try {
+    # Initialize log file with session separator
+    Initialize-Log
+    
+    # ===== Self-Healing Phase: Ensure script has fully detached from parent process control =====
+    Write-Log "========== Launcher Update Script Started =========="
+    Write-Log "Log file location: $LogFile"
+    Write-Log "Script has entered execution phase (self-healing check)"
+    Write-Log "Target Version: $Version"
+    Write-Log "ZIP Path: $ZipPath"
+    Write-Log "App Directory: $AppDir"
+    Write-Log "Parent PID: $ParentPid"
+    Write-Log "Update Strategy: Polling Rename + Temporary File Replacement"
+    Write-Log "Preserved log files: $($PreserveLogPatterns -join ', ')"
+    
+    # Initial wait: Ensure Electron main process completes exit sequence
+    Write-Log "Initial delay: waiting for Electron to complete exit sequence..."
+    Start-Sleep -Seconds 2
+    
+    # ===== Self-Healing Code: Force terminate parent if still alive =====
+    # This is a fail-safe mechanism to handle cases where main process failed to exit properly
+    Write-Log "Self-healing check: verifying parent process status..."
+    try {
+        $parentProc = Get-Process -Id $ParentPid -ErrorAction SilentlyContinue
+        if ($null -ne $parentProc) {
+            Write-Log "[Self-Healing] Parent process still alive, attempting force termination PID: $ParentPid"
+            Write-Log "[Self-Healing] Process Name: $($parentProc.ProcessName), StartTime: $($parentProc.StartTime)"
+            
+            # Try graceful close first
+            try {
+                $parentProc.CloseMainWindow() | Out-Null
+                Start-Sleep -Seconds 2
+            } catch {
+                Write-Log "[Self-Healing] CloseMainWindow failed, will force kill"
+            }
+            
+            # Check if already exited
+            $parentProc = Get-Process -Id $ParentPid -ErrorAction SilentlyContinue
+            if ($null -ne $parentProc) {
+                Write-Log "[Self-Healing] Force terminating parent process..."
+                Stop-Process -Id $ParentPid -Force -ErrorAction SilentlyContinue
+                Start-Sleep -Seconds 1
+            }
+            
+            Write-Log "[Self-Healing] Parent process termination completed"
+        } else {
+            Write-Log "[Self-Healing] Parent process already exited, good"
+        }
+    } catch {
+        Write-Log "[Self-Healing] Exception during parent check (likely already exited): $($_.Exception.Message)"
+    }
+
+    # ===== Capture parent process identity to prevent PID reuse false positive =====
+    $ExpectedProcessName = "AI-Learning-Assistant-Launcher"
+    $ParentStartTime = $null
+    $ParentPath = $ParentExePath
+    try {
+        $initialParent = Get-Process -Id $ParentPid -ErrorAction SilentlyContinue
+        if ($null -ne $initialParent) {
+            $ParentStartTime = $initialParent.StartTime
+            # Also capture actual path from process as fallback
+            if ($null -eq $ParentPath -or $ParentPath -eq "") {
+                try {
+                    $ParentPath = $initialParent.Path
+                } catch {
+                    Write-Log "[WARN] Could not get process path: $($_.Exception.Message)"
+                }
+            }
+            Write-Log "Captured parent process identity - Name: $($initialParent.ProcessName), StartTime: $ParentStartTime, Path: $ParentPath"
+        }
+    } catch {
+        Write-Log "[WARN] Could not capture parent process identity: $($_.Exception.Message)"
+    }
+    
+    # ===== Formally wait for parent process to exit (with PID reuse protection) =====
+    Write-Log "Waiting for main process to fully exit..."
+    $waitCount = 0
+    $confirmedExit = $false
+    while ($waitCount -lt $MaxWaitSeconds) {
+        try {
+            $proc = Get-Process -Id $ParentPid -ErrorAction SilentlyContinue
+            if ($null -eq $proc) {
+                # PID not found - process likely exited
+                Write-Log "Main process confirmed exited (PID not found)"
+                $confirmedExit = $true
+                break
+            }
+                
+            # PID reuse protection: verify process identity matches expected parent
+            # If any identity attribute differs, it's a different process (PID reused)
+            $isSameProcess = $true
+            
+            # 1. Check start time
+            if ($null -ne $ParentStartTime) {
+                try {
+                    $currentStartTime = $proc.StartTime
+                    if ($currentStartTime -ne $ParentStartTime) {
+                        $isSameProcess = $false
+                        Write-Log "[PID Reuse Detected] Start time mismatch - Expected: $ParentStartTime, Current: $currentStartTime"
+                    }
+                } catch {
+                    Write-Log "[WARN] Could not compare start times: $($_.Exception.Message)"
+                }
+            }
+            
+            # 2. Check process name
+            if ($proc.ProcessName -notlike "*$ExpectedProcessName*") {
+                $isSameProcess = $false
+                Write-Log "[PID Reuse Detected] Process name mismatch - Expected: $ExpectedProcessName, Current: $($proc.ProcessName)"
+            }
+            
+            # 3. Check executable path (most reliable identifier)
+            if ($null -ne $ParentPath -and $ParentPath -ne "") {
+                try {
+                    $currentPath = $proc.Path
+                    # Use case-insensitive comparison for Windows paths
+                    if ($currentPath -and $currentPath.ToLower() -ne $ParentPath.ToLower()) {
+                        $isSameProcess = $false
+                        Write-Log "[PID Reuse Detected] Executable path mismatch - Expected: $ParentPath, Current: $currentPath"
+                    }
+                } catch {
+                    Write-Log "[WARN] Could not compare executable paths: $($_.Exception.Message)"
+                }
+            }
+                
+            if (-not $isSameProcess) {
+                Write-Log "[PID Reuse] PID $ParentPid now belongs to a different process, original process has exited"
+                $confirmedExit = $true
+                break
+            }
+                
+            # If still alive after 10 seconds, try force kill again
+            if ($waitCount -eq 10) {
+                Write-Log "[Fallback] Process still alive after 10s, force killing..."
+                Stop-Process -Id $ParentPid -Force -ErrorAction SilentlyContinue
+            }
+        } catch {
+            Write-Log "Main process exited (exception detected)"
+            $confirmedExit = $true
+            break
+        }
+        Start-Sleep -Seconds 1
+        $waitCount++
+        if ($waitCount % 10 -eq 0) {
+            Write-Log "Still waiting for main process to exit... ($waitCount seconds)"
+        }
+    }
+    
+    if (-not $confirmedExit -and $waitCount -ge $MaxWaitSeconds) {
+        Write-Log "[WARN] Timeout waiting for main process to exit, but proceeding with caution..."
+        # Add extra safety delay when timeout occurred
+        Write-Log "Adding extra 3-second safety delay due to timeout..."
+        Start-Sleep -Seconds 3
+    }
+
+    # ===== Polling rename critical files =====
+    # Confirm file handles are fully released by attempting rename
+    Write-Log "Starting to poll for file handle release..."
+    
+    $exePath = Join-Path $AppDir $ExeName
+    $criticalFiles = @(
+        $exePath,
+        (Join-Path $AppDir "libEGL.dll"),
+        (Join-Path $AppDir "libGLESv2.dll"),
+        (Join-Path $AppDir "ffmpeg.dll")
+    )
+    
+    # Check app.asar (if exists)
+    $asarPath = Join-Path $AppDir "resources\\app.asar"
+    if (Test-Path $asarPath) {
+        $criticalFiles += $asarPath
+    }
+    
+    $allUnlocked = $true
+    foreach ($file in $criticalFiles) {
+        if (Test-Path $file) {
+            Write-Log "Checking file: $file"
+            $unlocked = Wait-FileUnlocked -FilePath $file
+            if (-not $unlocked) {
+                $allUnlocked = $false
+                Write-Log "[ERROR] File still locked: $file"
+            }
+        }
+    }
+    
+    if (-not $allUnlocked) {
+        Write-Log "[ERROR] Some files cannot be unlocked, update aborted"
+        # Try to restore renamed files
+        Get-ChildItem -Path $AppDir -Filter "*.old" -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
+            $originalName = $_.FullName -replace '\\.old$', ''
+            try {
+                Rename-Item -Path $_.FullName -NewName ([System.IO.Path]::GetFileName($originalName)) -Force
+            } catch {}
+        }
+        exit 1
+    }
+    
+    Write-Log "All critical file handles released"
+
+    # Verify ZIP file exists
+    if (-not (Test-Path $ZipPath)) {
+        Write-Log "[ERROR] ZIP file does not exist: $ZipPath"
+        exit 1
+    }
+
+    # Backup external-resources
+    $externalResources = Join-Path $AppDir "external-resources"
+    $backupDir = Join-Path $env:TEMP "launcher-external-resources-backup"
+    
+    if (Test-Path $externalResources) {
+        Write-Log "Backing up user data..."
+        if (Test-Path $backupDir) {
+            Remove-Item -Path $backupDir -Recurse -Force
+        }
+        Copy-Item -Path $externalResources -Destination $backupDir -Recurse -Force
+        Write-Log "User data backup completed"
+    }
+
+    # Extract to temporary directory
+    $extractDir = Join-Path $env:TEMP "launcher-update-extract"
+    if (Test-Path $extractDir) {
+        Remove-Item -Path $extractDir -Recurse -Force
+    }
+    
+    Write-Log "Extracting update package..."
+    Expand-Archive -Path $ZipPath -DestinationPath $extractDir -Force
+    Write-Log "Extraction completed"
+
+    # Find directory containing exe
+    $sourceDir = $extractDir
+    $exeFile = Get-ChildItem -Path $extractDir -Filter $ExeName -Recurse -File | Select-Object -First 1
+    if ($null -ne $exeFile) {
+        $sourceDir = $exeFile.DirectoryName
+        Write-Log "Found source directory: $sourceDir"
+    } else {
+        Write-Log "[ERROR] Could not find $ExeName"
+        exit 1
+    }
+
+    # ===== Perform replacement =====
+    # Files are now renamed to .old, safe to copy new files
+    Write-Log "Starting to install new version..."
+    
+    # Delete renamed .old files and other old files (preserve external-resources and log files)
+    Write-Log "Cleaning up old version files..."
+    Get-ChildItem -Path $AppDir | Where-Object { 
+        $_.Name -ne "external-resources" -and 
+        $_.Name -notin $PreserveLogPatterns 
+    } | ForEach-Object {
+        try {
+            if ($_.PSIsContainer) {
+                Remove-Item -Path $_.FullName -Recurse -Force -ErrorAction Stop
+            } else {
+                Remove-Item -Path $_.FullName -Force -ErrorAction Stop
+            }
+        } catch {
+            Write-Log "[WARN] Deletion failed: $($_.FullName) - $($_.Exception.Message)"
+        }
+    }
+
+    # Copy new files (exclude external-resources)
+    Write-Log "Copying new version files..."
+    Get-ChildItem -Path $sourceDir | Where-Object { $_.Name -ne "external-resources" } | ForEach-Object {
+        $destPath = Join-Path $AppDir $_.Name
+        Copy-Item -Path $_.FullName -Destination $destPath -Recurse -Force
+    }
+    Write-Log "File copy completed"
+
+    # Restore user data
+    if (Test-Path $backupDir) {
+        if (-not (Test-Path $externalResources)) {
+            Write-Log "Restoring user data..."
+            Copy-Item -Path $backupDir -Destination $externalResources -Recurse -Force
+            Write-Log "User data restoration completed"
+        }
+        # Clean up backup
+        Remove-Item -Path $backupDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    # Verify installation
+    $newExePath = Join-Path $AppDir $ExeName
+    if (-not (Test-Path $newExePath)) {
+        Write-Log "[ERROR] Installation verification failed: $ExeName does not exist"
+        exit 1
+    }
+    Write-Log "Installation verification passed"
+
+    # Clean up temporary files
+    Write-Log "Cleaning up temporary files..."
+    Remove-Item -Path $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+    
+    # Clean up update config
+    $configPath = Join-Path $env:APPDATA "ai-learning-assistant-launcher\\update-config.json"
+    if (Test-Path $configPath) {
+        Remove-Item -Path $configPath -Force -ErrorAction SilentlyContinue
+    }
+    $pendingZip = Join-Path $env:APPDATA "ai-learning-assistant-launcher\\pending-update.zip"
+    if (Test-Path $pendingZip) {
+        Remove-Item -Path $pendingZip -Force -ErrorAction SilentlyContinue
+    }
+
+    Write-Log "========== Update completed, starting new version =========="
+    
+    # Start new version
+    Start-Process -FilePath $newExePath -WorkingDirectory $AppDir
+    
+    Write-Log "New version started"
+    exit 0
+
+} catch {
+    Write-Log "[ERROR] Update failed: $($_.Exception.Message)"
+    Write-Log "[ERROR] Stack trace: $($_.ScriptStackTrace)"
+    
+    # Try to restore .old files
+    Write-Log "Attempting to restore renamed files..."
+    Get-ChildItem -Path $AppDir -Filter "*.old" -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
+        $originalName = $_.FullName -replace '\\.old$', ''
+        try {
+            if (-not (Test-Path $originalName)) {
+                Rename-Item -Path $_.FullName -NewName ([System.IO.Path]::GetFileName($originalName)) -Force
+                Write-Log "[Restore] Restored: $originalName"
+            }
+        } catch {
+            Write-Log "[WARN] Restoration failed: $($_.FullName)"
+        }
+    }
+    
+    # Try to start old version
+    $oldExe = Join-Path $AppDir $ExeName
+    if (Test-Path $oldExe) {
+        Write-Log "Attempting to start old version..."
+        Start-Process -FilePath $oldExe -WorkingDirectory $AppDir
+    }
+    exit 1
+}
+`;
+
+  // 写入脚本文件，添加 UTF-8 BOM 防止中文路径或特殊字符导致解析失败
+  const BOM = '\uFEFF';
+  await writeFile(scriptPath, BOM + scriptContent, { encoding: 'utf8' });
+
+  await writeUpdateLog('INFO', '[generatePowerShellUpdateScript] 脚本已生成', {
     scriptPath,
-    zipPath,
-    appDir,
-    tempDir,
-    newVersion,
+    logPath,
   });
 
   return scriptPath;
 }
 
-/**
- * 等待文件句柄释放的重试配置
- */
-const FILE_RELEASE_CONFIG = {
-  MAX_RETRIES: 10,
-  INITIAL_DELAY_MS: 200,
-  MAX_DELAY_MS: 2000,
-};
-
-/**
- * 检测文件是否可访问（句柄已释放）
- * 通过尝试 rename 操作来验证文件是否被占用
- * @param filePath 文件路径
- * @returns 是否可访问
- */
-async function isFileAccessible(filePath: string): Promise<boolean> {
-  try {
-    // 检查文件是否可读
-    await access(filePath, constants.R_OK);
-
-    // 尝试 rename 到自身（Windows 下被占用的文件无法 rename）
-    // 这是检测文件句柄是否释放的可靠方法
-    const tempPath = filePath + '.tmp_check';
-    await rename(filePath, tempPath);
-    await rename(tempPath, filePath);
-
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * 等待文件句柄释放，使用指数退避重试机制
- * @param filePath 文件路径
- * @returns 文件是否可访问
- */
-async function waitForFileRelease(filePath: string): Promise<void> {
-  let delay = FILE_RELEASE_CONFIG.INITIAL_DELAY_MS;
-
-  for (let attempt = 1; attempt <= FILE_RELEASE_CONFIG.MAX_RETRIES; attempt++) {
-    const accessible = await isFileAccessible(filePath);
-
-    if (accessible) {
-      await writeUpdateLog('DEBUG', '[waitForFileRelease] 文件句柄已释放', {
-        filePath,
-        attempt,
-      });
-      return;
-    }
-
-    await writeUpdateLog(
-      'DEBUG',
-      '[waitForFileRelease] 文件仍被占用，等待重试',
-      {
-        filePath,
-        attempt,
-        nextDelayMs: delay,
-      },
-    );
-
-    await new Promise((resolve) => setTimeout(resolve, delay));
-
-    // 指数退避，但不超过最大延迟
-    delay = Math.min(delay * 2, FILE_RELEASE_CONFIG.MAX_DELAY_MS);
-  }
-
-  throw new Error(
-    `文件句柄释放超时: ${filePath}，已重试 ${FILE_RELEASE_CONFIG.MAX_RETRIES} 次`,
-  );
-}
-
 export async function installLauncherUpdate() {
-  await writeUpdateLog('INFO', '[installLauncherUpdate] 开始执行自定义更新');
+  // 防止重复点击
+  if (isInstallInProgress) {
+    await writeUpdateLog(
+      'WARN',
+      '[installLauncherUpdate] 更新已在进行中，忽略重复调用',
+    );
+    return {
+      success: false,
+      message: '更新已在进行中，请勿重复点击',
+    };
+  }
+
+  isInstallInProgress = true;
+
+  await writeUpdateLog(
+    'INFO',
+    '[installLauncherUpdate] 开始执行两阶段更新（阶段一）',
+  );
 
   // 如果是开发模式，不执行更新
   const isPackaged = app.isPackaged;
@@ -574,6 +972,7 @@ export async function installLauncherUpdate() {
       'WARN',
       '[installLauncherUpdate] 开发模式下不支持自动更新',
     );
+    isInstallInProgress = false;
     return {
       success: false,
       message: '开发模式下不支持自动更新',
@@ -649,30 +1048,22 @@ export async function installLauncherUpdate() {
     );
     await destroyWebtorrentForInstall(magnet);
 
-    // 使用重试机制等待文件句柄释放
-    await waitForFileRelease(zipPath);
-    await writeUpdateLog('DEBUG', '[installLauncherUpdate] 文件句柄已释放');
-
-    // 获取应用目录和临时目录
-    const exePath = app.getPath('exe');
-    const appDir = path.dirname(exePath);
-    const tempDir = path.join(app.getPath('temp'), 'launcher-update');
-
-    await writeUpdateLog('DEBUG', '[installLauncherUpdate] 应用目录:', appDir);
-    await writeUpdateLog('DEBUG', '[installLauncherUpdate] 临时目录:', tempDir);
+    // 等待一小段时间确保文件句柄释放
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
     // 显示更新确认对话框
     const result = await dialog.showMessageBox({
       type: 'info',
       title: '准备更新',
-      message: '启动器将在关闭后自动更新',
-      detail: `当前版本: ${currentVersion}\n新版本: ${version}\n\n点击"确定"后程序将关闭并自动更新，更新完成后会自动重启。`,
+      message: '启动器将重启并应用更新',
+      detail: `当前版本: ${currentVersion}\n新版本: ${version}\n\n点击"确定"后程序将重启，重启过程中会自动应用更新。`,
       buttons: ['确定', '取消'],
       defaultId: 0,
       cancelId: 1,
     });
 
     if (result.response !== 0) {
+      isInstallInProgress = false;
       await writeUpdateLog('INFO', '[installLauncherUpdate] 用户取消更新');
       return {
         success: false,
@@ -682,49 +1073,254 @@ export async function installLauncherUpdate() {
 
     await writeUpdateLog(
       'INFO',
-      '[installLauncherUpdate] 用户确认更新，准备执行自定义更新',
+      '[installLauncherUpdate] 用户确认更新，开始准备更新文件',
     );
 
-    // 生成更新脚本
-    const scriptPath = await generateUpdateScript(
+    // 获取应用目录
+    const exePath = app.getPath('exe');
+    const appDir = path.dirname(exePath);
+
+    // ===== 生成并启动 PowerShell 更新脚本 =====
+    await writeUpdateLog('INFO', '[installLauncherUpdate] 生成更新脚本...');
+    const scriptPath = await generatePowerShellUpdateScript(
       zipPath,
       appDir,
-      tempDir,
       version,
+      exePath,
     );
+
+    // 验证脚本文件是否成功生成且可读
+    try {
+      await access(scriptPath, constants.R_OK);
+      await writeUpdateLog('INFO', '[installLauncherUpdate] 脚本文件验证通过', {
+        scriptPath,
+      });
+    } catch (err) {
+      await writeUpdateLog(
+        'ERROR',
+        '[installLauncherUpdate] 脚本文件验证失败，文件不存在或不可读',
+        {
+          scriptPath,
+          error: err instanceof Error ? err.message : String(err),
+        },
+      );
+      throw new Error(`脚本文件验证失败: ${scriptPath}`);
+    }
 
     await writeUpdateLog(
       'INFO',
-      '[installLauncherUpdate] 启动更新脚本:',
-      scriptPath,
+      '[installLauncherUpdate] 启动更新脚本 (使用 Start-Process 脱离 Job Object)...',
     );
 
-    // 启动更新脚本
-    const updateProcess = spawn('cmd.exe', ['/c', scriptPath], {
-      detached: true,
-      stdio: 'ignore',
-      windowsHide: true,
+    // ===== 关键：使用 PowerShell Start-Process 脱离 Job Object =====
+    // Windows 会将子进程绑定到父进程的 Job Object 中，父进程退出时子进程也会被终止
+    // 通过 PowerShell 的 Start-Process 启动的进程不会继承 Job Object，完全独立
+    const isDebugMode = process.env.UPDATE_DEBUG === '1';
+    const windowStyle = isDebugMode ? 'Normal' : 'Hidden';
+
+    // 构建 Start-Process 命令，启动一个完全独立的 PowerShell 进程
+    // -PassThru 返回进程对象以便获取 PID
+    // 转义路径中的单引号
+    const escapedScriptPath = scriptPath.replace(/'/g, "''");
+    // PID 文件路径，作为 stdout 管道的可靠回退
+    const pidFilePath = path.join(
+      app.getPath('userData'),
+      'update-temp',
+      'update-pid.txt',
+    );
+    const escapedPidFilePath = pidFilePath
+      .replace(/\\/g, '\\\\')
+      .replace(/'/g, "''");
+
+    // 单行命令，避免换行符导致 -Command 解析异常
+    // 同时将 PID 写入文件作为回退（stdout 管道在 detached 模式下不可靠）
+    const startProcessCommand = `$ErrorActionPreference='Stop'; $p = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','${windowStyle}','-File','${escapedScriptPath}') -WindowStyle ${windowStyle} -PassThru; $p.Id | Out-File -FilePath '${escapedPidFilePath}' -NoNewline -Encoding UTF8; Write-Output $p.Id`;
+
+    const args = [
+      '-NoProfile',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-Command',
+      startProcessCommand,
+    ];
+
+    await writeUpdateLog(
+      'DEBUG',
+      `[installLauncherUpdate] 启动参数: 调试模式=${isDebugMode}`,
+      {
+        command: 'powershell.exe',
+        startProcessCommand,
+        windowStyle,
+        pidFilePath,
+      },
+    );
+
+    // ===== 使用 execFile 替代 spawn + pipe =====
+    // execFile 更可靠地捕获 stdout/stderr，避免 detached+pipe 组合的管道丢失问题
+    // 外层 PowerShell 只需运行 Start-Process 并返回 PID，不需要 detached
+    // 真正的脱离 Job Object 由内层 Start-Process 完成
+    const { stdout: stdoutData, stderr: stderrData } = await new Promise<{
+      stdout: string;
+      stderr: string;
+    }>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('启动更新进程超时（15秒）'));
+      }, 15000);
+
+      execFile(
+        'powershell.exe',
+        args,
+        {
+          timeout: 15000,
+          windowsHide: true,
+          encoding: 'utf8',
+        },
+        (error, stdout, stderr) => {
+          clearTimeout(timeout);
+          if (error) {
+            writeUpdateLog('ERROR', '[installLauncherUpdate] execFile 错误', {
+              message: error.message,
+              code: (error as any).code,
+              killed: (error as any).killed,
+              stdout,
+              stderr,
+            });
+            reject(error);
+          } else {
+            resolve({ stdout: stdout || '', stderr: stderr || '' });
+          }
+        },
+      );
     });
-    updateProcess.unref();
+
+    await writeUpdateLog('DEBUG', '[installLauncherUpdate] PowerShell 输出', {
+      stdout: stdoutData.trim(),
+      stderr: stderrData.trim(),
+    });
+
+    // 解析输出获取新进程 PID
+    let launchedPid = parseInt(stdoutData.trim(), 10);
+
+    // 如果 stdout 解析失败，尝试从 PID 文件回退读取
+    if (isNaN(launchedPid) || launchedPid <= 0) {
+      await writeUpdateLog(
+        'WARN',
+        '[installLauncherUpdate] stdout 解析 PID 失败，尝试从文件回退读取',
+        { stdout: stdoutData, pidFilePath },
+      );
+      try {
+        if (existsSync(pidFilePath)) {
+          const pidFromFile = readFileSync(pidFilePath, 'utf-8').trim();
+          // 移除 UTF-8 BOM（如果存在）
+          const cleanPid = pidFromFile.replace(/^\uFEFF/, '');
+          launchedPid = parseInt(cleanPid, 10);
+          await writeUpdateLog(
+            'INFO',
+            '[installLauncherUpdate] 从文件回退读取 PID 成功',
+            { pid: launchedPid, raw: pidFromFile },
+          );
+        }
+      } catch (pidFileErr) {
+        await writeUpdateLog(
+          'ERROR',
+          '[installLauncherUpdate] 读取 PID 文件失败',
+          {
+            error:
+              pidFileErr instanceof Error
+                ? pidFileErr.message
+                : String(pidFileErr),
+          },
+        );
+      }
+    }
+
+    // 清理 PID 文件
+    try {
+      if (existsSync(pidFilePath)) {
+        unlinkSync(pidFilePath);
+      }
+    } catch {
+      // 忽略清理失败
+    }
+
+    if (isNaN(launchedPid) || launchedPid <= 0) {
+      await writeUpdateLog(
+        'ERROR',
+        '[installLauncherUpdate] 无法获取更新脚本进程 PID（stdout 和文件回退均失败）',
+        { stdout: stdoutData, stderr: stderrData, pidFilePath },
+      );
+      throw new Error('无法获取更新脚本进程 PID');
+    }
+
+    await writeUpdateLog('INFO', '[installLauncherUpdate] 独立更新进程已启动', {
+      launchedPid,
+      scriptPath,
+    });
+
+    // ===== 验证独立进程确实在运行 =====
+    const maxVerifyAttempts = 10;
+    const verifyIntervalMs = 300;
+    let verified = false;
+
+    for (let i = 0; i < maxVerifyAttempts; i++) {
+      await new Promise((resolve) => setTimeout(resolve, verifyIntervalMs));
+
+      try {
+        // signal 0 只检查进程是否存在，不发送信号
+        process.kill(launchedPid, 0);
+        verified = true;
+        await writeUpdateLog(
+          'DEBUG',
+          `[installLauncherUpdate] 进程验证成功 (尝试 ${i + 1}/${maxVerifyAttempts})`,
+          { pid: launchedPid },
+        );
+        break;
+      } catch {
+        await writeUpdateLog(
+          'WARN',
+          `[installLauncherUpdate] 进程验证中 (尝试 ${i + 1}/${maxVerifyAttempts})`,
+          { pid: launchedPid },
+        );
+      }
+    }
+
+    if (!verified) {
+      await writeUpdateLog(
+        'ERROR',
+        '[installLauncherUpdate] 更新进程验证失败，进程可能未成功启动',
+      );
+      throw new Error('更新进程启动验证失败');
+    }
 
     await writeUpdateLog(
       'INFO',
-      '[installLauncherUpdate] 更新脚本已启动，准备退出应用',
+      '[installLauncherUpdate] 更新进程验证通过，准备退出主进程',
     );
 
-    // 延迟退出应用
+    // 额外等待确保 PowerShell 脚本开始执行
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    await writeUpdateLog('INFO', '[installLauncherUpdate] 准备退出应用...');
+
+    // 设置 forceQuit 标志，绕过托盘最小化拦截，确保应用能正常退出
+    setForceQuit(true);
+
+    // 使用 app.exit(0) 而不是 app.quit()
+    // app.quit() 会发出 before-quit 等事件并等待所有窗口关闭，可能因为 onbeforeunload 拦截而挂起
+    // app.exit(0) 更彻底，不触发窗口关闭逻辑
     setTimeout(() => {
-      app.quit();
-    }, 1000);
+      app.exit(0);
+    }, 500);
 
     return {
       success: true,
       message: '正在更新启动器...',
     };
   } catch (error) {
+    isInstallInProgress = false;
     await writeUpdateLog(
       'ERROR',
-      '[installLauncherUpdate] 自定义更新失败',
+      '[installLauncherUpdate] 两阶段更新（阶段一）失败',
       error instanceof Error
         ? { message: error.message, stack: error.stack }
         : error,
