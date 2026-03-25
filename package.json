@@ -11,7 +11,15 @@
     "make-mini": "cross-env NODE_ENV=production MAKE_MINI=true electron-forge make --target @electron-forge/maker-zip",
     "publish": "cross-env NODE_ENV=production electron-forge publish",
     "lint": "eslint --ext .ts,.tsx .",
-    "lint:fix": "eslint --fix --ext .ts,.tsx ."
+    "lint:fix": "eslint --fix --ext .ts,.tsx .",
+    "test": "npm run test:main && npm run test:renderer",
+    "test:main": "vitest run",
+    "test:main:watch": "vitest",
+    "test:main:coverage": "vitest run --coverage",
+    "test:renderer": "playwright test",
+    "test:renderer:ui": "playwright test --ui",
+    "test:renderer:debug": "playwright test --debug",
+    "test:install": "playwright install chromium"
   },
   "keywords": [],
   "author": {
@@ -30,6 +38,7 @@
     "@electron-forge/plugin-fuses": "^7.8.1",
     "@electron-forge/plugin-webpack": "^7.8.1",
     "@electron/fuses": "^1.8.0",
+    "@playwright/test": "^1.58.2",
     "@stdlib/utils-convert-path": "^0.2.2",
     "@svgr/webpack": "^8.1.0",
     "@types/adm-zip": "^0.5.7",
@@ -44,6 +53,7 @@
     "@typescript-eslint/eslint-plugin": "^5.62.0",
     "@typescript-eslint/parser": "^5.62.0",
     "@vercel/webpack-asset-relocator-loader": "1.7.3",
+    "@vitest/coverage-v8": "^4.1.1",
     "@xterm/xterm": "^5.5.0",
     "antd": "^5.26.1",
     "copy-webpack-plugin": "^13.0.1",
@@ -79,6 +89,7 @@
     "ts-node": "^10.9.2",
     "typescript": "~4.5.4",
     "uuid": "^11.1.0",
+    "vitest": "^4.1.1",
     "webtorrent": "^2.8.5",
     "xterm-theme": "^1.1.0"
   },
