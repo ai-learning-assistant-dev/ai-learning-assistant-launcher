@@ -38,9 +38,9 @@ await window.reload(); // 刷新使设置生效
 
 参考 `basic.spec.ts` 的实现。
 
-## 开始编写新测试
+# 开始编写新测试
 
-### 基础模板
+## 基础模板
 
 ```typescript
 import { test, expect, _electron as electron } from '@playwright/test';
@@ -82,7 +82,7 @@ test.describe('页面名称', () => {
 });
 ```
 
-### 常用操作
+## 常用操作
 
 ```typescript
 // 导航到特定页面
@@ -112,7 +112,7 @@ const result = await window.evaluate(async () => {
 });
 ```
 
-### 调试技巧
+## 调试技巧
 
 ```typescript
 // 启用可见窗口进行调试
@@ -129,3 +129,112 @@ window.on('console', (msg) => console.log(msg.text()));
 window.on('pageerror', (error) => console.error(error));
 ```
 
+## 导航到各个页面的脚本例子
+
+navigation目录包含了一系列基础的 Playwright 测试脚本，用于验证从首页（hello）进入各个子功能页面的导航是否正常。
+
+### ⚠️ 重要说明
+
+由于 Playwright 1.58.2 与 Electron 36.5.0 存在兼容性问题，测试使用了 **CDP (Chrome DevTools Protocol)** 方式连接应用，而不是直接使用 `electron.launch`。
+
+### 📁 测试文件列表
+
+| 序号 | 脚本文件                       | 测试目标 | 路由路径             | 功能描述                         |
+| :--: | ------------------------------ | -------- | -------------------- | -------------------------------- |
+|  00  | `00-all-navigation.spec.ts`    | 所有页面 | 全部                 | 综合导航测试，按顺序测试所有页面 |
+|  01  | `01-hello-home.spec.ts`        | 首页     | `/hello`             | 应用启动、四个功能入口存在性     |
+|  02  | `02-reader-obsidian.spec.ts`   | 阅读器   | `/obsidian-app`      | Obsidian 管理页面导航            |
+|  03  | `03-toolbox-native-ai.spec.ts` | 工具箱   | `/native-ai-service` | AI 工具箱及子页面(TTS/ASR/PDF)   |
+|  04  | `04-llm-service.spec.ts`       | 大模型   | `/lm-service`        | LM Studio 管理及 API 配置        |
+|  05  | `05-subject-training.spec.ts`  | 学科培训 | 首页内               | 学科培训卡片、按钮状态验证       |
+
+### 🚀 运行测试
+
+```bash
+# 运行所有导航测试
+npx playwright test tests/renderer/navigation/
+
+# 运行单个测试文件
+npx playwright test tests/renderer/navigation/01-hello-home.spec.ts
+
+# 带 UI 界面运行
+npx playwright test tests/renderer/navigation/ --ui
+
+# 调试模式
+npx playwright test tests/renderer/navigation/02-reader-obsidian.spec.ts --debug
+
+# 只运行综合测试
+npx playwright test tests/renderer/navigation/00-all-navigation.spec.ts
+```
+
+### 📝 参考模板
+
+#### 基础模板（用于创建新测试）
+
+```typescript
+import { test, expect, chromium } from '@playwright/test';
+import { join } from 'path';
+import { spawn, ChildProcess } from 'child_process';
+
+const exePath = join(__dirname, '../../../out/AI-Learning-Assistant-Launcher-win32-x64/AI-Learning-Assistant-Launcher.exe');
+
+async function launchApp(): Promise<{ proc: ChildProcess; page: any; cleanup: () => Promise<void> }> {
+  // 启动应用
+  const proc = spawn(exePath, ['--test-mode', '--remote-debugging-port=9222'], {
+    env: { ...process.env, NODE_ENV: 'production' },
+  });
+  
+  // 等待应用启动
+  await new Promise(resolve => setTimeout(resolve, 3000));
+  
+  // 连接 CDP
+  const browser = await chromium.connectOverCDP('http://localhost:9222');
+  const context = browser.contexts()[0];
+  const page = context.pages()[0];
+  
+  const cleanup = async () => {
+    await browser.close();
+    proc.kill();
+  };
+  
+  return { proc, page, cleanup };
+}
+
+test('测试示例', async () => {
+  const { page, cleanup } = await launchApp();
+  
+  try {
+    // 你的测试代码
+    await expect(page.locator('body')).toBeAttached();
+  } finally {
+    await cleanup();
+  }
+});
+```
+
+### 🗺️ 路由对照表
+
+根据 `src/renderer/app.tsx` 中的路由定义：
+
+| 路由                 | 页面                     | 说明                |
+| -------------------- | ------------------------ | ------------------- |
+| `/`                  | Hello (首页)             | 默认首页            |
+| `/hello`             | Hello (首页)             | 首页                |
+| `/obsidian-app`      | ObsidianApp (阅读器)     | Obsidian 阅读器管理 |
+| `/native-ai-service` | NativeAiService (工具箱) | AI 工具箱           |
+| `/lm-service`        | LMService (大模型)       | LM Studio 管理      |
+| `/ai-service`        | AiService (AI服务)       | 容器版 AI 服务      |
+| `/TTS-config`        | TTSConfig                | 文字转语音配置      |
+| `/ASR-config`        | ASRConfig                | 语音转文字配置      |
+| `/PDF-config`        | PdfConfig                | PDF 配置            |
+| `/pdf-convert`       | PdfConvert               | PDF 转换            |
+| `/llm-api-config`    | LLMConfig                | LLM API 配置        |
+
+### 🛠️ 辅助工具
+
+`test-helpers.ts` 提供了可复用的辅助函数：
+
+- `ROUTES` - 所有路由常量
+- `launchApp()` - 启动应用
+- `navigateTo()` - 导航到指定路由
+- `HOME_PAGE_SELECTORS` - 首页选择器
