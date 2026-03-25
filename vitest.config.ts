@@ -13,6 +13,8 @@ export default defineConfig({
       include: ['src/main/**/*.ts'],
       exclude: ['src/main/**/*.d.ts', 'src/main/preload.ts'],
     },
+    // 设置测试超时
+    testTimeout: 10000,
   },
   resolve: {
     alias: {

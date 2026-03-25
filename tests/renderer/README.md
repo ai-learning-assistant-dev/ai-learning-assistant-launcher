@@ -1,8 +1,10 @@
 # 渲染进程集成测试
 
-本目录包含使用 Playwright 编写的 Electron 应用 E2E/集成测试。
+目录包含使用 Playwright 编写的 Electron 应用 E2E/集成测试。
 
-## 测试结构
+## 目录结构
+
+> 如果你要编写后端的工具函数的测试用例，应该在上层目录的`main`
 
 ```
 tests/renderer/
@@ -11,7 +13,14 @@ tests/renderer/
 └── README.md               # 本文件
 ```
 
-## 关键注意事项
+## 常见的要处理的细节
+
+> 虽然模拟的使用户的行为，然而仍然不免要考虑到启动器自己的许多弹窗等等的情况要处理，算是编写测试时的Dirty Work了，相当的Hack。
+
+1. **处理欢迎弹窗**：始终在 `beforeEach` 中设置 localStorage 跳过弹窗
+2. **使用 force: true 关闭**：防止应用关闭时卡住
+3. **缩短超时**：配置合理的超时时间，避免长时间等待
+4. **串行执行**：Electron 测试建议 `workers: 1` 避免冲突
 
 ### 欢迎弹窗处理
 
@@ -29,9 +38,9 @@ await window.reload(); // 刷新使设置生效
 
 参考 `basic.spec.ts` 的实现。
 
-## 编写新测试
+## 开始编写新测试
 
-### 1. 基础模板
+### 基础模板
 
 ```typescript
 import { test, expect, _electron as electron } from '@playwright/test';
@@ -73,7 +82,7 @@ test.describe('页面名称', () => {
 });
 ```
 
-### 2. 常用操作
+### 常用操作
 
 ```typescript
 // 导航到特定页面
@@ -103,7 +112,7 @@ const result = await window.evaluate(async () => {
 });
 ```
 
-### 3. 调试技巧
+### 调试技巧
 
 ```typescript
 // 启用可见窗口进行调试
@@ -120,9 +129,3 @@ window.on('console', (msg) => console.log(msg.text()));
 window.on('pageerror', (error) => console.error(error));
 ```
 
-## 最佳实践
-
-1. **处理欢迎弹窗**：始终在 `beforeEach` 中设置 localStorage 跳过弹窗
-2. **使用 force: true 关闭**：防止应用关闭时卡住
-3. **缩短超时**：配置合理的超时时间，避免长时间等待
-4. **串行执行**：Electron 测试建议 `workers: 1` 避免冲突

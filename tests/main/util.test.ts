@@ -1,69 +1,82 @@
 /**
- * 主进程工具函数单元测试示例
- * 测试 src/main/util.ts 中的纯函数
+ * 主进程工具函数单元测试
+ * 真实导入 src/main/util.ts 中的函数
  */
 import { describe, it, expect } from 'vitest';
+import { wait, onlyAlphaNumericLine, resolveHtmlPath } from '../../src/main/util';
 
-// 示例：测试一个简单的工具函数
-// 实际项目中替换为真实的工具函数导入
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
-}
-
-describe('工具函数测试', () => {
-  describe('delay', () => {
+describe('util.ts 工具函数', () => {
+  describe('wait', () => {
     it('应该在指定时间后 resolve', async () => {
       const start = Date.now();
-      await delay(50);
+      await wait(100);
       const elapsed = Date.now() - start;
-      expect(elapsed).toBeGreaterThanOrEqual(45); // 允许小误差
+      expect(elapsed).toBeGreaterThanOrEqual(90); // 允许小误差
+      expect(elapsed).toBeLessThan(200);
+    });
+
+    it('应该能等待 0ms', async () => {
+      const start = Date.now();
+      await wait(0);
+      const elapsed = Date.now() - start;
+      expect(elapsed).toBeLessThan(50);
     });
   });
 
-  describe('formatBytes', () => {
-    it('应该正确格式化字节', () => {
-      expect(formatBytes(0)).toBe('0 B');
-      expect(formatBytes(1024)).toBe('1 KB');
-      expect(formatBytes(1536)).toBe('1.5 KB');
-      expect(formatBytes(1024 * 1024)).toBe('1 MB');
-      expect(formatBytes(1024 * 1024 * 1024)).toBe('1 GB');
+  describe('onlyAlphaNumericLine', () => {
+    it('应该过滤非字母数字字符', () => {
+      expect(onlyAlphaNumericLine('hello world!')).toBe('helloworld');
+      expect(onlyAlphaNumericLine('test@#$%123')).toBe('test123');
+      expect(onlyAlphaNumericLine('中文测试abc')).toBe('abc');
     });
 
-    it('应该处理大数值', () => {
-      expect(formatBytes(1024 * 1024 * 1024 * 1024)).toBe('1 TB');
+    it('应该保留路径分隔符和下划线', () => {
+      // 正则 [^a-zA-Z0-9_/\\] 保留字母数字、下划线、正斜杠、反斜杠
+      expect(onlyAlphaNumericLine('/path/to/file')).toBe('/path/to/file');
+      expect(onlyAlphaNumericLine('/path_with_underscore')).toBe('/path_with_underscore');
+      expect(onlyAlphaNumericLine('file_name_123')).toBe('file_name_123');
+      // 反斜杠和正斜杠
+      expect(onlyAlphaNumericLine('path\\to\\file')).toBe('path\\to\\file');
+      expect(onlyAlphaNumericLine('path/to/file')).toBe('path/to/file');
+    });
+
+    it('应该处理空字符串', () => {
+      expect(onlyAlphaNumericLine('')).toBe('');
+    });
+
+    it('应该处理纯特殊字符', () => {
+      expect(onlyAlphaNumericLine('!@#$%^&*()')).toBe('');
     });
   });
-});
 
-// 示例：测试 IPC 相关工具
-// 可以 mock electron 模块来测试 IPC 处理逻辑
-describe('IPC 工具测试', () => {
-  it('应该正确解析 IPC 消息类型', () => {
-    // 模拟 IPC 消息类型检查
-    const validTypes = ['ERROR', 'INFO', 'WARNING', 'DATA', 'PROGRESS'];
-    
-    expect(validTypes).toContain('ERROR');
-    expect(validTypes).toContain('DATA');
-    expect(validTypes).not.toContain('INVALID');
-  });
+  describe('resolveHtmlPath', () => {
+    const originalEnv = process.env.NODE_ENV;
+    const originalPort = process.env.PORT;
 
-  it('应该验证服务名称格式', () => {
-    const isValidServiceName = (name: string): boolean => {
-      return /^[a-z0-9-]+$/.test(name);
-    };
+    afterEach(() => {
+      process.env.NODE_ENV = originalEnv;
+      process.env.PORT = originalPort;
+    });
 
-    expect(isValidServiceName('docker')).toBe(true);
-    expect(isValidServiceName('wsl')).toBe(true);
-    expect(isValidServiceName('training-service')).toBe(true);
-    expect(isValidServiceName('InvalidName')).toBe(false);
-    expect(isValidServiceName('invalid_name')).toBe(false);
+    it('生产环境应该返回 file:// 协议路径', () => {
+      process.env.NODE_ENV = 'production';
+      const result = resolveHtmlPath('index.html');
+      expect(result).toMatch(/^file:\/\//);
+      expect(result).toContain('index.html');
+    });
+
+    it('开发环境应该返回 localhost URL', () => {
+      process.env.NODE_ENV = 'development';
+      process.env.PORT = '3000';
+      const result = resolveHtmlPath('index.html');
+      expect(result).toMatch(/^http:\/\/localhost:3000\/index\.html$/);
+    });
+
+    it('开发环境应该使用默认端口 1212', () => {
+      process.env.NODE_ENV = 'development';
+      delete process.env.PORT;
+      const result = resolveHtmlPath('index.html');
+      expect(result).toContain(':1212');
+    });
   });
 });
