@@ -38,6 +38,11 @@ import {
   setUploadEnabledHandle,
   getUploadEnabledHandle,
   getUploadStatsHandle,
+  startHttpsDownloadHandle,
+  queryHttpsDownloadHandle,
+  cancelHttpsDownloadHandle,
+  checkHttpsDownloadFileHandle,
+  HttpsDownloadState,
 } from './dlc/type-info';
 import {
   checkLauncherUpdateHandle,
@@ -46,12 +51,14 @@ import {
 } from './launcher-update/type-info';
 import {
   courseHaveNewVersionNativeTrainingServiceHandle,
+  haveNewVersionNativeTrainingServiceHandle,
   installNativeTrainingServiceHandle,
   logsNativeTrainingServiceHandle,
   queryNativeTrainingServiceHandle,
   removeNativeTrainingServiceHandle,
   startNativeTrainingServiceHandle,
   updateCourseNativeTrainingServiceHandle,
+  updateNativeTrainingServiceHandle,
 } from './native-training-service/type-info';
 import { NativeServiceInfo } from './native-script/type-info';
 import {
@@ -68,8 +75,16 @@ import {
   runObsidianVoiceServiceHandle,
   stopObsidianVoiceServiceHandle,
 } from './local-service/obsidian-voice-service/type-info';
+import {
+  queryNativeTrainingConfigHandle,
+  setNativeTrainingConfigHandle,
+  TrainingConfig,
+} from './configs/type-info';
 
 const electronHandler = {
+  // 系统信息
+  platform: process.platform, // 'win32' | 'darwin' | 'linux'
+  arch: process.arch, // 'x64' | 'arm64' | etc.
   ipcRenderer: {
     sendMessage<A extends AllAction, S extends AllService>(
       channel: Channels,
@@ -167,6 +182,12 @@ const mainHandle = {
       logsTrainingServiceHandle,
     );
   },
+  queryNativeTrainingConfigHandle: async () => {
+    return ipcInvoke<TrainingConfig>(queryNativeTrainingConfigHandle);
+  },
+  setNativeTrainingConfigHandle: async (config: TrainingConfig) => {
+    return ipcInvoke<TrainingConfig>(setNativeTrainingConfigHandle, config);
+  },
   queryNativeTrainingServiceHandle: async () => {
     return ipcInvoke<NativeServiceInfo>(queryNativeTrainingServiceHandle);
   },
@@ -188,6 +209,16 @@ const mainHandle = {
       latestVersion: string;
       haveNew: boolean;
     }>(courseHaveNewVersionNativeTrainingServiceHandle);
+  },
+  updateNativeTrainingServiceHandle: async () => {
+    return ipcInvoke(updateNativeTrainingServiceHandle);
+  },
+  haveNewVersionNativeTrainingServiceHandle: async () => {
+    return ipcInvoke<{
+      currentVersion: string;
+      latestVersion: string;
+      haveNew: boolean;
+    }>(haveNewVersionNativeTrainingServiceHandle);
   },
   logsNativeTrainingServiceHandle: async () => {
     return ipcInvoke<{ imageId: string; logs: string }>(
@@ -296,6 +327,32 @@ const mainHandle = {
       uploadSpeed: number;
       activeTorrents: number;
     }>(getUploadStatsHandle);
+  },
+  // HTTPS 多源下载
+  startHttpsDownloadHandle: async (
+    dlcId: DLCId,
+    urls: string[],
+    version: string,
+  ) => {
+    return ipcInvoke<{ success: boolean; error?: string }>(
+      startHttpsDownloadHandle,
+      dlcId,
+      urls,
+      version,
+    );
+  },
+  queryHttpsDownloadHandle: async () => {
+    return ipcInvoke<HttpsDownloadState>(queryHttpsDownloadHandle);
+  },
+  cancelHttpsDownloadHandle: async (dlcId: DLCId) => {
+    return ipcInvoke<{ success: boolean }>(cancelHttpsDownloadHandle, dlcId);
+  },
+  checkHttpsDownloadFileHandle: async (dlcId: DLCId, version: string) => {
+    return ipcInvoke<{ exists: boolean; filePath: string | null }>(
+      checkHttpsDownloadFileHandle,
+      dlcId,
+      version,
+    );
   },
   // RTS 进度事件监听
   onRtsProgress: (callback: (progress: RTSProgressInfo) => void) => {

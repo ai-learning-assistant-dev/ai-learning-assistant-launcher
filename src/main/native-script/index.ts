@@ -12,74 +12,26 @@ import { loggerFactory } from '../terminal-log';
 import { existsSync, readFileSync, mkdirSync, rmSync, cpSync } from 'fs';
 import { CancellationTokenSourceImpl } from '../exec/cancellation-token';
 import http from 'http';
-import { getLatestVersion, startWebtorrent, waitTorrentDone } from '../dlc';
 import { llmConfigPath } from '../configs';
+import { queryTrainingConfig } from '../configs/training-config';
 
 const commandLine = new Exec();
 
-// 检查进程是否是关键系统进程（Windows）
-async function isCriticalProcess(pid: string): Promise<boolean> {
-  if (!isWindows()) {
-    return false; // 非Windows系统暂不检查
-  }
-
+// 根据进程名终止进程
+async function killProcessByName(processName: string): Promise<void> {
   try {
-    // 获取进程名称
-    const tasklistResult = await commandLine.exec('tasklist', [
-      '/FI',
-      `PID eq ${pid}`,
-      '/FO',
-      'CSV',
-      '/NH',
-    ]);
-    const lines = tasklistResult.stdout.trim().split('\n');
-
-    if (lines.length === 0 || lines[0] === '') {
-      return false; // 进程不存在
+    if (isWindows()) {
+      // Windows: 使用taskkill根据进程名终止进程
+      await commandLine.exec('taskkill', ['/F', '/IM', processName]);
+      console.debug(`已终止进程: ${processName}`);
+    } else {
+      // macOS/Linux: 使用pkill根据进程名终止进程
+      await commandLine.exec('pkill', ['-9', '-f', processName]);
+      console.debug(`已终止进程: ${processName}`);
     }
-
-    // CSV格式: "进程名","PID","会话名","会话#","内存使用"
-    const match = lines[0].match(
-      /"([^"]+)","([^"]+)","([^"]+)","([^"]+)","([^"]+)"/,
-    );
-    if (!match) {
-      return false;
-    }
-
-    const processName = match[1].toLowerCase();
-
-    // Windows关键系统进程列表
-    const criticalProcesses = [
-      'system',
-      'registry',
-      'smss.exe',
-      'csrss.exe',
-      'wininit.exe',
-      'services.exe',
-      'lsass.exe',
-      'svchost.exe',
-      'explorer.exe',
-      'taskhostw.exe',
-      'dwm.exe',
-      'ctfmon.exe',
-      'winlogon.exe',
-      'spoolsv.exe',
-      'taskeng.exe',
-      'conhost.exe',
-      'sihost.exe',
-      'runtimebroker.exe',
-      'searchindexer.exe',
-      'searchui.exe',
-      'shellexperiencehost.exe',
-    ];
-
-    // 检查是否是关键进程
-    return criticalProcesses.some((critical) =>
-      processName.includes(critical.toLowerCase()),
-    );
   } catch (error) {
-    console.warn(`无法检查进程 ${pid} 的信息:`, error);
-    return true; // 如果无法检查，安全起见不终止该进程
+    // 如果命令执行失败（例如没有找到该进程），忽略错误
+    console.debug(`没有找到进程 ${processName} 或无法终止:`, error);
   }
 }
 
@@ -111,7 +63,7 @@ async function killProcessOnPort(port: number): Promise<void> {
       for (const pid of pids) {
         try {
           // 安全检查：不终止关键系统进程
-          const isCritical = await isCriticalProcess(pid);
+          const isCritical = Number(pid) == 0;
           if (isCritical) {
             console.warn(`跳过关键系统进程 PID: ${pid} (端口: ${port})`);
             continue;
@@ -226,6 +178,7 @@ export async function installService(
   serviceName: NativeServiceName,
 ): Promise<NativeServiceInfo> {
   if (serviceName === 'NATIVE_TRAINING') {
+    console.debug('开始清除旧版本');
     try {
       rmSync(trainingServerSourcePath, { recursive: true });
     } catch (e) {
@@ -243,11 +196,17 @@ export async function installService(
 
     console.debug('开始下载程序');
 
-    await gitClone(
-      'https://gitee.com/shiftonetothree/ai-learning-assistant-training-server.git',
-      trainingServerSourcePath,
-      'refactor',
-    );
+    try {
+      await gitClone(
+        'https://gitee.com/shiftonetothree/ai-learning-assistant-training-server.git',
+        trainingServerSourcePath,
+        'refactor',
+      );
+    } catch (e) {
+      console.error(e);
+      console.error('下载程序失败');
+      return { state: 'not_install', version: '0.0.0' };
+    }
 
     console.debug('开始编译程序');
     await commandLine.exec('bun install', [], {
@@ -256,11 +215,24 @@ export async function installService(
       cwd: trainingServerSourcePath,
     });
 
-    await gitClone(
-      'https://gitee.com/shiftonetothree/ai-learning-assistant-training-front-dist.git',
-      trainingFrontendPath,
-      'master',
-    );
+    // 检查package.json文件是否存在
+    const packageJsonPath = path.join(trainingServerSourcePath, 'package.json');
+    if (existsSync(packageJsonPath)) {
+      const packageJsonContent = readFileSync(packageJsonPath, 'utf-8');
+      const packageJson = JSON.parse(packageJsonContent);
+      const frontendDistGit = packageJson.frontendDistGit;
+      try {
+        await gitClone(
+          frontendDistGit.url,
+          trainingFrontendPath,
+          frontendDistGit.branch,
+        );
+      } catch (e) {
+        console.error(e);
+        console.error('下载界面程序失败');
+        return { state: 'not_install', version: '0.0.0' };
+      }
+    }
 
     cpSync(trainingFrontendPath, trainingServerSourcePublicPath, {
       recursive: true,
@@ -275,6 +247,7 @@ export async function monitorStateIsRuning(
   serviceName: NativeServiceName,
 ): Promise<void> {
   if (serviceName === 'NATIVE_TRAINING') {
+    let retryCounter = 30;
     console.debug('checking health', serviceName);
     return new Promise<void>((resolve, reject) => {
       const interval = setInterval(async () => {
@@ -290,6 +263,11 @@ export async function monitorStateIsRuning(
             }
           } else {
             // do nothing
+            if (retryCounter > 0) {
+              retryCounter--;
+            } else {
+              reject('服务超时还未启动');
+            }
           }
         } else {
           clearInterval(interval);
@@ -307,6 +285,12 @@ export async function uninstallService(serviceName: NativeServiceName) {
     } catch (e) {
       console.warn(e);
     }
+    // 终止bun.exe进程
+    try {
+      await killProcessByName('bun.exe');
+    } catch (e) {
+      console.warn(e);
+    }
     rmSync(trainingServerSourcePath, { recursive: true });
     try {
       rmSync(trainingFrontendPath, { recursive: true });
@@ -320,21 +304,33 @@ export async function startService(
 ): Promise<NativeServiceInfo> {
   if (serviceName === 'NATIVE_TRAINING') {
     const info = await getServiceInfo(serviceName);
+    const trainingConfig = await queryTrainingConfig();
     if (info.state !== 'running') {
       const tokenSource = new CancellationTokenSourceImpl();
-      commandLine.exec(
-        `set PORT=${TRAINING_PORT} && set "ALA_LLM_CONFIG_PATH=${llmConfigPath}" && bun dev`,
-        [],
-        {
-          shell: true,
-          encoding: 'utf8',
-          logger: loggerFactory(serviceName),
-          cwd: trainingServerSourcePath,
-          token: tokenSource.token,
-        },
-      );
+      commandLine
+        .exec(
+          `set PORT=${TRAINING_PORT} && set "ALA_LLM_CONFIG_PATH=${llmConfigPath}" && set "UNLOCK_ALL_SECTION=${trainingConfig.env.UNLOCK_ALL_SECTION}" && bun dev`,
+          [],
+          {
+            shell: true,
+            encoding: 'utf8',
+            logger: loggerFactory(serviceName),
+            cwd: trainingServerSourcePath,
+            token: tokenSource.token,
+          },
+        )
+        .catch((e) => {
+          console.warn(e);
+          console.debug('学科培训服务停止了');
+        });
     }
-    await monitorStateIsRuning(serviceName);
+    try {
+      await monitorStateIsRuning(serviceName);
+    } catch (e) {
+      console.error(e);
+      await stopService(serviceName);
+    }
+
     return getServiceInfo(serviceName);
   }
   return { state: 'running', version: '1.0.0' };
@@ -343,6 +339,12 @@ export async function stopService(serviceName: NativeServiceName) {
   if (serviceName === 'NATIVE_TRAINING') {
     try {
       await killProcessOnPort(TRAINING_PORT);
+    } catch (e) {
+      console.warn(e);
+    }
+    // 终止bun.exe进程
+    try {
+      await killProcessByName('bun.exe');
     } catch (e) {
       console.warn(e);
     }

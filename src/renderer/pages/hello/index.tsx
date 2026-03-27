@@ -8,7 +8,7 @@ import {
   Progress,
 } from 'antd';
 import { NavLink } from 'react-router-dom';
-import { useEffect, useState, useRef } from 'react'; // 添加 useRef 导入
+import { useEffect, useState, useRef, useCallback } from 'react'; // 添加 useRef 导入
 import obsidianLogo from './2023_Obsidian_logo.png';
 import llmIcon from './LLM_Icon.png';
 import heroImage from './Frame 2.png';
@@ -27,6 +27,8 @@ import { useRtsService } from '../../containers/use-rts-service';
 import { TorrentProgress } from '../../containers/torrent-progress';
 import { TerminalLogScreen } from '../../containers/terminal-log-screen';
 import toolsIcon from './Tools_Icon.png';
+import Checkbox, { CheckboxChangeEvent } from 'antd/es/checkbox/Checkbox';
+import { TrainingConfig } from '../../../main/configs/type-info';
 
 export default function Hello() {
   const trainingShortcut = useNativeTrainingServiceShortcut();
@@ -267,6 +269,16 @@ export default function Hello() {
     setTrainingServiceStarting(true);
     setTrainingServiceRemoving(true);
     await trainingShortcut.updateCourse();
+    message.success('学科培训课程更新成功');
+    setTrainingServiceStarting(false);
+    setTrainingServiceRemoving(false);
+  };
+
+  const updateTrainingService = async () => {
+    setShowTerminalLog(true);
+    setTrainingServiceStarting(true);
+    setTrainingServiceRemoving(true);
+    await trainingShortcut.update();
     message.success('学科培训更新成功');
     setTrainingServiceStarting(false);
     setTrainingServiceRemoving(false);
@@ -390,6 +402,27 @@ export default function Hello() {
     }
   };
 
+  const [trainingConfig, setTrainingConfig] = useState<TrainingConfig | null>(
+    null,
+  );
+
+  useEffect(() => {
+    window.mainHandle
+      .queryNativeTrainingConfigHandle()
+      .then((res) => setTrainingConfig(res));
+  });
+
+  const handleTrainingConfigChange = useCallback(
+    async (e: CheckboxChangeEvent) => {
+      window.mainHandle.setNativeTrainingConfigHandle({
+        env: {
+          UNLOCK_ALL_SECTION: e.target.checked,
+        },
+      });
+    },
+    [],
+  );
+
   return (
     <div className="hello-root" ref={containerRef}>
       <div
@@ -401,12 +434,18 @@ export default function Hello() {
         <div className="hello-container" ref={contentRef}>
           <div className="hello-content">
             {showTerminalLog ? (
-              <TerminalLogScreen
-                id="hello-terminal-log"
-                cols={100}
-                rows={20}
-                style={{ width: 'calc(100% - 20px)', marginTop: '16px' }}
-              />
+              <div className="hello-header">
+                <TerminalLogScreen
+                  id="hello-terminal-log"
+                  cols={100}
+                  rows={30}
+                  style={{
+                    width: 'calc(100%)',
+                    marginTop: '16px',
+                    height: '430px',
+                  }}
+                />
+              </div>
             ) : (
               <div className="hello-header">
                 <div className="header-content">
@@ -550,13 +589,21 @@ export default function Hello() {
                       <p className="description-text">
                         AI辅助的学科知识培训，学员建档设立目标，帮助补齐技能知识短板。
                         {trainingShortcut.state !== 'not_install' &&
-                          `当前版本：${trainingShortcut.versionInfo.currentVersion}`}
+                          `当前版本：${trainingShortcut.courseVersionInfo.currentVersion}`}
+                        <Checkbox
+                          checked={trainingConfig?.env.UNLOCK_ALL_SECTION}
+                          onChange={handleTrainingConfigChange}
+                        >
+                          进行非线性学习
+                        </Checkbox>
                       </p>
                     </div>
                     {trainingShortcut.state === 'updating' && (
                       <TorrentProgress
                         id={'TRAINING_COURSE'}
-                        version={trainingShortcut.versionInfo.latestVersion}
+                        version={
+                          trainingShortcut.courseVersionInfo.latestVersion
+                        }
                       />
                     )}
                   </div>
@@ -564,7 +611,8 @@ export default function Hello() {
                     {!(
                       (trainingShortcut.state === 'stopped' ||
                         trainingShortcut.state === 'updating') &&
-                      trainingShortcut.versionInfo.haveNew
+                      (trainingShortcut.courseVersionInfo.haveNew ||
+                        trainingShortcut.programVersionInfo.haveNew)
                     ) && (
                       <Button
                         className="feature-button"
@@ -583,7 +631,8 @@ export default function Hello() {
                     )}
                     {(trainingShortcut.state === 'stopped' ||
                       trainingShortcut.state === 'updating') &&
-                      trainingShortcut.versionInfo.haveNew && (
+                      trainingShortcut.courseVersionInfo.haveNew &&
+                      !trainingShortcut.programVersionInfo.haveNew && (
                         <Button
                           className="feature-button"
                           block
@@ -592,6 +641,19 @@ export default function Hello() {
                           loading={trainingServiceRemoving}
                         >
                           更新课程
+                        </Button>
+                      )}
+                    {(trainingShortcut.state === 'stopped' ||
+                      trainingShortcut.state === 'updating') &&
+                      trainingShortcut.programVersionInfo.haveNew && (
+                        <Button
+                          className="feature-button"
+                          block
+                          size="large"
+                          onClick={updateTrainingService}
+                          loading={trainingServiceRemoving}
+                        >
+                          更新
                         </Button>
                       )}
                     {trainingShortcut.state !== 'not_install' && (

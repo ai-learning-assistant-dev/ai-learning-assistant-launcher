@@ -8,6 +8,8 @@ import {
   updateCourseNativeTrainingServiceHandle,
   trainingWebURL,
   courseHaveNewVersionNativeTrainingServiceHandle,
+  haveNewVersionNativeTrainingServiceHandle,
+  updateNativeTrainingServiceHandle,
 } from './type-info';
 import { ipcHandle } from '../ipc-util';
 import {
@@ -32,6 +34,9 @@ import { appPath, Exec } from '../exec';
 import { CancellationTokenSourceImpl } from '../exec/cancellation-token';
 import { loggerFactory } from '../terminal-log';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import git from 'isomorphic-git';
+import http from 'isomorphic-git/http/node';
+import fs from 'fs';
 
 const commandLine = new Exec();
 
@@ -53,6 +58,14 @@ export default async function init(ipcMain: IpcMain) {
   );
   ipcHandle(ipcMain, logsNativeTrainingServiceHandle, async (_event) =>
     logsTrainingService(),
+  );
+  ipcHandle(ipcMain, updateNativeTrainingServiceHandle, async (_event) =>
+    updateTrainingService(),
+  );
+  ipcHandle(
+    ipcMain,
+    haveNewVersionNativeTrainingServiceHandle,
+    async (_event) => haveNewVersionTrainingService(),
   );
   ipcHandle(ipcMain, updateCourseNativeTrainingServiceHandle, async (_event) =>
     updateCourseTrainingService(),
@@ -148,11 +161,17 @@ export async function updateCourseTrainingService() {
     console.debug('开始下载课程数据');
     const latestVersion = getLatestVersion('TRAINING_COURSE');
     await startWebtorrent(latestVersion.dlcInfo.magnet);
-    const torrent = await waitTorrentDone(
-      'TRAINING_COURSE',
-      latestVersion.version,
-    );
-    const coursePath = path.join(torrent.path, torrent.files[0].name);
+    let coursePath = '';
+    try {
+      const torrent = await waitTorrentDone(
+        'TRAINING_COURSE',
+        latestVersion.version,
+      );
+      coursePath = path.join(torrent.path, torrent.files[0].name);
+    } catch (e) {
+      console.error(e);
+      return { someData: 'data1' };
+    }
     console.debug('将课程导入到学科培训');
     await stopService('NATIVE_TRAINING');
     await startService('NATIVE_TRAINING');
@@ -222,4 +241,104 @@ export async function courseHaveNewVersionTrainingService() {
     latestVersion: latestVersion.version,
     haveNew: currentVersion != latestVersion.version,
   };
+}
+
+// 远程仓库URL和分支
+const TRAINING_REPO_URL =
+  'https://gitee.com/shiftonetothree/ai-learning-assistant-training-server.git';
+const TRAINING_REPO_BRANCH = 'refactor';
+
+/**
+ * 检查本地版本是否落后于远程版本
+ * 使用 git 对比本地 HEAD 和远程分支的最新 commit
+ * @returns 如果本地落后则返回 true，否则返回 false
+ */
+export async function haveNewVersionTrainingService(): Promise<{
+  haveNew: boolean;
+  localCommit?: string;
+  remoteCommit?: string;
+  error?: string;
+}> {
+  try {
+    // 检查本地目录是否存在
+    if (!existsSync(trainingServerSourcePath)) {
+      return { haveNew: false, error: '本地服务未安装' };
+    }
+
+    // 检查是否是 git 仓库
+    const gitDir = path.join(trainingServerSourcePath, '.git');
+    if (!existsSync(gitDir)) {
+      return { haveNew: false, error: '本地目录不是 git 仓库' };
+    }
+
+    // 获取本地 HEAD commit
+    let localCommit: string;
+    try {
+      const commits = await git.log({
+        fs,
+        dir: trainingServerSourcePath,
+        depth: 1,
+      });
+      if (commits.length === 0) {
+        return { haveNew: false, error: '无法获取本地 commit' };
+      }
+      localCommit = commits[0].oid;
+    } catch (e) {
+      console.warn('获取本地 commit 失败:', e);
+      return { haveNew: false, error: '获取本地 commit 失败' };
+    }
+
+    // 获取远程分支的最新 commit
+    let remoteCommit: string;
+    try {
+      const remoteInfo = await git.getRemoteInfo({
+        http,
+        url: TRAINING_REPO_URL,
+      });
+
+      // 查找目标分支的引用
+      const refs = remoteInfo.refs?.heads;
+      if (refs && refs[TRAINING_REPO_BRANCH]) {
+        remoteCommit = refs[TRAINING_REPO_BRANCH];
+      } else {
+        return {
+          haveNew: false,
+          error: `无法找到远程分支 ${TRAINING_REPO_BRANCH}`,
+        };
+      }
+    } catch (e) {
+      console.warn('获取远程 commit 失败:', e);
+      return { haveNew: false, error: '获取远程 commit 失败，可能是网络问题' };
+    }
+
+    // 对比本地和远程 commit
+    const haveNew = localCommit !== remoteCommit;
+
+    console.debug(
+      `版本检查: 本地 commit=${localCommit}, 远程 commit=${remoteCommit}, 有新版本=${haveNew}`,
+    );
+
+    return {
+      haveNew,
+      localCommit,
+      remoteCommit,
+    };
+  } catch (e) {
+    console.warn('检查新版本时发生错误:', e);
+    return { haveNew: false, error: '检查新版本时发生未知错误' };
+  }
+}
+
+/**
+ * 更新 Training Service
+ * 执行 stopService -> installService，返回 installService 的结果
+ */
+export async function updateTrainingService() {
+  // 先停止服务
+  await stopService('NATIVE_TRAINING');
+
+  // 执行安装服务（会重新克隆并安装）
+  const result = await installTrainingService();
+
+  return result;
 }

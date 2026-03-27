@@ -1,5 +1,3 @@
-import { spawn, execFile } from 'child_process';
-import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs';
 import net from 'net';
@@ -14,7 +12,11 @@ import {
   rtsProgressChannel,
   RTSProgressInfo,
 } from './type-info';
-import { appPath } from '../../exec';
+import { appPath, Exec } from '../../exec';
+import { spawn } from 'cross-spawn';
+import { loggerFactory } from '../../terminal-log';
+
+const commandLine = new Exec();
 
 // 日志前缀标签
 const LOG_TAG = '[RTS-Service]';
@@ -24,13 +26,17 @@ function timestamp(): string {
   return new Date().toISOString().substring(11, 23);
 }
 
+const terminalLogger = loggerFactory('NATIVE_TRAINING_RTS');
+
 // 统一日志函数
 function logInfo(message: string, ...args: unknown[]): void {
   console.log(`${timestamp()} ${LOG_TAG} ${message}`, ...args);
+  terminalLogger.log(`${timestamp()} ${LOG_TAG} ${message}`, ...args);
 }
 
 function logError(message: string, ...args: unknown[]): void {
   console.error(`${timestamp()} ${LOG_TAG} ERROR: ${message}`, ...args);
+  terminalLogger.error(`${timestamp()} ${LOG_TAG} ERROR: ${message}`, ...args);
 }
 
 // 缓存上次状态，避免重复日志
@@ -252,6 +258,7 @@ export async function installRTSService(): Promise<string> {
     child.stdout.on('data', (data: Buffer) => {
       const text = data.toString();
       stdoutData += text;
+      terminalLogger.log(text);
 
       // 解析每一行检查是否有进度信息
       const lines = text.split('\n');
@@ -273,6 +280,7 @@ export async function installRTSService(): Promise<string> {
     child.stderr.on('data', (data: Buffer) => {
       const text = data.toString();
       stderrData += text;
+      terminalLogger.error(text);
     });
 
     child.on('close', (code) => {
@@ -312,7 +320,13 @@ export async function runRTSService(): Promise<string> {
     const child = spawn(
       'powershell',
       ['-ExecutionPolicy', 'Bypass', '-Command', `cd "${psDir}"; .\\run.ps1`],
-      { shell: true },
+      {
+        shell: true,
+        env: {
+          ...process.env,
+          LLM_STREAM_URL: 'http://localhost:7100/api/ai-chat/chat/stream',
+        },
+      },
     );
 
     let stdoutData = '';
@@ -321,6 +335,7 @@ export async function runRTSService(): Promise<string> {
     child.stdout.on('data', (data: Buffer) => {
       const text = data.toString();
       stdoutData += text;
+      terminalLogger.log(text);
 
       // 解析每一行检查是否有进度信息
       const lines = text.split('\n');
@@ -361,6 +376,7 @@ export async function runRTSService(): Promise<string> {
     child.stderr.on('data', (data: Buffer) => {
       const text = data.toString();
       stderrData += text;
+      terminalLogger.error(text);
     });
 
     child.on('close', (code) => {
@@ -394,10 +410,13 @@ export async function stopRTSService(): Promise<string> {
   const startTime = Date.now();
 
   try {
-    const { stdout } = await exec(
+    const { stdout } = await commandLine.exec(
       'powershell',
       ['-ExecutionPolicy', 'Bypass', '-Command', `cd "${psDir}"; .\\stop.ps1`],
-      { encoding: 'utf8' },
+      {
+        encoding: 'utf8',
+        logger: terminalLogger,
+      },
     );
 
     const status = extractStatus(stdout);
