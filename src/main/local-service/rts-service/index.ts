@@ -1,4 +1,7 @@
 import path from 'path';
+import fs from 'fs';
+import net from 'net';
+const exec = promisify(execFile);
 import { IpcMain, BrowserWindow } from 'electron';
 import { ipcHandle } from '../../ipc-util';
 import {
@@ -53,6 +56,50 @@ const psDir = path.join(
   'rts-service',
 );
 
+// RTS服务配置（必须与PowerShell脚本保持一致）
+// install.ps1 和 run.ps1 中的 $extractedDir = "rtc-backend"
+const RTS_CONFIG = {
+  extractedDir: 'rtc-backend',
+  statusFile: 'service-status.json',
+  port: 8989,  // 与 run.ps1 中的 $Port 保持一致
+};
+
+// 检查端口是否被占用
+function checkPortInUse(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    
+    socket.setTimeout(1000);
+    
+    socket.on('connect', () => {
+      socket.destroy();
+      resolve(true); // 端口被占用
+    });
+    
+    socket.on('error', () => {
+      resolve(false); // 端口空闲
+    });
+    
+    socket.on('timeout', () => {
+      socket.destroy();
+      resolve(false);
+    });
+    
+    socket.connect(port, '127.0.0.1');
+  });
+}
+
+// 检查进程是否存在
+function isProcessRunning(pid: number): boolean {
+  try {
+    // signal 0 不会真的杀死进程，只是测试进程是否存在
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Extract last non-empty line from stdout (filter out debug output)
 function extractStatus(stdout: string): string {
   const lines = stdout
@@ -96,27 +143,89 @@ function parseProgressLine(
 }
 
 /* 
-  单次获取RTS服务状态
+  单次获取RTS服务状态（TypeScript实现，替代PowerShell脚本）
 */
 export async function getRTSServiceStatus(): Promise<string> {
   try {
-    const { stdout } = await commandLine.exec(
-      'powershell',
-      [
-        '-ExecutionPolicy',
-        'Bypass',
-        '-Command',
-        `cd "${psDir}"; .\\get-service-status.ps1`,
-      ],
-      {
-        encoding: 'utf8',
-      },
-    );
+    const backendDir = path.join(psDir, RTS_CONFIG.extractedDir);
+    const statusFilePath = path.join(psDir, RTS_CONFIG.statusFile);
 
-    const status = extractStatus(stdout);
-    // 只在状态变化时打印日志
+    // 1. 检查后端目录是否存在
+    if (!fs.existsSync(backendDir)) {
+      const status = 'not_installed';
+      if (status !== lastLoggedStatus) {
+        logInfo('RTS服务状态:', status);
+        lastLoggedStatus = status;
+      }
+      return status;
+    }
+
+    // 2. 检查状态文件是否存在
+    if (!fs.existsSync(statusFilePath)) {
+      const status = 'stopped';
+      if (status !== lastLoggedStatus) {
+        logInfo('RTS服务状态:', status, '(文件不存在:', statusFilePath, ')');
+        lastLoggedStatus = status;
+      }
+      return status;
+    }
+
+    // 3. 读取并解析状态文件
+    let statusData: { status?: string; pid?: number };
+    try {
+      let fileContent = fs.readFileSync(statusFilePath, 'utf8');
+      // 去除 BOM (Byte Order Mark) - PowerShell 写入的 UTF8 文件可能带有 BOM
+      fileContent = fileContent.replace(/^\uFEFF/, '');
+      statusData = JSON.parse(fileContent);
+    } catch (e: any) {
+      logError('读取或解析状态文件失败:', e.message);
+      const status = 'error';
+      if (status !== lastLoggedStatus) {
+        logInfo('RTS服务状态:', status);
+        lastLoggedStatus = status;
+      }
+      return status;
+    }
+
+    // 4. 如果状态是 starting，检查端口是否已被占用
+    if (statusData.status === 'starting') {
+      const isPortInUse = await checkPortInUse(RTS_CONFIG.port);
+      const status = isPortInUse ? 'running' : 'starting';
+      if (status !== lastLoggedStatus) {
+        logInfo('RTS服务状态:', status);
+        lastLoggedStatus = status;
+      }
+      return status;
+    }
+
+    // 5. 如果存在 PID，检查进程是否存在
+    // 注意：PowerShell 中 pid 可能是 null，需要检查
+    if (statusData.pid && typeof statusData.pid === 'number' && statusData.pid > 0) {
+      if (!isProcessRunning(statusData.pid)) {
+        const status = 'stopped';
+        if (status !== lastLoggedStatus) {
+          logInfo('RTS服务状态:', status, '(PID', statusData.pid, '不存在)');
+          lastLoggedStatus = status;
+        }
+        return status;
+      }
+    }
+
+    // 6. 检查端口是否被占用
+    const isPortInUse = await checkPortInUse(RTS_CONFIG.port);
+    if (isPortInUse) {
+      const status = 'running';
+      if (status !== lastLoggedStatus) {
+        logInfo('RTS服务状态:', status);
+        lastLoggedStatus = status;
+      }
+      return status;
+    }
+
+    // 7. 返回状态文件中的状态或默认 stopped
+    const status = statusData.status || 'stopped';
     if (status !== lastLoggedStatus) {
-      logInfo('RTS服务状态:', status);
+      logInfo('RTS服务状态:', status, '(来自文件)');
       lastLoggedStatus = status;
     }
     return status;
