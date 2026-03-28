@@ -9,7 +9,7 @@ import {
 } from '../configs';
 import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 import path from 'node:path';
-import fs from 'node:fs';
+import { statSync } from 'node:fs';
 import {
   ensurePodmanWorks,
   getPodmanCli,
@@ -80,7 +80,11 @@ async function executeWithRetry(
             retry * WEBTORRENT_CONFIG.RETRY_INCREMENT;
       await new Promise((resolve) => setTimeout(resolve, waitTime));
 
+      console.debug(
+        `[${logPrefix}] 尝试执行安装程序 (${retry + 1}/${maxRetries})，等待了 ${waitTime}ms`,
+      );
       const result = await commandLine.exec(exePath, args);
+      console.debug(`[${logPrefix}] 安装程序执行成功:`, result);
       return true;
     } catch (e) {
       if (isEBUSYError(e) && retry < maxRetries - 1) {
@@ -140,33 +144,7 @@ async function installFromP2POrFallback(
   const { dlcKey, installerArgs, logPrefix, fallbackInstallerPath } = options;
 
   try {
-    // 首先直接在 DLC 目录下检查是否有已下载的 exe 文件（不使用版本号子目录）
-    const dlcDir = path.join(appPath, 'external-resources', 'dlc', dlcKey);
-
-    if (fs.existsSync(dlcDir)) {
-      const allItems = fs.readdirSync(dlcDir);
-
-      // 直接在 DLC 目录下查找 exe 文件
-      const exeFile = allItems.find(
-        (f: string) => f.endsWith('.exe') && !f.endsWith('.downloading'),
-      );
-
-      if (exeFile) {
-        const exePath = path.join(dlcDir, exeFile);
-
-        if (fs.existsSync(exePath)) {
-          const stats = fs.statSync(exePath);
-
-          return await executeWithRetry({
-            exePath,
-            args: installerArgs,
-            logPrefix,
-          });
-        }
-      }
-    }
-
-    // 如果 HTTPS 下载目录没有文件，尝试从 P2P 下载（保留旧逻辑兼容）
+    // 首先检查是否有P2P下载的文件
     const { getDLCFromDLCIndex, destroyWebtorrentForInstall } = await import(
       '../dlc'
     );
@@ -174,7 +152,6 @@ async function installFromP2POrFallback(
 
     if (dlcInfo) {
       const latestVersion = Object.keys(dlcInfo.versions).sort().pop();
-
       if (latestVersion) {
         const versionInfo = dlcInfo.versions[latestVersion];
 
@@ -201,9 +178,9 @@ async function installFromP2POrFallback(
           latestVersion,
         );
 
+        const fs = await import('fs');
         if (fs.existsSync(downloadPath)) {
           const files = fs.readdirSync(downloadPath);
-
           const exeFile = files.find((f: string) => f.endsWith('.exe'));
 
           if (exeFile) {
@@ -218,18 +195,19 @@ async function installFromP2POrFallback(
       }
     }
   } catch (error) {
-    console.error(`[${logPrefix}] 尝试使用下载包失败，使用默认方式:`, error);
+    console.error(`[${logPrefix}] 尝试使用P2P下载包失败，使用默认方式:`, error);
   }
 
   // 降级到原有的本地安装包方式
-  const fallbackPath = path.join(
-    appPath,
-    'external-resources',
-    'ai-assistant-backend',
-    fallbackInstallerPath,
+  const result = await commandLine.exec(
+    path.join(
+      appPath,
+      'external-resources',
+      'ai-assistant-backend',
+      fallbackInstallerPath,
+    ),
+    installerArgs,
   );
-
-  const result = await commandLine.exec(fallbackPath, installerArgs);
   console.debug(`[${logPrefix}] 本地安装包执行结果:`, result);
   return true;
 }
@@ -712,7 +690,7 @@ export async function isObsidianInstall() {
   try {
     obsidianPath = replaceVarInPath(obsidianPath);
     console.debug('getObsidianConfig', obsidianPath);
-    const stat = fs.statSync(obsidianPath);
+    const stat = statSync(obsidianPath);
     if (stat.isFile()) {
       return true;
     } else {

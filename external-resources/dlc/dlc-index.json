@@ -19,27 +19,6 @@
     "id": "TRAINING_COURSE",
     "name": "学科培训课程数据",
     "versions": {
-      "2.0.8": {
-        "magnet": "magnet:?xt=urn:btih:09e4424598ef26d1b9e1cb0ee91527aa9823ebf4&dn=course10v2.zip&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=ws%3A%2F%2F121.40.137.135%3A8200",
-        "comment": "修复所有课程",
-        "require": {
-          "TRAINING_TAR": "^2.0.0"
-        }
-      },
-      "2.0.7": {
-        "magnet": "magnet:?xt=urn:btih:943d91e3692893147ca89d8331f90aec3d6f443d&dn=course10.zip&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=ws%3A%2F%2F121.40.137.135%3A8200",
-        "comment": "新结构",
-        "require": {
-          "TRAINING_TAR": "^2.0.0"
-        }
-      },
-      "2.0.6": {
-        "magnet": "magnet:?xt=urn:btih:b9f708c919039a5fe035dc97437e6eac4a778f8c&dn=10course.zip&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=ws%3A%2F%2F121.40.137.135%3A8200",
-        "comment": "10门课",
-        "require": {
-          "TRAINING_TAR": "^2.0.0"
-        }
-      },
       "2.0.5": {
         "magnet": "magnet:?xt=urn:btih:c7e6ceac3bce2a2884ee86d6ac5d50fd85d8ae27&dn=8course.zip&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=wss%3A%2F%2F114.66.58.95%3A17853%2Fannounce&tr=ws%3A%2F%2F121.40.137.135%3A8200",
         "comment": "第三个版本",
@@ -74,11 +53,6 @@
     "id": "AI_LEARNING_ASSISTANT_LAUNCHER",
     "name": "AI学习助手启动器",
     "versions": {
-      "2.1.0-test": {
-        "magnet": "magnet:?xt=urn:btih:72cadee7da364ce360d38c2c2ff93c7951b3a441&dn=AI-Learning-Assistant-Launcher-win32-x64-2.1.0-test.zip&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=ws%3A%2F%2F121.40.137.135%3A8200&tr=udp%3A%2F%2Ftracker.leechers-paradise.org%3A6969&tr=udp%3A%2F%2Ftracker.coppersurfer.tk%3A6969&tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337&tr=udp%3A%2F%2Fexplodie.org%3A6969&tr=udp%3A%2F%2Ftracker.empire-js.us%3A1337&tr=wss%3A%2F%2Ftracker.btorrent.xyz&tr=wss%3A%2F%2Ftracker.openwebtorrent.com",
-        "comment": "修复一些问题",
-        "require": {}
-      },
       "2.0.2": {
         "magnet": "magnet:?xt=urn:btih:30469d14ed0eaf65f88d6a2c51cea9888c4a2ff7&dn=AI-Learning-Assistant-Launcher-win32-x64-2.0.2-p2p.zip&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=wss%3A%2F%2F114.66.58.95%3A17853%2Fannounce",
         "comment": "测试更新使用版本",

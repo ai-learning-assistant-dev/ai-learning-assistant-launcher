@@ -11,7 +11,8 @@ import { useObsidianVoiceService } from '../../containers/use-obsidian-voice-ser
 import { Link } from 'react-router-dom';
 import { useRtsService } from '../../containers/use-rts-service';
 import './index.scss';
-import { TerminalLogScreen } from '../../containers/terminal-log-screen';
+
+import toolsIcon from './Tools_Icon.png';
 
 export default function NativeAiService() {
   const {
@@ -64,7 +65,7 @@ export default function NativeAiService() {
                 }
                 onClick={installVoiceService}
               >
-                <span className="button-text">安装</span>
+                <span className="button-text">安装语音服务</span>
               </Button>
             ),
             voiceState !== 'running' && (
@@ -78,7 +79,7 @@ export default function NativeAiService() {
                 }
                 onClick={runVoiceService}
               >
-                <span className="button-text">启动</span>
+                <span className="button-text">启动语音服务</span>
               </Button>
             ),
             (voiceState === 'running' || voiceState === 'starting') && (
@@ -93,7 +94,7 @@ export default function NativeAiService() {
                 }
                 onClick={stopVoiceService}
               >
-                <span className="button-text">停止</span>
+                <span className="button-text">停止语音服务</span>
               </Button>
             ),
             <Button
@@ -106,8 +107,8 @@ export default function NativeAiService() {
           ].filter((item) => item)}
         >
           <List.Item.Meta
-            title="Obsidian 语音服务"
-            description={`为Obsidian提供文字语音互转服务 服务状态：${voiceState || 'unknown'}（端口 8001）`}
+            title="Obsidian Voice Service"
+            description={`服务状态：${voiceState || 'unknown'}（端口 8001）`}
           />
         </List.Item>
         <List.Item
@@ -147,9 +148,11 @@ export default function NativeAiService() {
           <div className="rts-wrapper">
             <div className="rts-content-wrapper">
               <div className="rts-header">
-                <span className="rts-title">语音对话</span>
+                <span className="rts-title">RTS</span>
               </div>
-              <p className="rts-description">为学科培训提供实时语音对话服务</p>
+              <p className="rts-description">
+                实时语音服务，为工具箱(本地化)提供语音识别和语音合成功能
+              </p>
               <div className="rts-status-container">
                 <span
                   className={`rts-status-badge ${
@@ -209,16 +212,6 @@ export default function NativeAiService() {
           </div>
         </List.Item>
       </List>
-      <TerminalLogScreen
-        id="native-ai-terminal-log"
-        cols={100}
-        rows={30}
-        style={{
-          width: 'calc(100% - 20px)',
-          marginTop: '16px',
-          height: '430px',
-        }}
-      />
     </div>
   );
 }

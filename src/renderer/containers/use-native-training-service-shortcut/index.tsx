@@ -9,17 +9,7 @@ export function useNativeTrainingServiceShortcut() {
   const [serviceInfo, setServiceInfo] = useState<NativeServiceInfo>({
     state: 'not_install',
   });
-  const [courseVersionInfo, setCourseVersionInfo] = useState<{
-    currentVersion: string;
-    latestVersion: string;
-    haveNew: boolean;
-  }>({
-    currentVersion: '0.0.0',
-    latestVersion: '0.0.0',
-    haveNew: false,
-  });
-
-  const [programVersionInfo, setProgramVersionInfo] = useState<{
+  const [versionInfo, setVersionInfo] = useState<{
     currentVersion: string;
     latestVersion: string;
     haveNew: boolean;
@@ -35,10 +25,7 @@ export function useNativeTrainingServiceShortcut() {
     setServiceInfo(serviceInfo);
     const versionInfo =
       await window.mainHandle.courseHaveNewVersionNativeTrainingServiceHandle();
-    setCourseVersionInfo(versionInfo);
-    const pVersionInfo =
-      await window.mainHandle.haveNewVersionNativeTrainingServiceHandle();
-    setProgramVersionInfo(pVersionInfo);
+    setVersionInfo(versionInfo);
   }, [setServiceInfo]);
 
   useEffect(() => {
@@ -75,16 +62,6 @@ export function useNativeTrainingServiceShortcut() {
       serviceInfo.state = 'updating';
       await window.mainHandle.updateCourseNativeTrainingServiceHandle();
     }
-    await queryServiceInfo();
-  };
-
-  const update = async () => {
-    await queryServiceInfo();
-    if (serviceInfo.state !== 'not_install') {
-      serviceInfo.state = 'updating';
-      await window.mainHandle.updateNativeTrainingServiceHandle();
-    }
-    await queryServiceInfo();
   };
 
   const downloadLogs = async () => {
@@ -111,10 +88,8 @@ export function useNativeTrainingServiceShortcut() {
     state: serviceInfo.state,
     start,
     remove,
-    courseVersionInfo,
+    versionInfo,
     updateCourse,
-    programVersionInfo,
-    update,
     downloadLogs,
   };
 }
