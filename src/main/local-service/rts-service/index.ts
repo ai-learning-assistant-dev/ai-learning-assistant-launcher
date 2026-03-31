@@ -1,7 +1,6 @@
 import path from 'path';
 import fs from 'fs';
 import net from 'net';
-const exec = promisify(execFile);
 import { IpcMain, BrowserWindow } from 'electron';
 import { ipcHandle } from '../../ipc-util';
 import {
@@ -61,30 +60,30 @@ const psDir = path.join(
 const RTS_CONFIG = {
   extractedDir: 'rtc-backend',
   statusFile: 'service-status.json',
-  port: 8989,  // 与 run.ps1 中的 $Port 保持一致
+  port: 8989, // 与 run.ps1 中的 $Port 保持一致
 };
 
 // 检查端口是否被占用
 function checkPortInUse(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const socket = new net.Socket();
-    
+
     socket.setTimeout(1000);
-    
+
     socket.on('connect', () => {
       socket.destroy();
       resolve(true); // 端口被占用
     });
-    
+
     socket.on('error', () => {
       resolve(false); // 端口空闲
     });
-    
+
     socket.on('timeout', () => {
       socket.destroy();
       resolve(false);
     });
-    
+
     socket.connect(port, '127.0.0.1');
   });
 }
@@ -200,7 +199,11 @@ export async function getRTSServiceStatus(): Promise<string> {
 
     // 5. 如果存在 PID，检查进程是否存在
     // 注意：PowerShell 中 pid 可能是 null，需要检查
-    if (statusData.pid && typeof statusData.pid === 'number' && statusData.pid > 0) {
+    if (
+      statusData.pid &&
+      typeof statusData.pid === 'number' &&
+      statusData.pid > 0
+    ) {
       if (!isProcessRunning(statusData.pid)) {
         const status = 'stopped';
         if (status !== lastLoggedStatus) {
