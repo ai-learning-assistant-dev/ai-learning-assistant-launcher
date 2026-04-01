@@ -10,10 +10,6 @@ export const startNativeTrainingServiceHandle = `${channel}start`;
 
 export const removeNativeTrainingServiceHandle = `${channel}remove`;
 
-export const updateNativeTrainingServiceHandle = `${channel}update`;
-
-export const haveNewVersionNativeTrainingServiceHandle = `${channel}haveNewVersion`;
-
 export const updateCourseNativeTrainingServiceHandle = `${channel}updateCourse`;
 
 export const courseHaveNewVersionNativeTrainingServiceHandle = `${channel}courseHaveNewVersion`;

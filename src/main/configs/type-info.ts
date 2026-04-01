@@ -84,12 +84,3 @@ export interface LLMConfig {
   models: CustomModel[];
 }
 
-export const queryNativeTrainingConfigHandle = `${channel}queryNativeTrainingConfig`;
-
-export const setNativeTrainingConfigHandle = `${channel}setNativeTrainingConfig`;
-
-export interface TrainingConfig {
-  env: {
-    UNLOCK_ALL_SECTION: boolean;
-  };
-}

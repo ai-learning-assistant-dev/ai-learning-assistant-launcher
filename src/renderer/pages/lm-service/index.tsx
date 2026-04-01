@@ -70,40 +70,12 @@ export default function LMService() {
     actionName: 'install',
   });
 
-  // LM Studio HTTPS 下载状态
+  // LM Studio P2P 下载状态
   const [downloading, setDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [isDownloadComplete, setIsDownloadComplete] = useState(false);
   const [latestVersion, setLatestVersion] = useState<string | null>(null);
-  const [downloadSpeed, setDownloadSpeed] = useState(0);
-
-  // 获取当前系统平台和架构，生成对应的下载链接
-  // windows + x64 => win32/x64
-  // windows + ARM64 => win32/arm64
-  // macOS => darwin/arm64
-  const { platform, arch } = window.electron;
-  const downloadPlatform = platform === 'darwin' ? 'darwin' : 'win32';
-  const downloadArch = platform === 'darwin' ? 'arm64' : arch; // macOS 目前主要用 arm64
-
-  // LM Studio 下载源列表（按优先级排序）
-  const LM_STUDIO_DOWNLOAD_URLS = [
-    `https://lm-studio.cn/download/latest/${downloadPlatform}/${downloadArch}`,
-    `https://lmstudio.ai/download/latest/${downloadPlatform}/${downloadArch}`,
-  ];
-  // TODO: 硬编码的默认版本号，实际版本从下载后的文件名中动态提取
-  // 未来可考虑从后端配置或远程接口获取最新版本号
-  const LM_STUDIO_VERSION = '0.3.15';
-
-  // 从 LM Studio 文件名中提取版本号
-  // 文件名格式: LM-Studio-0.4.7-4-x64.exe -> 提取 0.4.7
-  const extractVersionFromFilename = (
-    filePath: string | null,
-  ): string | null => {
-    if (!filePath) return null;
-    const filename = filePath.split(/[/\\]/).pop() || '';
-    const match = filename.match(/LM-Studio-(\d+\.\d+\.\d+)/i);
-    return match ? match[1] : null;
-  };
+  const [lmStudioMagnet, setLmStudioMagnet] = useState<string | null>(null);
 
   useEffect(() => {
     checkLMStudioUpdate();
@@ -122,48 +94,30 @@ export default function LMService() {
   const checkLMStudioUpdate = async () => {
     // 检查是否已经有下载完成的文件，或正在下载中（用于恢复后台下载状态）
     try {
-      // 首先检查本地是否已有下载好的文件
-      const fileCheck = await window.mainHandle.checkHttpsDownloadFileHandle(
-        'LM_STUDIO_SETUP_EXE',
-        LM_STUDIO_VERSION,
+      const dlcIndex = await window.mainHandle.queryWebtorrentHandle();
+      const lmStudioDLC = dlcIndex.find(
+        (item) => item.id === 'LM_STUDIO_SETUP_EXE',
       );
-
-      if (fileCheck.exists) {
-        // 本地已有下载好的文件，从文件名提取版本号
-        const extractedVersion = extractVersionFromFilename(fileCheck.filePath);
-        setLatestVersion(extractedVersion || LM_STUDIO_VERSION);
-        setIsDownloadComplete(true);
-        setDownloadProgress(100);
-        setDownloading(false);
-        return;
-      }
-
-      // 检查下载状态
-      const httpsState = await window.mainHandle.queryHttpsDownloadHandle();
-      const lmStudioState = httpsState['LM_STUDIO_SETUP_EXE'];
-
-      if (lmStudioState) {
-        if (
-          lmStudioState.status === 'completed' ||
-          lmStudioState.progress >= 1
-        ) {
-          // 下载已完成，从文件名提取版本号
-          const extractedVersion = extractVersionFromFilename(
-            lmStudioState.filePath || null,
-          );
-          setLatestVersion(extractedVersion || LM_STUDIO_VERSION);
-          setIsDownloadComplete(true);
-          setDownloadProgress(100);
-          setDownloading(false);
-        } else if (
-          lmStudioState.status === 'downloading' &&
-          lmStudioState.progress > 0
-        ) {
-          // 正在下载中，恢复下载状态
-          setDownloading(true);
-          setDownloadProgress(Math.floor(lmStudioState.progress * 100));
-          setDownloadSpeed(lmStudioState.speed || 0);
-          setIsDownloadComplete(false);
+      if (lmStudioDLC) {
+        const version = Object.keys(lmStudioDLC.versions).sort().pop();
+        if (version) {
+          setLatestVersion(version);
+          const versionInfo = lmStudioDLC.versions[version];
+          if (versionInfo.progress) {
+            const progress = versionInfo.progress.progress || 0;
+            if (progress >= 1) {
+              // 下载已完成
+              setIsDownloadComplete(true);
+              setDownloadProgress(100);
+              setDownloading(false);
+            } else if (progress > 0) {
+              // 正在下载中，恢复下载状态
+              setDownloading(true);
+              setDownloadProgress(Math.floor(progress * 100));
+              setLmStudioMagnet(versionInfo.magnet);
+              setIsDownloadComplete(false);
+            }
+          }
         }
       }
     } catch (error) {
@@ -173,26 +127,23 @@ export default function LMService() {
 
   const updateDownloadProgress = async () => {
     try {
-      const httpsState = await window.mainHandle.queryHttpsDownloadHandle();
-      const lmStudioState = httpsState['LM_STUDIO_SETUP_EXE'];
-
-      if (lmStudioState) {
-        const progress = lmStudioState.progress || 0;
-        setDownloadProgress(Math.floor(progress * 100));
-        setDownloadSpeed(lmStudioState.speed || 0);
-
-        if (lmStudioState.status === 'completed' || progress >= 1) {
-          // 下载完成，从文件名提取版本号
-          const extractedVersion = extractVersionFromFilename(
-            lmStudioState.filePath || null,
-          );
-          setLatestVersion(extractedVersion || LM_STUDIO_VERSION);
-          setDownloading(false);
-          setIsDownloadComplete(true);
-          message.success('LM Studio下载完成，可以点击安装按钮进行安装');
-        } else if (lmStudioState.status === 'error') {
-          setDownloading(false);
-          message.error('下载失败：' + (lmStudioState.error || '未知错误'));
+      const dlcIndex = await window.mainHandle.queryWebtorrentHandle();
+      const lmStudioDLC = dlcIndex.find(
+        (item) => item.id === 'LM_STUDIO_SETUP_EXE',
+      );
+      if (lmStudioDLC) {
+        const version = Object.keys(lmStudioDLC.versions).sort().pop();
+        if (version) {
+          const versionInfo = lmStudioDLC.versions[version];
+          if (versionInfo.progress) {
+            const progress = versionInfo.progress.progress || 0;
+            setDownloadProgress(Math.floor(progress * 100));
+            if (progress >= 1) {
+              setDownloading(false);
+              setIsDownloadComplete(true);
+              message.success('LM Studio下载完成，可以点击安装按钮进行安装');
+            }
+          }
         }
       }
     } catch (error) {
@@ -207,44 +158,55 @@ export default function LMService() {
       return;
     }
 
-    // 否则开始 HTTPS 多源下载
+    // 否则开始下载
     try {
       setDownloading(true);
       setDownloadProgress(0);
-      setDownloadSpeed(0);
       message.info('正在启动下载LM Studio...');
 
-      const version = latestVersion || LM_STUDIO_VERSION;
-      setLatestVersion(version);
-
-      const result = await window.mainHandle.startHttpsDownloadHandle(
-        'LM_STUDIO_SETUP_EXE',
-        LM_STUDIO_DOWNLOAD_URLS,
-        version,
+      const dlcIndex = await window.mainHandle.queryWebtorrentHandle();
+      const lmStudioDLC = dlcIndex.find(
+        (item) => item.id === 'LM_STUDIO_SETUP_EXE',
       );
 
+      if (!lmStudioDLC) {
+        throw new Error('未找到LM Studio安装包信息');
+      }
+
+      const version = Object.keys(lmStudioDLC.versions).sort().pop();
+      if (!version) {
+        throw new Error('未找到可用版本');
+      }
+
+      setLatestVersion(version);
+      const versionInfo = lmStudioDLC.versions[version];
+      const magnet = versionInfo.magnet;
+      setLmStudioMagnet(magnet);
+
+      const result = await window.mainHandle.startWebtorrentHandle(magnet);
       if (result.success) {
         message.success(`开始下载LM Studio ${version}`);
       } else {
-        throw new Error(result.error || '启动下载失败');
+        throw new Error('error' in result ? result.error : '启动下载失败');
       }
     } catch (error) {
       console.error('下载LM Studio失败:', error);
       message.error('下载失败：' + (error as Error).message);
       setDownloading(false);
+      setLmStudioMagnet(null);
     }
   };
 
   const handleCancelLMStudioDownload = async () => {
-    if (!downloading) {
+    if (!lmStudioMagnet) {
       message.warning('没有正在进行的下载');
       return;
     }
     try {
-      await window.mainHandle.cancelHttpsDownloadHandle('LM_STUDIO_SETUP_EXE');
+      await window.mainHandle.pauseWebtorrentHandle(lmStudioMagnet);
       setDownloading(false);
       setDownloadProgress(0);
-      setDownloadSpeed(0);
+      setLmStudioMagnet(null);
       message.info('已取消下载');
     } catch (error) {
       console.error('取消下载失败:', error);

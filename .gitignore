@@ -127,22 +127,3 @@ external-resources/local-ai-service/rts-service/flask.out
 external-resources/local-ai-service/rts-service/service-status.json
 external-resources/local-ai-service/rts-service/repo.zip
 external-resources/local-ai-service/rts-service/rtc-backend/
-
-# Test artifacts
-/tests-results/
-/playwright-report/
-/playwright/.cache/
-/blob-report/
-/coverage/
-*.lcov
-.nyc_output
-
-# Vitest
-vitest.config.ts.timestamp-*
-
-# Playwright trace and video
-**/test-results/
-**/playwright/.auth/
-*.webm
-*.png
-!/tests/**/*.png  # Keep reference screenshots if using visual regression

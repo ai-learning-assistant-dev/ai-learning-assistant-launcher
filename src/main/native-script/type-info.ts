@@ -1,8 +1,4 @@
-const nativeServiceNames = [
-  'NATIVE_TRAINING',
-  'NATIVE_TRAINING_RTS',
-  'NATIVE_OBSIDIAN_VOICE',
-] as const;
+const nativeServiceNames = ['NATIVE_TRAINING'] as const;
 
 export type NativeServiceName = (typeof nativeServiceNames)[number];
 

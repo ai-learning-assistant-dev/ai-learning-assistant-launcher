@@ -204,18 +204,10 @@ function destroyTray(): void {
 
 // 设置窗口关闭行为
 export function setupWindowCloseHandler(mainWindow: BrowserWindow): void {
-  const isTestMode = process.argv.includes('--test-mode') || process.env.TEST_MODE === 'true';
-  
-  // 测试模式下不创建托盘，允许正常关闭
-  if (!isTestMode) {
-    createTray();
-  }
+  // 确保托盘已创建
+  createTray();
   
   mainWindow.on('close', (event) => {
-    // 测试模式下允许正常关闭
-    if (isTestMode) {
-      return;
-    }
     // 始终最小化到托盘，除非是强制退出
     if (!forceQuit) {
       event.preventDefault();
@@ -234,12 +226,7 @@ export function setForceQuit(value: boolean): void {
   forceQuit = value;
 }
 
-// 获取托盘启用状态（始终启用托盘最小化，测试模式除外）
+// 获取托盘启用状态（始终启用托盘最小化）
 export function isTrayEnabled(): boolean {
-  // 测试模式下禁用托盘，确保应用可以正常退出
-  // 检测命令行参数 --test-mode 或环境变量 TEST_MODE
-  if (process.argv.includes('--test-mode') || process.env.TEST_MODE === 'true') {
-    return false;
-  }
   return true;
 }

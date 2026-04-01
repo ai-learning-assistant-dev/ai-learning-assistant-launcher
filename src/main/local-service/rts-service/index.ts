@@ -1,6 +1,6 @@
+import { spawn, execFile } from 'child_process';
+import { promisify } from 'util';
 import path from 'path';
-import fs from 'fs';
-import net from 'net';
 import { IpcMain, BrowserWindow } from 'electron';
 import { ipcHandle } from '../../ipc-util';
 import {
@@ -11,11 +11,7 @@ import {
   rtsProgressChannel,
   RTSProgressInfo,
 } from './type-info';
-import { appPath, Exec } from '../../exec';
-import { spawn } from 'cross-spawn';
-import { loggerFactory } from '../../terminal-log';
-
-const commandLine = new Exec();
+import { appPath } from '../../exec';
 
 // 日志前缀标签
 const LOG_TAG = '[RTS-Service]';
@@ -25,17 +21,13 @@ function timestamp(): string {
   return new Date().toISOString().substring(11, 23);
 }
 
-const terminalLogger = loggerFactory('NATIVE_TRAINING_RTS');
-
 // 统一日志函数
 function logInfo(message: string, ...args: unknown[]): void {
   console.log(`${timestamp()} ${LOG_TAG} ${message}`, ...args);
-  terminalLogger.log(`${timestamp()} ${LOG_TAG} ${message}`, ...args);
 }
 
 function logError(message: string, ...args: unknown[]): void {
   console.error(`${timestamp()} ${LOG_TAG} ERROR: ${message}`, ...args);
-  terminalLogger.error(`${timestamp()} ${LOG_TAG} ERROR: ${message}`, ...args);
 }
 
 // 缓存上次状态，避免重复日志
@@ -54,50 +46,6 @@ const psDir = path.join(
   'local-ai-service',
   'rts-service',
 );
-
-// RTS服务配置（必须与PowerShell脚本保持一致）
-// install.ps1 和 run.ps1 中的 $extractedDir = "rtc-backend"
-const RTS_CONFIG = {
-  extractedDir: 'rtc-backend',
-  statusFile: 'service-status.json',
-  port: 8989, // 与 run.ps1 中的 $Port 保持一致
-};
-
-// 检查端口是否被占用
-function checkPortInUse(port: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const socket = new net.Socket();
-
-    socket.setTimeout(1000);
-
-    socket.on('connect', () => {
-      socket.destroy();
-      resolve(true); // 端口被占用
-    });
-
-    socket.on('error', () => {
-      resolve(false); // 端口空闲
-    });
-
-    socket.on('timeout', () => {
-      socket.destroy();
-      resolve(false);
-    });
-
-    socket.connect(port, '127.0.0.1');
-  });
-}
-
-// 检查进程是否存在
-function isProcessRunning(pid: number): boolean {
-  try {
-    // signal 0 不会真的杀死进程，只是测试进程是否存在
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 // Extract last non-empty line from stdout (filter out debug output)
 function extractStatus(stdout: string): string {
@@ -142,93 +90,27 @@ function parseProgressLine(
 }
 
 /* 
-  单次获取RTS服务状态（TypeScript实现，替代PowerShell脚本）
+  单次获取RTS服务状态
 */
 export async function getRTSServiceStatus(): Promise<string> {
   try {
-    const backendDir = path.join(psDir, RTS_CONFIG.extractedDir);
-    const statusFilePath = path.join(psDir, RTS_CONFIG.statusFile);
+    const { stdout } = await commandLine.exec(
+      'powershell',
+      [
+        '-ExecutionPolicy',
+        'Bypass',
+        '-Command',
+        `cd "${psDir}"; .\\get-service-status.ps1`,
+      ],
+      {
+        encoding: 'utf8',
+      },
+    );
 
-    // 1. 检查后端目录是否存在
-    if (!fs.existsSync(backendDir)) {
-      const status = 'not_installed';
-      if (status !== lastLoggedStatus) {
-        logInfo('RTS服务状态:', status);
-        lastLoggedStatus = status;
-      }
-      return status;
-    }
-
-    // 2. 检查状态文件是否存在
-    if (!fs.existsSync(statusFilePath)) {
-      const status = 'stopped';
-      if (status !== lastLoggedStatus) {
-        logInfo('RTS服务状态:', status, '(文件不存在:', statusFilePath, ')');
-        lastLoggedStatus = status;
-      }
-      return status;
-    }
-
-    // 3. 读取并解析状态文件
-    let statusData: { status?: string; pid?: number };
-    try {
-      let fileContent = fs.readFileSync(statusFilePath, 'utf8');
-      // 去除 BOM (Byte Order Mark) - PowerShell 写入的 UTF8 文件可能带有 BOM
-      fileContent = fileContent.replace(/^\uFEFF/, '');
-      statusData = JSON.parse(fileContent);
-    } catch (e: any) {
-      logError('读取或解析状态文件失败:', e.message);
-      const status = 'error';
-      if (status !== lastLoggedStatus) {
-        logInfo('RTS服务状态:', status);
-        lastLoggedStatus = status;
-      }
-      return status;
-    }
-
-    // 4. 如果状态是 starting，检查端口是否已被占用
-    if (statusData.status === 'starting') {
-      const isPortInUse = await checkPortInUse(RTS_CONFIG.port);
-      const status = isPortInUse ? 'running' : 'starting';
-      if (status !== lastLoggedStatus) {
-        logInfo('RTS服务状态:', status);
-        lastLoggedStatus = status;
-      }
-      return status;
-    }
-
-    // 5. 如果存在 PID，检查进程是否存在
-    // 注意：PowerShell 中 pid 可能是 null，需要检查
-    if (
-      statusData.pid &&
-      typeof statusData.pid === 'number' &&
-      statusData.pid > 0
-    ) {
-      if (!isProcessRunning(statusData.pid)) {
-        const status = 'stopped';
-        if (status !== lastLoggedStatus) {
-          logInfo('RTS服务状态:', status, '(PID', statusData.pid, '不存在)');
-          lastLoggedStatus = status;
-        }
-        return status;
-      }
-    }
-
-    // 6. 检查端口是否被占用
-    const isPortInUse = await checkPortInUse(RTS_CONFIG.port);
-    if (isPortInUse) {
-      const status = 'running';
-      if (status !== lastLoggedStatus) {
-        logInfo('RTS服务状态:', status);
-        lastLoggedStatus = status;
-      }
-      return status;
-    }
-
-    // 7. 返回状态文件中的状态或默认 stopped
-    const status = statusData.status || 'stopped';
+    const status = extractStatus(stdout);
+    // 只在状态变化时打印日志
     if (status !== lastLoggedStatus) {
-      logInfo('RTS服务状态:', status, '(来自文件)');
+      logInfo('RTS服务状态:', status);
       lastLoggedStatus = status;
     }
     return status;
@@ -261,7 +143,6 @@ export async function installRTSService(): Promise<string> {
     child.stdout.on('data', (data: Buffer) => {
       const text = data.toString();
       stdoutData += text;
-      terminalLogger.log(text);
 
       // 解析每一行检查是否有进度信息
       const lines = text.split('\n');
@@ -283,7 +164,6 @@ export async function installRTSService(): Promise<string> {
     child.stderr.on('data', (data: Buffer) => {
       const text = data.toString();
       stderrData += text;
-      terminalLogger.error(text);
     });
 
     child.on('close', (code) => {
@@ -323,13 +203,7 @@ export async function runRTSService(): Promise<string> {
     const child = spawn(
       'powershell',
       ['-ExecutionPolicy', 'Bypass', '-Command', `cd "${psDir}"; .\\run.ps1`],
-      {
-        shell: true,
-        env: {
-          ...process.env,
-          LLM_STREAM_URL: 'http://localhost:7100/api/ai-chat/chat/stream',
-        },
-      },
+      { shell: true },
     );
 
     let stdoutData = '';
@@ -338,7 +212,6 @@ export async function runRTSService(): Promise<string> {
     child.stdout.on('data', (data: Buffer) => {
       const text = data.toString();
       stdoutData += text;
-      terminalLogger.log(text);
 
       // 解析每一行检查是否有进度信息
       const lines = text.split('\n');
@@ -379,7 +252,6 @@ export async function runRTSService(): Promise<string> {
     child.stderr.on('data', (data: Buffer) => {
       const text = data.toString();
       stderrData += text;
-      terminalLogger.error(text);
     });
 
     child.on('close', (code) => {
@@ -413,13 +285,10 @@ export async function stopRTSService(): Promise<string> {
   const startTime = Date.now();
 
   try {
-    const { stdout } = await commandLine.exec(
+    const { stdout } = await exec(
       'powershell',
       ['-ExecutionPolicy', 'Bypass', '-Command', `cd "${psDir}"; .\\stop.ps1`],
-      {
-        encoding: 'utf8',
-        logger: terminalLogger,
-      },
+      { encoding: 'utf8' },
     );
 
     const status = extractStatus(stdout);

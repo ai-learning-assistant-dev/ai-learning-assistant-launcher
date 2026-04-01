@@ -22,7 +22,6 @@ import { ChatAnthropic } from "@langchain/anthropic";
 import { ChatGoogleGenerativeAI  } from "@langchain/google-genai";
 import { ChatOllama } from "@langchain/ollama";
 import { ChatDeepSeek } from '@langchain/deepseek';
-import { initTrainingConfig } from './training-config';
 
 // 临时文件操作记录
 interface FileOperation {
@@ -305,7 +304,6 @@ export default async function init(ipcMain: IpcMain) {
       }
     },
   );
-  await initTrainingConfig(ipcMain);
 }
 
 // 添加保存大模型配置的函数

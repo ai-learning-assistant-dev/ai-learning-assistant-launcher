@@ -17,29 +17,7 @@ export default function ObsidianApp() {
   const [downloading, setDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [isDownloadComplete, setIsDownloadComplete] = useState(false);
-  const [latestVersion, setLatestVersion] = useState<string | null>(null);
-  const [downloadSpeed, setDownloadSpeed] = useState(0);
-
-  // TODO: 硬编码的默认版本号，实际版本从下载后的文件名中动态提取
-  // 未来可考虑从后端配置或远程接口获取最新版本号
-  const OBSIDIAN_VERSION = '1.12.4';
-  // Obsidian HTTPS 下载源列表（按优先级排序）
-  const OBSIDIAN_DOWNLOAD_URLS = [
-    `https://kkgithub.com/obsidianmd/obsidian-releases/releases/download/v${OBSIDIAN_VERSION}/Obsidian-${OBSIDIAN_VERSION}.exe`,
-    `https://gh-proxy.org/https://github.com/obsidianmd/obsidian-releases/releases/download/v${OBSIDIAN_VERSION}/Obsidian-${OBSIDIAN_VERSION}.exe`,
-    `https://github.com/obsidianmd/obsidian-releases/releases/download/v${OBSIDIAN_VERSION}/Obsidian-${OBSIDIAN_VERSION}.exe`,
-  ];
-
-  // 从 Obsidian 文件名中提取版本号
-  // 文件名格式: Obsidian-1.12.4.exe -> 提取 1.12.4
-  const extractVersionFromFilename = (
-    filePath: string | null,
-  ): string | null => {
-    if (!filePath) return null;
-    const filename = filePath.split(/[/\\]/).pop() || '';
-    const match = filename.match(/Obsidian-(\d+\.\d+\.\d+)/i);
-    return match ? match[1] : null;
-  };
+  const [currentMagnet, setCurrentMagnet] = useState<string | null>(null);
 
   useEffect(() => {
     checkObsidianUpdate();
@@ -58,81 +36,59 @@ export default function ObsidianApp() {
   const checkObsidianUpdate = async () => {
     // 检查是否已经有下载完成的文件，或正在下载中（用于恢复后台下载状态）
     try {
-      // 首先检查本地是否已有下载好的文件
-      const fileCheck = await window.mainHandle.checkHttpsDownloadFileHandle(
-        'OBSIDIAN_SETUP_EXE',
-        OBSIDIAN_VERSION,
+      const dlcIndex = await window.mainHandle.queryWebtorrentHandle();
+      const obsidianDLC = dlcIndex.find(
+        (item) => item.id === 'OBSIDIAN_SETUP_EXE',
       );
-
-      if (fileCheck.exists) {
-        // 本地已有下载好的文件，从文件名提取版本号
-        const extractedVersion = extractVersionFromFilename(fileCheck.filePath);
-        setLatestVersion(extractedVersion || OBSIDIAN_VERSION);
-        setIsDownloadComplete(true);
-        setDownloadProgress(100);
-        setDownloading(false);
-        return;
-      }
-
-      // 检查下载状态
-      const httpsState = await window.mainHandle.queryHttpsDownloadHandle();
-      const obsidianState = httpsState['OBSIDIAN_SETUP_EXE'];
-
-      if (obsidianState) {
-        if (
-          obsidianState.status === 'completed' ||
-          obsidianState.progress >= 1
-        ) {
-          // 下载已完成，从文件名提取版本号
-          const extractedVersion = extractVersionFromFilename(
-            obsidianState.filePath || null,
-          );
-          setLatestVersion(extractedVersion || OBSIDIAN_VERSION);
-          setIsDownloadComplete(true);
-          setDownloadProgress(100);
-          setDownloading(false);
-        } else if (
-          obsidianState.status === 'downloading' &&
-          obsidianState.progress > 0
-        ) {
-          // 正在下载中，恢复下载状态
-          setDownloading(true);
-          setDownloadProgress(Math.floor(obsidianState.progress * 100));
-          setDownloadSpeed(obsidianState.speed || 0);
-          setIsDownloadComplete(false);
+      if (obsidianDLC) {
+        const latestVersion = Object.keys(obsidianDLC.versions).sort().pop();
+        if (latestVersion) {
+          const versionInfo = obsidianDLC.versions[latestVersion];
+          if (versionInfo.progress) {
+            const progress = versionInfo.progress.progress || 0;
+            if (progress >= 1) {
+              // 下载已完成
+              setIsDownloadComplete(true);
+              setDownloadProgress(100);
+              setDownloading(false);
+            } else if (progress > 0) {
+              // 正在下载中，恢复下载状态
+              setDownloading(true);
+              setDownloadProgress(Math.floor(progress * 100));
+              setCurrentMagnet(versionInfo.magnet);
+              setIsDownloadComplete(false);
+            }
+          }
         }
       }
     } catch (error) {
-      console.error('检查Obsidian下载状态失败:', error);
+      console.error('检查下载状态失败:', error);
     }
   };
 
   const updateDownloadProgress = async () => {
     try {
-      const httpsState = await window.mainHandle.queryHttpsDownloadHandle();
-      const obsidianState = httpsState['OBSIDIAN_SETUP_EXE'];
-
-      if (obsidianState) {
-        const progress = obsidianState.progress || 0;
-        setDownloadProgress(Math.floor(progress * 100));
-        setDownloadSpeed(obsidianState.speed || 0);
-
-        if (obsidianState.status === 'completed' || progress >= 1) {
-          // 下载完成，从文件名提取版本号
-          const extractedVersion = extractVersionFromFilename(
-            obsidianState.filePath || null,
-          );
-          setLatestVersion(extractedVersion || OBSIDIAN_VERSION);
-          setDownloading(false);
-          setIsDownloadComplete(true);
-          message.success('Obsidian下载完成，可以点击安装按钮进行安装');
-        } else if (obsidianState.status === 'error') {
-          setDownloading(false);
-          message.error('下载失败：' + (obsidianState.error || '未知错误'));
+      const dlcIndex = await window.mainHandle.queryWebtorrentHandle();
+      const obsidianDLC = dlcIndex.find(
+        (item) => item.id === 'OBSIDIAN_SETUP_EXE',
+      );
+      if (obsidianDLC) {
+        const latestVersion = Object.keys(obsidianDLC.versions).sort().pop();
+        if (latestVersion) {
+          const versionInfo = obsidianDLC.versions[latestVersion];
+          if (versionInfo.progress) {
+            const progress = versionInfo.progress.progress || 0;
+            setDownloadProgress(Math.floor(progress * 100));
+            if (progress >= 1) {
+              setDownloading(false);
+              setIsDownloadComplete(true);
+              message.success('下载完成，可以点击安装按钮进行安装');
+            }
+          }
         }
       }
     } catch (error) {
-      console.error('获取Obsidian下载进度失败:', error);
+      console.error('获取下载进度失败:', error);
     }
   };
 
@@ -143,44 +99,54 @@ export default function ObsidianApp() {
       return;
     }
 
-    // 否则开始 HTTPS 多源下载
+    // 否则开始下载
     try {
       setDownloading(true);
       setDownloadProgress(0);
-      setDownloadSpeed(0);
-      message.info('正在启动下载Obsidian...');
+      message.info('正在启动下载...');
 
-      const version = latestVersion || OBSIDIAN_VERSION;
-      setLatestVersion(version);
-
-      const result = await window.mainHandle.startHttpsDownloadHandle(
-        'OBSIDIAN_SETUP_EXE',
-        OBSIDIAN_DOWNLOAD_URLS,
-        version,
+      const dlcIndex = await window.mainHandle.queryWebtorrentHandle();
+      const obsidianDLC = dlcIndex.find(
+        (item) => item.id === 'OBSIDIAN_SETUP_EXE',
       );
 
+      if (!obsidianDLC) {
+        throw new Error('未找到Obsidian安装包信息');
+      }
+
+      const latestVersion = Object.keys(obsidianDLC.versions).sort().pop();
+      if (!latestVersion) {
+        throw new Error('未找到可用版本');
+      }
+
+      const versionInfo = obsidianDLC.versions[latestVersion];
+      const magnet = versionInfo.magnet;
+      setCurrentMagnet(magnet);
+
+      const result = await window.mainHandle.startWebtorrentHandle(magnet);
       if (result.success) {
-        message.success(`开始下载Obsidian ${version}`);
+        message.success(`开始下载Obsidian ${latestVersion}`);
       } else {
-        throw new Error(result.error || '启动下载失败');
+        throw new Error('error' in result ? result.error : '启动下载失败');
       }
     } catch (error) {
       console.error('下载Obsidian失败:', error);
-      message.error('下载失败：' + (error as Error).message);
+      message.error('下载失败：' + error.message);
       setDownloading(false);
+      setCurrentMagnet(null);
     }
   };
 
   const handleCancelDownload = async () => {
-    if (!downloading) {
+    if (!currentMagnet) {
       message.warning('没有正在进行的下载');
       return;
     }
     try {
-      await window.mainHandle.cancelHttpsDownloadHandle('OBSIDIAN_SETUP_EXE');
+      await window.mainHandle.pauseWebtorrentHandle(currentMagnet);
       setDownloading(false);
       setDownloadProgress(0);
-      setDownloadSpeed(0);
+      setCurrentMagnet(null);
       message.info('已取消下载');
     } catch (error) {
       console.error('取消下载失败:', error);
@@ -190,11 +156,31 @@ export default function ObsidianApp() {
 
   const handleInstallObsidian = async () => {
     try {
+      const dlcIndex = await window.mainHandle.queryWebtorrentHandle();
+      const obsidianDLC = dlcIndex.find(
+        (item) => item.id === 'OBSIDIAN_SETUP_EXE',
+      );
+
+      if (!obsidianDLC) {
+        throw new Error('未找到Obsidian安装包');
+      }
+
+      const latestVersion = Object.keys(obsidianDLC.versions).sort().pop();
+      if (!latestVersion) {
+        throw new Error('未找到可用版本');
+      }
+
+      const versionInfo = obsidianDLC.versions[latestVersion];
+      if (!versionInfo.progress || versionInfo.progress.progress < 1) {
+        message.warning('请先完成下载');
+        return;
+      }
+
       message.info('正在打开安装程序...');
       cmdAction('install', 'obsidianApp');
     } catch (error) {
       console.error('打开安装程序失败:', error);
-      message.error('失败：' + (error as Error).message);
+      message.error('失败：' + error.message);
     }
   };
 
@@ -269,9 +255,7 @@ export default function ObsidianApp() {
                     loading={false}
                     onClick={handleDownloadOrInstall}
                   >
-                    {isDownloadComplete
-                      ? `安装 ${latestVersion || ''}`
-                      : '更新Obsidian'}
+                    {isDownloadComplete ? '安装Obsidian' : '更新Obsidian'}
                   </Button>
                 )}
               </div>
