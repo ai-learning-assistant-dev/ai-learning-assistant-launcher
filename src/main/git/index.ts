@@ -1,13 +1,11 @@
-import path from 'path';
 import git from 'isomorphic-git';
 import http from 'isomorphic-git/http/node';
 import fs from 'fs';
 
 function onAuth(){
-
   return {
-    username: 'shiftonetothree',
-    password: 'a2d3c7e60c320b66f4da1d08d68ae8a6',
+    username: 'aladeploy',
+    password: 'b4d6791010b8e5c953233390c8551fda',
   }
 }
 
