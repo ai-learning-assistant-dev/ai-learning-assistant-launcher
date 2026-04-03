@@ -44,6 +44,7 @@ export type HttpsDownloadState = Record<string, HttpsDownloadProgress>;
 export const dLCIds = [
   'PDF_TAR',
   'VOICE_TAR',
+  'TRAINING_SOURCE',
   'TRAINING_TAR',
   'TRAINING_VOICE_TAR',
   'TRAINING_COURSE',
@@ -66,7 +67,7 @@ export type OneDLCInfo = {
       http: string;
       progress?: WebTorrent.Torrent;
       comment?: string;
-      riquire: Record<string, string>;
+      require: Partial<Record<DLCId, string>>;
     }
   >;
 };

@@ -35,8 +35,8 @@ import { CancellationTokenSourceImpl } from '../exec/cancellation-token';
 import { loggerFactory } from '../terminal-log';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import git from 'isomorphic-git';
-import http from 'isomorphic-git/http/node';
 import fs from 'fs';
+import { getRemoteInfo } from '../git';
 
 const commandLine = new Exec();
 
@@ -158,8 +158,12 @@ const courseVersionMark = path.join(nativeTrainingPath, 'course-version.json');
 export async function updateCourseTrainingService() {
   console.debug('检查是否有新课程');
   if ((await courseHaveNewVersionTrainingService()).haveNew) {
+    const trainingInfo = await getServiceInfo('NATIVE_TRAINING');
+    const depVersions = trainingInfo?.version? {
+      TRAINING_SOURCE: trainingInfo.version,
+    } : {};
     console.debug('开始下载课程数据');
-    const latestVersion = getLatestVersion('TRAINING_COURSE');
+    const latestVersion = getLatestVersion('TRAINING_COURSE', depVersions);
     await startWebtorrent(latestVersion.dlcInfo.magnet);
     let coursePath = '';
     try {
@@ -234,13 +238,26 @@ export async function getCourseVersion() {
 }
 
 export async function courseHaveNewVersionTrainingService() {
+  const trainingInfo = await getServiceInfo('NATIVE_TRAINING');
+  const depVersions = trainingInfo?.version? {
+    TRAINING_SOURCE: trainingInfo.version,
+  } : {};
   const currentVersion = await getCourseVersion();
-  const latestVersion = getLatestVersion('TRAINING_COURSE');
-  return {
-    currentVersion: currentVersion,
-    latestVersion: latestVersion.version,
-    haveNew: currentVersion != latestVersion.version,
-  };
+  try{
+    const latestVersion = getLatestVersion('TRAINING_COURSE', depVersions);
+    return {
+      currentVersion: currentVersion,
+      latestVersion: latestVersion.version,
+      haveNew: currentVersion != latestVersion.version,
+    };
+  }catch(e){
+    console.warn(e);
+    return {
+      currentVersion: currentVersion,
+      latestVersion: currentVersion,
+      haveNew: false,
+    }
+  }
 }
 
 // 远程仓库URL和分支
@@ -291,10 +308,7 @@ export async function haveNewVersionTrainingService(): Promise<{
     // 获取远程分支的最新 commit
     let remoteCommit: string;
     try {
-      const remoteInfo = await git.getRemoteInfo({
-        http,
-        url: TRAINING_REPO_URL,
-      });
+      const remoteInfo = await getRemoteInfo(TRAINING_REPO_URL);
 
       // 查找目标分支的引用
       const refs = remoteInfo.refs?.heads;

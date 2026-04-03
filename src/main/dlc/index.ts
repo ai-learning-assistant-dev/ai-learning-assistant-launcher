@@ -33,7 +33,7 @@ import fs, {
 
 import http from 'http';
 import https from 'https';
-import { compare } from 'semver';
+import { compare, satisfies } from 'semver';
 import { WEBTORRENT_CONFIG } from '../webtorrent-config';
 
 let client: WebTorrent.Instance | null = null;
@@ -185,7 +185,7 @@ export default async function init(ipcMain: IpcMain) {
 
   // 尝试更新DLC索引文件，失败时只记录错误日志，不向外抛出异常
   try {
-    await updateDLCIndex();
+    // await updateDLCIndex();
   } catch (error) {
     console.error('更新DLC索引失败:', error);
   }
@@ -359,9 +359,9 @@ export function getDLCFromDLCIndex(id: DLCId): OneDLCInfo {
   }
 }
 
-export function getLatestVersion(id: DLCId): {
+export function getLatestVersion(id: DLCId, installedDeps: Partial<Record<DLCId, string>> = {}): {
   version: string;
-  dlcInfo: OneDLCInfo['versions'][string];
+  dlcInfo: OneDLCInfo['versions'][DLCId];
 } {
   const dlc = getDLCFromDLCIndex(id);
   const versions = Object.keys(dlc.versions);
@@ -370,11 +370,47 @@ export function getLatestVersion(id: DLCId): {
     throw new Error(`DLC ${id} 没有可用的版本`);
   }
 
-  // 找到最新的版本
-  let latestVersion = versions[0];
-  for (let i = 1; i < versions.length; i++) {
-    if (compare(versions[i], latestVersion) > 0) {
-      latestVersion = versions[i];
+  // 筛选满足依赖要求的版本
+  const compatibleVersions: string[] = [];
+  
+  for (const version of versions) {
+    const versionInfo = dlc.versions[version];
+    // 使用类型断言处理两种可能的情况
+    const versionRequire = versionInfo.require || {} as Partial<Record<DLCId, string>>;
+    
+    let satisfiesAllDependencies = true;
+    
+    // 检查是否满足所有传入的依赖要求
+    for (const [reqiureId, requireVersion] of Object.entries(versionRequire)) {
+      const installedVersion = installedDeps[reqiureId as DLCId];
+      
+      if (!installedVersion) {
+        // 如果版本没有声明这个依赖，但用户要求了，则不满足
+        satisfiesAllDependencies = false;
+        break;
+      }
+      
+      // 使用 semver.satisfies 检查版本范围
+      if (!satisfies(installedVersion, requireVersion)) {
+        satisfiesAllDependencies = false;
+        break;
+      }
+    }
+    
+    if (satisfiesAllDependencies) {
+      compatibleVersions.push(version);
+    }
+  }
+
+  if (compatibleVersions.length === 0) {
+    throw new Error(`DLC ${id} 没有满足依赖要求的版本`);
+  }
+
+  // 从兼容的版本中找到最新的版本
+  let latestVersion = compatibleVersions[0];
+  for (let i = 1; i < compatibleVersions.length; i++) {
+    if (compare(compatibleVersions[i], latestVersion) > 0) {
+      latestVersion = compatibleVersions[i];
     }
   }
 
@@ -384,7 +420,7 @@ export function getLatestVersion(id: DLCId): {
   };
 }
 
-export function isLatestVersion(id: DLCId, version: string): boolean {
+export function isLatestVersion(id: DLCId, version: string, installedDeps: Partial<Record<DLCId, string>> = {}): boolean {
   const dlc = getDLCFromDLCIndex(id);
   const versions = Object.keys(dlc.versions);
 
@@ -392,8 +428,8 @@ export function isLatestVersion(id: DLCId, version: string): boolean {
     return false;
   }
 
-  // 找到最新的版本
-  const latestVersion = getLatestVersion(id).version;
+  // 找到最新的版本（不检查依赖）
+  const latestVersion = getLatestVersion(id, installedDeps).version;
 
   // 比较给定的版本是否等于最新版本
   return compare(version, latestVersion) === 0;

@@ -33,12 +33,12 @@ export function useNativeTrainingServiceShortcut() {
     const serviceInfo =
       await window.mainHandle.queryNativeTrainingServiceHandle();
     setServiceInfo(serviceInfo);
-    const versionInfo =
-      await window.mainHandle.courseHaveNewVersionNativeTrainingServiceHandle();
-    setCourseVersionInfo(versionInfo);
     const pVersionInfo =
       await window.mainHandle.haveNewVersionNativeTrainingServiceHandle();
-    setProgramVersionInfo(pVersionInfo);
+    setProgramVersionInfo(pVersionInfo)
+    const versionInfo = 
+      await window.mainHandle.courseHaveNewVersionNativeTrainingServiceHandle();
+    setCourseVersionInfo(versionInfo);
   }, [setServiceInfo]);
 
   useEffect(() => {

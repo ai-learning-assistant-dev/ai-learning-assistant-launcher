@@ -19,53 +19,60 @@
     "id": "TRAINING_COURSE",
     "name": "学科培训课程数据",
     "versions": {
+      "2.0.9": {
+        "magnet": "magnet:?xt=urn:btih:f6b428f3a5eed7cc31e44c95347fda2997be37c6&dn=course10v3.zip&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=ws%3A%2F%2F121.40.137.135%3A8200",
+        "comment": "修复所有课程",
+        "require": {
+          "TRAINING_SOURCE": "^2.0.0"
+        }
+      },
       "2.0.8": {
         "magnet": "magnet:?xt=urn:btih:09e4424598ef26d1b9e1cb0ee91527aa9823ebf4&dn=course10v2.zip&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=ws%3A%2F%2F121.40.137.135%3A8200",
         "comment": "修复所有课程",
         "require": {
-          "TRAINING_TAR": "^2.0.0"
+          "TRAINING_SOURCE": "^2.0.0"
         }
       },
       "2.0.7": {
         "magnet": "magnet:?xt=urn:btih:943d91e3692893147ca89d8331f90aec3d6f443d&dn=course10.zip&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=ws%3A%2F%2F121.40.137.135%3A8200",
         "comment": "新结构",
         "require": {
-          "TRAINING_TAR": "^2.0.0"
+          "TRAINING_SOURCE": "^2.0.0"
         }
       },
       "2.0.6": {
         "magnet": "magnet:?xt=urn:btih:b9f708c919039a5fe035dc97437e6eac4a778f8c&dn=10course.zip&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=ws%3A%2F%2F121.40.137.135%3A8200",
         "comment": "10门课",
         "require": {
-          "TRAINING_TAR": "^2.0.0"
+          "TRAINING_SOURCE": "^2.0.0"
         }
       },
       "2.0.5": {
         "magnet": "magnet:?xt=urn:btih:c7e6ceac3bce2a2884ee86d6ac5d50fd85d8ae27&dn=8course.zip&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=wss%3A%2F%2F114.66.58.95%3A17853%2Fannounce&tr=ws%3A%2F%2F121.40.137.135%3A8200",
         "comment": "第三个版本",
         "require": {
-          "TRAINING_TAR": "^2.0.0"
+          "TRAINING_SOURCE": "^2.0.0"
         }
       },
       "2.0.4": {
         "magnet": "magnet:?xt=urn:btih:823f72d52b299bff2507c00eb19d7ba456c43a23&dn=course.json&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=wss%3A%2F%2F114.66.58.95%3A17853%2Fannounce&tr=ws%3A%2F%2F121.40.137.135%3A8200",
         "comment": "第二个版本",
         "require": {
-          "TRAINING_TAR": "^2.0.0"
+          "TRAINING_SOURCE": "^2.0.0"
         }
       },
       "2.0.3": {
         "magnet": "magnet:?xt=urn:btih:043b1c79bd0cd233ed59ab804f159d5cc8f05086&dn=ala-training-database-bun.sql&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=wss%3A%2F%2F114.66.58.95%3A17853%2Fannounce",
         "comment": "第一个版本",
         "require": {
-          "TRAINING_TAR": "^2.0.0"
+          "TRAINING_SOURCE": "^2.0.0"
         }
       },
       "2.0.2": {
         "magnet": "magnet:?xt=urn:btih:cff0fb96747c5fc4696af4c9fa8cd30330050250&dn=ai_learning_assistant.sql&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=wss%3A%2F%2F114.66.58.95%3A17853%2Fannounce",
         "comment": "第一个版本",
         "require": {
-          "TRAINING_TAR": "^2.0.0"
+          "TRAINING_SOURCE": "^2.0.0"
         }
       }
     }
@@ -74,6 +81,11 @@
     "id": "AI_LEARNING_ASSISTANT_LAUNCHER",
     "name": "AI学习助手启动器",
     "versions": {
+      "2.1.0-test-5": {
+        "magnet": "magnet:?xt=urn:btih:fa016a80e15aa7d79613253b7343f4011b801758&dn=AI-Learning-Assistant-Launcher-win32-x64-2.1.0-test-5.zip&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=ws%3A%2F%2F121.40.137.135%3A8200",
+        "comment": "修复一些问题",
+        "require": {}
+      },
       "2.1.0-test": {
         "magnet": "magnet:?xt=urn:btih:72cadee7da364ce360d38c2c2ff93c7951b3a441&dn=AI-Learning-Assistant-Launcher-win32-x64-2.1.0-test.zip&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=ws%3A%2F%2F121.40.137.135%3A8200&tr=udp%3A%2F%2Ftracker.leechers-paradise.org%3A6969&tr=udp%3A%2F%2Ftracker.coppersurfer.tk%3A6969&tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337&tr=udp%3A%2F%2Fexplodie.org%3A6969&tr=udp%3A%2F%2Ftracker.empire-js.us%3A1337&tr=wss%3A%2F%2Ftracker.btorrent.xyz&tr=wss%3A%2F%2Ftracker.openwebtorrent.com",
         "comment": "修复一些问题",
