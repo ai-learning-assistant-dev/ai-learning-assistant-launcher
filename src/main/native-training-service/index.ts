@@ -37,6 +37,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import git from 'isomorphic-git';
 import fs from 'fs';
 import { getRemoteInfo } from '../git';
+import { TRAINING_REPO_URL, TRAINING_REPO_BRANCH } from '../native-script/type-info';
 
 const commandLine = new Exec();
 
@@ -259,11 +260,6 @@ export async function courseHaveNewVersionTrainingService() {
     }
   }
 }
-
-// 远程仓库URL和分支
-const TRAINING_REPO_URL =
-  'https://gitee.com/shiftonetothree/ai-learning-assistant-training-server.git';
-const TRAINING_REPO_BRANCH = 'refactor';
 
 /**
  * 检查本地版本是否落后于远程版本

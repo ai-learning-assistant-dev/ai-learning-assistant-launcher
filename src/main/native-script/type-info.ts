@@ -40,3 +40,8 @@ export interface NativeServiceInfo {
 }
 
 export const TRAINING_PORT = 7100;
+
+// 远程仓库URL和分支
+export const TRAINING_REPO_URL =
+  'https://gitee.com/shiftonetothree/ai-learning-assistant-training-server.git';
+export const TRAINING_REPO_BRANCH = 'release';

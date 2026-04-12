@@ -5,6 +5,8 @@ import {
   NativeServiceName,
   NativeServiceInfo,
   TRAINING_PORT,
+  TRAINING_REPO_URL,
+  TRAINING_REPO_BRANCH,
 } from './type-info';
 import { appPath, isWindows } from '../exec/util';
 import { Exec } from '../exec';
@@ -198,9 +200,9 @@ export async function installService(
 
     try {
       await gitClone(
-        'https://gitee.com/shiftonetothree/ai-learning-assistant-training-server.git',
+        TRAINING_REPO_URL,
         trainingServerSourcePath,
-        'refactor',
+        TRAINING_REPO_BRANCH,
       );
     } catch (e) {
       console.error(e);
@@ -209,36 +211,16 @@ export async function installService(
     }
 
     console.debug('开始编译程序');
-    await commandLine.exec('bun install', [], {
-      shell: true,
-      logger: loggerFactory(serviceName),
-      cwd: trainingServerSourcePath,
-    });
-
-    // 检查package.json文件是否存在
-    const packageJsonPath = path.join(trainingServerSourcePath, 'package.json');
-    if (existsSync(packageJsonPath)) {
-      const packageJsonContent = readFileSync(packageJsonPath, 'utf-8');
-      const packageJson = JSON.parse(packageJsonContent);
-      const frontendDistGit = packageJson.frontendDistGit;
-      try {
-        await gitClone(
-          frontendDistGit.url,
-          trainingFrontendPath,
-          frontendDistGit.branch,
-        );
-      } catch (e) {
-        console.error(e);
-        console.error('下载界面程序失败');
-        return { state: 'not_install', version: '0.0.0' };
-      }
+    try{
+      await commandLine.exec('bun install', [], {
+        shell: true,
+        logger: loggerFactory(serviceName),
+        cwd: trainingServerSourcePath,
+      });
+    }catch(e){
+      console.error(e);
+      console.error('编译程序失败');
     }
-
-    cpSync(trainingFrontendPath, trainingServerSourcePublicPath, {
-      recursive: true,
-    });
-
-    rmSync(trainingFrontendPath, { recursive: true });
 
     return { state: 'stopped', version: '1.0.0' };
   }
