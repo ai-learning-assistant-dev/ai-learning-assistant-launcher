@@ -92,6 +92,11 @@
     "id": "AI_LEARNING_ASSISTANT_LAUNCHER",
     "name": "AI学习助手启动器",
     "versions": {
+      "2.1.0-test-7": {
+        "magnet": "magnet:?xt=urn:btih:b042440c2acd1104ca24e7bec3d944859d80fe6a&dn=AI-Learning-Assistant-Launcher-win32-x64-2.1.0-test-7.zip&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=ws%3A%2F%2F121.40.137.135%3A8200",
+        "comment": "学科培训使用P2P渠道下载",
+        "require": {}
+      },
       "2.1.0-test-5": {
         "magnet": "magnet:?xt=urn:btih:fa016a80e15aa7d79613253b7343f4011b801758&dn=AI-Learning-Assistant-Launcher-win32-x64-2.1.0-test-5.zip&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=ws%3A%2F%2F121.40.137.135%3A8200",
         "comment": "修复一些问题",
