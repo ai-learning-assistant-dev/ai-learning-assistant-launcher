@@ -268,8 +268,8 @@ export async function courseHaveNewVersionTrainingService() {
  */
 export async function haveNewVersionTrainingService(): Promise<{
   haveNew: boolean;
-  localCommit?: string;
-  remoteCommit?: string;
+  currentVersion?: string;
+  latestVersion?: string;
   error?: string;
 }> {
   try {
@@ -284,54 +284,41 @@ export async function haveNewVersionTrainingService(): Promise<{
       return { haveNew: false, error: '本地目录不是 git 仓库' };
     }
 
-    // 获取本地 HEAD commit
-    let localCommit: string;
-    try {
-      const commits = await git.log({
-        fs,
-        dir: trainingServerSourcePath,
-        depth: 1,
-      });
-      if (commits.length === 0) {
-        return { haveNew: false, error: '无法获取本地 commit' };
+    // 获取本地 package.json中的版本
+    const packageJsonPath = path.join(trainingServerSourcePath, 'package.json');
+    let currentVersion = '0.0.0';
+    if (existsSync(packageJsonPath)) {
+      try {
+        const packageJsonContent = readFileSync(packageJsonPath, 'utf-8');
+        const packageJson = JSON.parse(packageJsonContent);
+        currentVersion = packageJson.version || '0.0.0';
+      } catch (error) {
+        console.warn('读取本地package.json失败:', error);
+        currentVersion = '0.0.0';
       }
-      localCommit = commits[0].oid;
-    } catch (e) {
-      console.warn('获取本地 commit 失败:', e);
-      return { haveNew: false, error: '获取本地 commit 失败' };
     }
 
-    // 获取远程分支的最新 commit
-    let remoteCommit: string;
+    // 获取dlc信息中TRAINING_SOURCE的最新版本
+    let latestVersion = '0.0.0';
     try {
-      const remoteInfo = await getRemoteInfo(TRAINING_REPO_URL);
-
-      // 查找目标分支的引用
-      const refs = remoteInfo.refs?.heads;
-      if (refs && refs[TRAINING_REPO_BRANCH]) {
-        remoteCommit = refs[TRAINING_REPO_BRANCH];
-      } else {
-        return {
-          haveNew: false,
-          error: `无法找到远程分支 ${TRAINING_REPO_BRANCH}`,
-        };
-      }
-    } catch (e) {
-      console.warn('获取远程 commit 失败:', e);
-      return { haveNew: false, error: '获取远程 commit 失败，可能是网络问题' };
+      const latestVersionInfo = getLatestVersion('TRAINING_SOURCE', {});
+      latestVersion = latestVersionInfo.version;
+    } catch (error) {
+      console.warn('获取TRAINING_SOURCE最新版本失败:', error);
+      latestVersion = '0.0.0';
     }
-
-    // 对比本地和远程 commit
-    const haveNew = localCommit !== remoteCommit;
+    
+    // 对比本地和远程版本
+    const haveNew = currentVersion !== latestVersion;
 
     console.debug(
-      `版本检查: 本地 commit=${localCommit}, 远程 commit=${remoteCommit}, 有新版本=${haveNew}`,
+      `版本检查: 本地版本=${currentVersion}, 远程版本=${latestVersion}, 有新版本=${haveNew}`,
     );
 
     return {
       haveNew,
-      localCommit,
-      remoteCommit,
+      currentVersion,
+      latestVersion,
     };
   } catch (e) {
     console.warn('检查新版本时发生错误:', e);

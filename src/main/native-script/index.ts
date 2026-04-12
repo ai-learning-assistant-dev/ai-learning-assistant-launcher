@@ -17,6 +17,7 @@ import http from 'http';
 import { llmConfigPath } from '../configs';
 import { queryTrainingConfig } from '../configs/training-config';
 import { getLatestVersion, startWebtorrent, waitTorrentDone } from '../dlc';
+import AdmZip from 'adm-zip';
 
 const commandLine = new Exec();
 
@@ -189,14 +190,6 @@ export async function installService(
     }
     mkdirSync(trainingServerSourcePath, { recursive: true });
 
-    try {
-      rmSync(trainingFrontendPath, { recursive: true });
-    } catch (e) {
-      console.warn(e);
-    }
-
-    mkdirSync(trainingFrontendPath, { recursive: true });
-
     console.debug('开始下载程序');
 
     const latestVersion = getLatestVersion('TRAINING_SOURCE');
@@ -216,7 +209,23 @@ export async function installService(
 
     console.debug('将程序解压到目标路径');
     try {
-      // TODO 将sourcePath对应的文件解压到trainingServerSourcePath
+      // 检查源文件是否存在
+      if (!existsSync(sourcePath)) {
+        console.error(`源文件不存在: ${sourcePath}`);
+        return { state: 'not_install', version: '0.0.0' };
+      }
+
+      console.debug(`解压文件: ${sourcePath} -> ${trainingServerSourcePath}`);
+      
+      // 使用adm-zip解压文件
+      const zip = new AdmZip(sourcePath);
+      zip.extractAllTo(trainingServerSourcePath, true);
+
+      cpSync(path.join(trainingServerSourcePath, 'native-training'), trainingServerSourcePath, { recursive: true });
+
+      rmSync(path.join(trainingServerSourcePath, 'native-training'), { recursive: true });
+
+      console.debug('解压完成');
     } catch (e) {
       console.error(e);
       console.error('解压程序失败');
@@ -237,6 +246,9 @@ export async function installService(
 
     return { state: 'stopped', version: '1.0.0' };
   }
+  
+  // 如果不是NATIVE_TRAINING服务，返回未安装状态
+  return { state: 'not_install', version: '0.0.0' };
 }
 export async function monitorStateIsRuning(
   serviceName: NativeServiceName,
