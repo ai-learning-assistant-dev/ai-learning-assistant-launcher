@@ -168,15 +168,6 @@ const trainingServerSourcePath = path.join(
   'external-resources',
   'native-training',
 );
-const trainingServerSourcePublicPath = path.join(
-  trainingServerSourcePath,
-  'public',
-);
-const trainingFrontendPath = path.join(
-  appPath,
-  'external-resources',
-  'native-training-front-tmp',
-);
 
 export async function installService(
   serviceName: NativeServiceName,
@@ -298,9 +289,9 @@ export async function uninstallService(serviceName: NativeServiceName) {
     } catch (e) {
       console.warn(e);
     }
-    rmSync(trainingServerSourcePath, { recursive: true });
+    
     try {
-      rmSync(trainingFrontendPath, { recursive: true });
+      rmSync(trainingServerSourcePath, { recursive: true });
     } catch (e) {
       console.warn(e);
     }
