@@ -16,6 +16,7 @@ import { CancellationTokenSourceImpl } from '../exec/cancellation-token';
 import http from 'http';
 import { llmConfigPath } from '../configs';
 import { queryTrainingConfig } from '../configs/training-config';
+import { getLatestVersion, startWebtorrent, waitTorrentDone } from '../dlc';
 
 const commandLine = new Exec();
 
@@ -198,15 +199,27 @@ export async function installService(
 
     console.debug('开始下载程序');
 
+    const latestVersion = getLatestVersion('TRAINING_SOURCE');
+    await startWebtorrent(latestVersion.dlcInfo.magnet);
+    let sourcePath = '';
     try {
-      await gitClone(
-        TRAINING_REPO_URL,
-        trainingServerSourcePath,
-        TRAINING_REPO_BRANCH,
+      const torrent = await waitTorrentDone(
+        'TRAINING_SOURCE',
+        latestVersion.version,
       );
+      sourcePath = path.join(torrent.path, torrent.files[0].name);
     } catch (e) {
       console.error(e);
       console.error('下载程序失败');
+      return { state: 'not_install', version: '0.0.0' };
+    }
+
+    console.debug('将程序解压到目标路径');
+    try {
+      // TODO 将sourcePath对应的文件解压到trainingServerSourcePath
+    } catch (e) {
+      console.error(e);
+      console.error('解压程序失败');
       return { state: 'not_install', version: '0.0.0' };
     }
 
