@@ -278,12 +278,6 @@ export async function haveNewVersionTrainingService(): Promise<{
       return { haveNew: false, error: '本地服务未安装' };
     }
 
-    // 检查是否是 git 仓库
-    const gitDir = path.join(trainingServerSourcePath, '.git');
-    if (!existsSync(gitDir)) {
-      return { haveNew: false, error: '本地目录不是 git 仓库' };
-    }
-
     // 获取本地 package.json中的版本
     const packageJsonPath = path.join(trainingServerSourcePath, 'package.json');
     let currentVersion = '0.0.0';

@@ -589,7 +589,10 @@ export async function waitTorrentDone(id: DLCId, version: string) {
       if (currentTorrent.progress === 1) {
         clearInterval(intervalId);
         console.debug(`种子 ${currentTorrent.name} 下载完成`);
-        resolve(currentTorrent);
+        // 尝试度过文件被webtorrent占用的时间再返回，避免莫名错误
+        setTimeout(() => {
+          resolve(currentTorrent);
+        }, 1000);
         return;
       }
 
@@ -613,7 +616,10 @@ export async function waitTorrentDone(id: DLCId, version: string) {
       torrent.removeListener('done', onDone);
       clearInterval(intervalId);
       console.debug(`种子 ${torrent.name} 下载完成（通过事件监听）`);
-      resolve(torrent);
+      // 尝试度过文件被webtorrent占用的时间再返回，避免莫名错误
+      setTimeout(() => {
+        resolve(torrent);
+      }, 1000);
     };
 
     torrent.on('done', onDone);
