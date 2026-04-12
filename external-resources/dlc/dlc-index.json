@@ -16,6 +16,17 @@
     }
   },
   {
+    "id": "TRAINING_SOURCE",
+    "name": "学科培训包",
+    "versions": {
+      "2.1.0": {
+        "magnet": "magnet:?xt=urn:btih:eebe9a2a3375699f863ded6afae53061fc86d2d9&dn=native-training.zip&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=ws%3A%2F%2F121.40.137.135%3A8200",
+        "comment": "第一个版本",
+        "require": {}
+      }
+    }
+  },
+  {
     "id": "TRAINING_COURSE",
     "name": "学科培训课程数据",
     "versions": {
