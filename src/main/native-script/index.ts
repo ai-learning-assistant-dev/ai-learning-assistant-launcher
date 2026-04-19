@@ -7,6 +7,7 @@ import {
   TRAINING_PORT,
   TRAINING_REPO_URL,
   TRAINING_REPO_BRANCH,
+  TRAINING_SHUTDOWN_URL,
 } from './type-info';
 import { appPath, isWindows } from '../exec/util';
 import { Exec } from '../exec';
@@ -277,18 +278,7 @@ export async function monitorStateIsRuning(
 }
 export async function uninstallService(serviceName: NativeServiceName) {
   if (serviceName === 'NATIVE_TRAINING') {
-    // 终止占用7100端口的进程
-    try {
-      await killProcessOnPort(7100);
-    } catch (e) {
-      console.warn(e);
-    }
-    // 终止bun.exe进程
-    try {
-      await killProcessByName('bun.exe');
-    } catch (e) {
-      console.warn(e);
-    }
+    await killNativeTraining();
     
     try {
       rmSync(trainingServerSourcePath, { recursive: true });
@@ -335,17 +325,39 @@ export async function startService(
 }
 export async function stopService(serviceName: NativeServiceName) {
   if (serviceName === 'NATIVE_TRAINING') {
-    try {
-      await killProcessOnPort(TRAINING_PORT);
-    } catch (e) {
-      console.warn(e);
-    }
-    // 终止bun.exe进程
-    try {
-      await killProcessByName('bun.exe');
-    } catch (e) {
-      console.warn(e);
-    }
+    await killNativeTraining();
+  }
+}
+
+export async function killNativeTraining(){
+  try {
+    await new Promise((resolve) => {
+      const req = http.get(TRAINING_SHUTDOWN_URL, (res) => {
+        resolve(true);
+      });
+
+      req.on('error', () => {
+        resolve(false);
+      });
+
+      req.setTimeout(6000, () => {
+        req.destroy();
+        resolve(false);
+      });
+    });
+  }catch(e){
+    console.warn(e);
+  }
+  try {
+    await killProcessOnPort(TRAINING_PORT);
+  } catch (e) {
+    console.warn(e);
+  }
+  // 终止bun.exe进程
+  try {
+    await killProcessByName('bun.exe');
+  } catch (e) {
+    console.warn(e);
   }
 }
 
