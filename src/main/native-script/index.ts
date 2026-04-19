@@ -245,7 +245,7 @@ export async function monitorStateIsRuning(
   serviceName: NativeServiceName,
 ): Promise<void> {
   if (serviceName === 'NATIVE_TRAINING') {
-    let retryCounter = 30;
+    let retryCounter = 60 * 2;
     console.debug('checking health', serviceName);
     return new Promise<void>((resolve, reject) => {
       const interval = setInterval(async () => {
