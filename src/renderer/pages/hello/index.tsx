@@ -11,13 +11,10 @@ import { NavLink } from 'react-router-dom';
 import { useEffect, useState, useRef, useCallback } from 'react'; // 添加 useRef 导入
 import obsidianLogo from './2023_Obsidian_logo.png';
 import llmIcon from './LLM_Icon.png';
-import heroImage from './Frame 2.png';
-import welcomeImage from './Welcome.png';
+import heroImage from './Frame2.png';
 import qrCodeImage from './QR_code_image.png';
 import subjectIcon from './subject_icon.png';
-// 新增导入Frame 3和Frame 8图片
-import frame3 from './Frame 3.png';
-import frame8 from './Frame 8.png';
+import frame8 from './Frame8.png';
 import jointBuildIcon from '../../../../icons/joint_build.png';
 import './index.scss';
 import { LeftOutlined, RightOutlined } from '@ant-design/icons';
@@ -76,15 +73,7 @@ export default function Hello() {
 
   const slides = [
     {
-      content: (
-        <img src={welcomeImage} alt="Welcome" className="hero-image-slide" />
-      ),
-    },
-    {
       content: <img src={heroImage} alt="Hero" className="hero-image-slide" />,
-    },
-    {
-      content: <img src={frame3} alt="Frame 3" className="hero-image-slide" />,
     },
     {
       content: <img src={frame8} alt="Frame 8" className="hero-image-slide" />,
