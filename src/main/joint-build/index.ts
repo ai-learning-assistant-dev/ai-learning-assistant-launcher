@@ -126,7 +126,7 @@ function updateTrayMenu(): void {
   
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: '打开AI学习助手',
+      label: '打开技能工作台',
       click: () => {
         const windows = BrowserWindow.getAllWindows();
         if (windows.length > 0) {
@@ -167,7 +167,7 @@ function updateTrayMenu(): void {
     },
     { type: 'separator' },
     {
-      label: '退出AI学习助手',
+      label: '退出技能工作台',
       click: () => {
         forceQuit = true;
         app.quit();
@@ -185,13 +185,13 @@ function updateTrayTooltip(): void {
   const version = app.getVersion();
   const isJointBuilding = trayEnabled ? '正在共建中（ON）' : '共建已关闭（OFF）';
   if (!trayEnabled) {
-    tray.setToolTip(`AI学习助手 ${version}\n共建已关闭（OFF）`);
+    tray.setToolTip(`技能工作台 ${version}\n共建已关闭（OFF）`);
     return;
   }
   // todo:获取动态数据
   const currentUploadSpeed = '0KB/s';
   const linkedTo = 0;
-  tray.setToolTip(`AI学习助手 ${version}\n${isJointBuilding}\n当前上传速度: ${currentUploadSpeed}\n已连接伙伴${linkedTo}人`);
+  tray.setToolTip(`技能工作台 ${version}\n${isJointBuilding}\n当前上传速度: ${currentUploadSpeed}\n已连接伙伴${linkedTo}人`);
 }
 
 // 销毁托盘

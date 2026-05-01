@@ -14,6 +14,13 @@
     "id": "TRAINING_COURSE",
     "name": "学科培训课程数据",
     "versions": {
+      "2.1.1": {
+        "magnet": "magnet:?xt=urn:btih:3c38f82c2958010dbf2162be45b0480f6c309136&dn=course10v5.zip&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=ws%3A%2F%2F121.40.137.135%3A8200",
+        "comment": "添加课程分类",
+        "require": {
+          "TRAINING_SOURCE": "^2.0.0"
+        }
+      },
       "2.1.0": {
         "magnet": "magnet:?xt=urn:btih:1ae91120661d2cbf0b6baa884c018b52e2e0499e&dn=course10v4.zip&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=ws%3A%2F%2F121.40.137.135%3A8200",
         "comment": "添加人设提示词",
@@ -25,9 +32,8 @@
   },
   {
     "id": "AI_LEARNING_ASSISTANT_LAUNCHER",
-    "name": "AI学习助手启动器",
+    "name": "技能工作台",
     "versions": {
-      
     }
   },
   {

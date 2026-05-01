@@ -34,7 +34,7 @@ export default function JointBuild() {
   const [modules, setModules] = useState<ModuleItem[]>([
     {
       id: 'launcher',
-      name: 'AI学习助手启动器',
+      name: '技能工作台',
       description: '磁盘占用 200MB',
       diskUsage: '200MB',
       recommendLevel: 3,
@@ -205,7 +205,7 @@ export default function JointBuild() {
         <img src={jointBuildIcon} alt="共建计划" className="header-icon" />
         <div className="header-text">
           <h1>共建计划</h1>
-          <p>通过闲时分享少量带宽，不仅能加速您的下载，也能帮助其他学习者更快获取大模型与课程资源。</p>
+          <p>通过闲时分享少量带宽，不仅能加速您的下载，也能帮助其他学习者更快获取课程资源。</p>
         </div>
       </div>
 
@@ -220,7 +220,7 @@ export default function JointBuild() {
         </div>
       </div>
 
-      <div className="section">
+      {/* <div className="section">
         <h2>可用磁盘空间</h2>
         <div className="disk-info">
           <span className="disk-path">磁盘路径：{diskPath}</span>
@@ -257,7 +257,7 @@ export default function JointBuild() {
             </div>
           ))}
         </div>
-      </div>
+      </div> */}
     </div>
   );
 }
