@@ -129,7 +129,7 @@ export default function Hello() {
       'open-external-url',
       'open',
       'browser',
-      'https://docs.qq.com/aio/DS1NnZkZkdkFiSVdP',
+      'https://docs.qq.com/aio/DS05IWHFFTUFkUUNm',
     );
   };
   // 新增：打开使用文档
