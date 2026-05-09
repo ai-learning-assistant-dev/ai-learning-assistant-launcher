@@ -80,6 +80,7 @@ import {
   setNativeTrainingConfigHandle,
   TrainingConfig,
 } from './configs/type-info';
+import { haveNewVersionTextbookEditorServiceHandle, installTextbookEditorServiceHandle, logsTextbookEditorServiceHandle, queryTextbookEditorServiceHandle, removeTextbookEditorServiceHandle, startTextbookEditorServiceHandle, updateTextbookEditorServiceHandle } from './textbook-editor-service/type-info';
 
 const electronHandler = {
   // 系统信息
@@ -224,6 +225,33 @@ const mainHandle = {
     return ipcInvoke<{ imageId: string; logs: string }>(
       logsNativeTrainingServiceHandle,
     );
+  },
+  queryTextbookEditorServiceHandle: async () => {
+    return ipcInvoke<NativeServiceInfo>(queryTextbookEditorServiceHandle);
+  },
+  installTextbookEditorServiceHandle: async () => {
+    return ipcInvoke(installTextbookEditorServiceHandle);
+  },
+  startTextbookEditorServiceHandle: async () => {
+    return ipcInvoke(startTextbookEditorServiceHandle);
+  },
+  removeTextbookEditorServiceHandle: async () => {
+    return ipcInvoke(removeTextbookEditorServiceHandle);
+  },
+  logsTextbookEditorServiceHandle: async () => {
+    return ipcInvoke<{ imageId: string; logs: string }>(
+      logsTextbookEditorServiceHandle,
+    );
+  },
+  updateTextbookEditorServiceHandle: async () => {
+    return ipcInvoke(updateTextbookEditorServiceHandle);
+  },
+  haveNewVersionTextbookEditorServiceHandle: async () => {
+    return ipcInvoke<{
+      currentVersion: string;
+      latestVersion: string;
+      haveNew: boolean;
+    }>(haveNewVersionTextbookEditorServiceHandle);
   },
   // 共建计划相关
   selectJointBuildFolder: async (): Promise<string | null> => {

@@ -185,7 +185,8 @@ export default async function init(ipcMain: IpcMain) {
 
   // 尝试更新DLC索引文件，失败时只记录错误日志，不向外抛出异常
   try {
-    await updateDLCIndex();
+    // console.debug('开始更新DLC索引文件');
+    // await updateDLCIndex();
   } catch (error) {
     console.error('更新DLC索引失败:', error);
   }

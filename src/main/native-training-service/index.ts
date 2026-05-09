@@ -120,7 +120,7 @@ export async function installTrainingService() {
 
 export async function removeTrainingService() {
   try {
-    trainingWindow.close();
+    trainingWindow && trainingWindow.close();
   } catch (e) {
     console.warn(e);
   }
@@ -205,7 +205,7 @@ export async function updateCourseTrainingService() {
       await stopService('NATIVE_TRAINING');
     }
     try {
-      trainingWindow.reload();
+      trainingWindow && trainingWindow.reload();
     } catch (e) {
       console.warn(e);
     }

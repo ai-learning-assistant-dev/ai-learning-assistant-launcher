@@ -2,6 +2,7 @@ const nativeServiceNames = [
   'NATIVE_TRAINING',
   'NATIVE_TRAINING_RTS',
   'NATIVE_OBSIDIAN_VOICE',
+  'TEXTBOOK_EDITOR',
 ] as const;
 
 export type NativeServiceName = (typeof nativeServiceNames)[number];
@@ -47,3 +48,7 @@ export const TRAINING_SHUTDOWN_URL = `http://localhost:${TRAINING_PORT}/shutdown
 export const TRAINING_REPO_URL =
   'https://gitee.com/shiftonetothree/ai-learning-assistant-training-server.git';
 export const TRAINING_REPO_BRANCH = 'release';
+
+export const TEXTBOOK_EDITOR_PORT = 7200;
+
+export const TEXTBOOK_EDITOR_SHUTDOWN_URL = `http://localhost:${TEXTBOOK_EDITOR_PORT}/shutdown`;

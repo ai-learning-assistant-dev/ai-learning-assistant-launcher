@@ -8,6 +8,8 @@ import {
   TRAINING_REPO_URL,
   TRAINING_REPO_BRANCH,
   TRAINING_SHUTDOWN_URL,
+  TEXTBOOK_EDITOR_PORT,
+  TEXTBOOK_EDITOR_SHUTDOWN_URL,
 } from './type-info';
 import { appPath, isWindows } from '../exec/util';
 import { Exec } from '../exec';
@@ -19,8 +21,21 @@ import { llmConfigPath } from '../configs';
 import { queryTrainingConfig } from '../configs/training-config';
 import { getLatestVersion, startWebtorrent, waitTorrentDone } from '../dlc';
 import AdmZip from 'adm-zip';
+import { load } from 'js-toml';
 
 const commandLine = new Exec();
+
+const trainingServerSourcePath = path.join(
+  appPath,
+  'external-resources',
+  'native-training',
+);
+
+const textbookEditorPath = path.join(
+  appPath,
+  'external-resources',
+  'textbook-editor',
+);
 
 // 根据进程名终止进程
 async function killProcessByName(processName: string): Promise<void> {
@@ -133,16 +148,10 @@ export async function getServiceInfo(
   serviceName: NativeServiceName,
 ): Promise<NativeServiceInfo> {
   if (serviceName === 'NATIVE_TRAINING') {
-    // 检查external-resources/native-training目录是否存在
-    const nativeTrainingPath = path.join(
-      appPath,
-      'external-resources',
-      'native-training',
-    );
 
-    if (existsSync(nativeTrainingPath)) {
+    if (existsSync(trainingServerSourcePath)) {
       // 检查package.json文件是否存在
-      const packageJsonPath = path.join(nativeTrainingPath, 'package.json');
+      const packageJsonPath = path.join(trainingServerSourcePath, 'package.json');
       if (existsSync(packageJsonPath)) {
         try {
           const packageJsonContent = readFileSync(packageJsonPath, 'utf-8');
@@ -158,17 +167,31 @@ export async function getServiceInfo(
         }
       }
     }
+  } else if (serviceName === 'TEXTBOOK_EDITOR') {
+
+    if (existsSync(textbookEditorPath)) {
+      // 检查package.json文件是否存在
+      const tomlPath = path.join(textbookEditorPath, 'pyproject.toml');
+      if (existsSync(tomlPath)) {
+        try {
+          const tomlContent = readFileSync(tomlPath, 'utf-8');
+          const toml = load(tomlContent) as any;
+          const version = toml.project.version || '0.0.0';
+
+          // 检查http://127.0.0.1:7200是否能正常访问，如果能访问,则返回的state是running，否则是stopped
+          const isHealthy = await checkServiceHealth('http://127.0.0.1:7200');
+          return { state: isHealthy ? 'running' : 'stopped', version };
+        } catch (error) {
+          // 如果读取或解析失败，返回默认值
+          return { state: 'stopped', version: '0.0.0' };
+        }
+      }
+    }
   }
 
   return { state: 'not_install', version: '0.0.0' };
 }
 export async function getServiceLogs(serviceName: NativeServiceName) {}
-
-const trainingServerSourcePath = path.join(
-  appPath,
-  'external-resources',
-  'native-training',
-);
 
 export async function installService(
   serviceName: NativeServiceName,
@@ -236,7 +259,76 @@ export async function installService(
       console.error('编译程序失败');
     }
 
-    return { state: 'stopped', version: '1.0.0' };
+    return { state: 'stopped', version: latestVersion.version };
+  }else if(serviceName === 'TEXTBOOK_EDITOR'){
+    console.debug('开始清除旧版本');
+    try {
+      rmSync(textbookEditorPath, { recursive: true });
+    } catch (e) {
+      console.warn(e);
+    }
+    mkdirSync(textbookEditorPath, { recursive: true });
+
+    console.debug('开始下载程序');
+
+    const latestVersion = getLatestVersion('TEXTBOOK_EDITOR_SOURCE');
+    await startWebtorrent(latestVersion.dlcInfo.magnet);
+    let sourcePath = '';
+    try {
+      const torrent = await waitTorrentDone(
+        'TEXTBOOK_EDITOR_SOURCE',
+        latestVersion.version,
+      );
+      sourcePath = path.join(torrent.path, torrent.files[0].name);
+    } catch (e) {
+      console.error(e);
+      console.error('下载程序失败');
+      return { state: 'not_install', version: '0.0.0' };
+    }
+
+    console.debug('将程序解压到目标路径');
+    try {
+      // 检查源文件是否存在
+      if (!existsSync(sourcePath)) {
+        console.error(`源文件不存在: ${sourcePath}`);
+        return { state: 'not_install', version: '0.0.0' };
+      }
+
+      console.debug(`解压文件: ${sourcePath} -> ${textbookEditorPath}`);
+      
+      // 使用adm-zip解压文件
+      const zip = new AdmZip(sourcePath);
+      zip.extractAllTo(textbookEditorPath, true);
+
+      cpSync(path.join(textbookEditorPath, 'textbook-editor'), textbookEditorPath, { recursive: true });
+
+      rmSync(path.join(textbookEditorPath, 'textbook-editor'), { recursive: true });
+
+      console.debug('解压完成');
+    } catch (e) {
+      console.error(e);
+      console.error('解压程序失败');
+      return { state: 'not_install', version: '0.0.0' };
+    }
+
+    console.debug('开始编译程序');
+    try{
+      await commandLine.exec('uv python install 3.12', [], {
+        shell: true,
+        logger: loggerFactory(serviceName),
+        cwd: textbookEditorPath,
+      });
+      await commandLine.exec('uv sync --python 3.12 --extra gpu', [], {
+        shell: true,
+        logger: loggerFactory(serviceName),
+        cwd: textbookEditorPath,
+      });
+    }catch(e){
+      console.error(e);
+      console.error('编译程序失败');
+    }
+
+    return { state: 'stopped', version: latestVersion.version };
   }
   
   // 如果不是NATIVE_TRAINING服务，返回未安装状态
@@ -245,7 +337,7 @@ export async function installService(
 export async function monitorStateIsRuning(
   serviceName: NativeServiceName,
 ): Promise<void> {
-  if (serviceName === 'NATIVE_TRAINING') {
+  if (serviceName === 'NATIVE_TRAINING' || serviceName === 'TEXTBOOK_EDITOR') {
     let retryCounter = 60 * 2;
     console.debug('checking health', serviceName);
     return new Promise<void>((resolve, reject) => {
@@ -285,6 +377,18 @@ export async function uninstallService(serviceName: NativeServiceName) {
     } catch (e) {
       console.warn(e);
     }
+  } else if (serviceName === 'TEXTBOOK_EDITOR') {
+    try {
+      await killProcessOnPort(TEXTBOOK_EDITOR_PORT);
+    } catch (e) {
+      console.warn(e);
+    }
+    
+    try {
+      rmSync(textbookEditorPath, { recursive: true });
+    } catch (e) {
+      console.warn(e);
+    }
   }
 }
 export async function startService(
@@ -320,12 +424,46 @@ export async function startService(
     }
 
     return getServiceInfo(serviceName);
+  } else if (serviceName === 'TEXTBOOK_EDITOR') {
+    const info = await getServiceInfo(serviceName);
+    if (info.state !== 'running') {
+      const tokenSource = new CancellationTokenSourceImpl();
+      commandLine
+        .exec(
+          `uv run python start_web.py`,
+          [],
+          {
+            shell: true,
+            encoding: 'utf8',
+            logger: loggerFactory(serviceName),
+            cwd: textbookEditorPath,
+            token: tokenSource.token,
+            env: {
+              PYTHONIOENCODING: 'utf-8'
+            }
+          },
+        )
+        .catch((e) => {
+          console.warn(e);
+          console.debug('学科培训课程编辑器服务停止了');
+        });
+    }
+    try {
+      await monitorStateIsRuning(serviceName);
+    } catch (e) {
+      console.error(e);
+      await stopService(serviceName);
+    }
+
+    return getServiceInfo(serviceName);
   }
-  return { state: 'running', version: '1.0.0' };
+  return { state: 'stopped', version: '1.0.0' };
 }
 export async function stopService(serviceName: NativeServiceName) {
   if (serviceName === 'NATIVE_TRAINING') {
     await killNativeTraining();
+  }else if (serviceName === 'TEXTBOOK_EDITOR') {
+    await killTextbookEditor();
   }
 }
 
@@ -356,6 +494,32 @@ export async function killNativeTraining(){
   // 终止bun.exe进程
   try {
     await killProcessByName('bun.exe');
+  } catch (e) {
+    console.warn(e);
+  }
+}
+
+export async function killTextbookEditor(){
+  try {
+    await new Promise((resolve) => {
+      const req = http.get(TEXTBOOK_EDITOR_SHUTDOWN_URL, (res) => {
+        resolve(true);
+      });
+
+      req.on('error', () => {
+        resolve(false);
+      });
+
+      req.setTimeout(6000, () => {
+        req.destroy();
+        resolve(false);
+      });
+    });
+  }catch(e){
+    console.warn(e);
+  }
+  try {
+    await killProcessOnPort(TEXTBOOK_EDITOR_PORT);
   } catch (e) {
     console.warn(e);
   }

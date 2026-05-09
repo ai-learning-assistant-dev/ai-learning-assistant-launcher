@@ -1,10 +1,21 @@
 [
   {
+    "id": "TEXTBOOK_EDITOR_SOURCE",
+    "name": "学科培训课程编辑器",
+    "versions": {
+      "0.1.0": {
+        "magnet": "magnet:?xt=urn:btih:052e19842ee7b386aef29b2bfbacefe7e7ce36b6&dn=textbook-editor.zip&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=ws%3A%2F%2F121.40.137.135%3A8200",
+        "comment": "第一个版本",
+        "require": {}
+      }
+    }
+  },
+  {
     "id": "TRAINING_SOURCE",
     "name": "学科培训包",
     "versions": {
       "2.1.0": {
-        "magnet": "magnet:?xt=urn:btih:a6e2e5bf5156c21775db8ef67642dce1fabed538&dn=native-training-v3.zip",
+        "magnet": "magnet:?xt=urn:btih:0ddf20c447ecf466d882dd083dac81f480eaea68&dn=native-training-v5.zip&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=ws%3A%2F%2F121.40.137.135%3A8200",
         "comment": "第一个版本",
         "require": {}
       }
@@ -14,6 +25,13 @@
     "id": "TRAINING_COURSE",
     "name": "学科培训课程数据",
     "versions": {
+      "2.1.2": {
+        "magnet": "magnet:?xt=urn:btih:a5973ccc746379c1deebc6dc1e062974178af76c&dn=course11.zip&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=ws%3A%2F%2F121.40.137.135%3A8200",
+        "comment": "添加英语课",
+        "require": {
+          "TRAINING_SOURCE": "^2.0.0"
+        }
+      },
       "2.1.1": {
         "magnet": "magnet:?xt=urn:btih:3c38f82c2958010dbf2162be45b0480f6c309136&dn=course10v5.zip&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=ws%3A%2F%2F121.40.137.135%3A8200",
         "comment": "添加课程分类",

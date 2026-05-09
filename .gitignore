@@ -120,6 +120,7 @@ update.bat
 external-resources/native-training
 external-resources/native-training-front-tmp
 external-resources/local-ai-service
+external-resources/textbook-editor
 
 # RTS服务相关文件
 external-resources/local-ai-service/rts-service/flask.err

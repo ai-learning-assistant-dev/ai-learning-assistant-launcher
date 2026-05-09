@@ -1,6 +1,7 @@
 import {
   Button,
   List,
+  message,
   Modal,
   notification,
   Popconfirm,
@@ -12,6 +13,8 @@ import { Link } from 'react-router-dom';
 import { useRtsService } from '../../containers/use-rts-service';
 import './index.scss';
 import { TerminalLogScreen } from '../../containers/terminal-log-screen';
+import { useTextbookEditorServiceShortcut } from '../../containers/use-textbook-editor-service-shortcut';
+import { useState } from 'react';
 
 export default function NativeAiService() {
   const {
@@ -37,6 +40,36 @@ export default function NativeAiService() {
     runRts,
     stopRts,
   } = useRtsService();
+
+  
+  const textbookEditorShortcut = useTextbookEditorServiceShortcut();
+  const [textbookEditorServiceStarting, setTextbookEditorServiceStarting] = useState(false);
+
+  const openTextbookEditorService = async () => {
+    setTextbookEditorServiceStarting(true);
+    try {
+      await textbookEditorShortcut.start();
+    } catch (e) {
+      message.error(e.message);
+    }
+    setTextbookEditorServiceStarting(false);
+  };
+
+  const [textbookEditorServiceRemoving, setTextbookEditorServiceRemoving] = useState(false);
+  const removeTextbookEditorService = async () => {
+    setTextbookEditorServiceRemoving(true);
+    await textbookEditorShortcut.remove();
+    setTextbookEditorServiceRemoving(false);
+  };
+
+  const updateTextbookEditorService = async () => {
+    setTextbookEditorServiceStarting(true);
+    setTextbookEditorServiceRemoving(true);
+    await textbookEditorShortcut.update();
+    message.success('学科培训编辑器更新成功');
+    setTextbookEditorServiceStarting(false);
+    setTextbookEditorServiceRemoving(false);
+  };
 
   return (
     <div className="native-ai-service">
@@ -208,15 +241,63 @@ export default function NativeAiService() {
             </div>
           </div>
         </List.Item>
+        <List.Item
+          actions={[
+            !(
+              (textbookEditorShortcut.state === 'stopped' ||
+                textbookEditorShortcut.state === 'updating') &&
+              (textbookEditorShortcut.programVersionInfo.haveNew)
+            ) && (
+              <Button
+                className="rts-button run"
+                onClick={openTextbookEditorService}
+                loading={
+                  textbookEditorServiceStarting || textbookEditorShortcut.initing
+                }
+                disabled={textbookEditorServiceRemoving}
+              >
+                <span className="button-text">{textbookEditorShortcut.state === 'not_install'
+                  ? '安装'
+                  : '开始'}
+                </span>
+              </Button>
+            ),
+            (textbookEditorShortcut.state === 'stopped' ||
+              textbookEditorShortcut.state === 'updating') &&
+              textbookEditorShortcut.programVersionInfo.haveNew && (
+                <Button
+                  className="rts-button install"
+                  onClick={updateTextbookEditorService}
+                  loading={textbookEditorServiceRemoving}
+                >
+                  <span className="button-text">更新</span>
+                </Button>
+              ),
+            textbookEditorShortcut.state !== 'not_install' && (
+              <Button
+                className="rts-button uninstall"
+                onClick={removeTextbookEditorService}
+                loading={textbookEditorServiceRemoving}
+              >
+                <span className="button-text">卸载</span>
+              </Button>
+            )
+          ].filter((item) => item)}
+        >
+          <List.Item.Meta
+            title="学科培训课程编辑器"
+            description={`为学科培训提供课程编辑功能 服务状态：${voiceState || 'unknown'}（端口 7200`}
+          />
+        </List.Item>
       </List>
       <TerminalLogScreen
         id="native-ai-terminal-log"
         cols={100}
-        rows={30}
+        rows={26}
         style={{
           width: 'calc(100% - 20px)',
           marginTop: '16px',
-          height: '430px',
+          height: '340px',
         }}
       />
     </div>

@@ -91,6 +91,7 @@
     "@types/webtorrent": "^0.110.1",
     "adm-zip": "^0.5.16",
     "electron-squirrel-startup": "^1.0.1",
+    "js-toml": "^1.1.0",
     "langchain": "^0.3.35",
     "pdf-lib": "^1.17.1",
     "react": "^19.1.0",

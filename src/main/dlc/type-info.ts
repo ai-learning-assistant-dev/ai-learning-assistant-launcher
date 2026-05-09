@@ -53,6 +53,7 @@ export const dLCIds = [
   'OBSIDIAN_SETUP_EXE',
   'LM_STUDIO_SETUP_EXE',
   'TEST_FILE',
+  'TEXTBOOK_EDITOR_SOURCE',
 ] as const;
 
 export type DLCId = (typeof dLCIds)[number];
