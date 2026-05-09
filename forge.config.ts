@@ -184,6 +184,19 @@ const config: ForgeConfig = {
             ),
         );
       });
+      // textbook-editor 内的所有文件不打到包内
+      allFileSuffix.forEach((suffix) => {
+        copyRules.push(
+          '!' +
+            path.join(
+              __dirname,
+              'external-resources',
+              'textbook-editor',
+              '**',
+              suffix,
+            ),
+        );
+      });
       // native-training-front-tmp 内的所有文件不打到包内
       allFileSuffix.forEach((suffix) => {
         copyRules.push(
