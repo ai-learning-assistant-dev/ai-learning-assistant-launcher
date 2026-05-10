@@ -286,7 +286,7 @@ export default function NativeAiService() {
         >
           <List.Item.Meta
             title="学科培训课程编辑器"
-            description={`为学科培训提供课程编辑功能 服务状态：${voiceState || 'unknown'}（端口 7200`}
+            description={`为学科培训提供课程编辑功能 服务状态：${textbookEditorShortcut.state || 'unknown'}（端口 7200`}
           />
         </List.Item>
       </List>
