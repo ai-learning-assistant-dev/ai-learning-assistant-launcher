@@ -15,7 +15,7 @@
     "name": "学科培训包",
     "versions": {
       "2.1.0": {
-        "magnet": "magnet:?xt=urn:btih:59f9986a1d4972171df91a4433772dd1d2fba671&dn=native-training-v6.zip&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=ws%3A%2F%2F121.40.137.135%3A8200",
+        "magnet": "magnet:?xt=urn:btih:7f5ccc6612da43cebf3fcec8a854b2358433ac26&dn=native-training-v7.zip&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=ws%3A%2F%2F121.40.137.135%3A8200",
         "comment": "第一个版本",
         "require": {}
       }
