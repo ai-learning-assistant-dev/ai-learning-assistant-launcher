@@ -34,6 +34,7 @@ const config: ForgeConfig = {
        */
       devContentSecurityPolicy: `default-src 'self' 'unsafe-inline' data:;script-src 'self' 'unsafe-inline' 'unsafe-eval';connect-src 'self' ws://127.0.0.1:8000 ws://121.40.137.135:8200;`,
       mainConfig,
+      port: 30120,
       renderer: {
         config: rendererConfig,
         entryPoints: [
@@ -77,6 +78,8 @@ const config: ForgeConfig = {
         '*.tar.gz',
         '*.tar',
         '*.mp4',
+        '*.zip',
+        '*.sql',
       ];
       if (process.env.MAKE_MINI) {
         bigFileSuffix.forEach((suffix) => {
@@ -91,10 +94,120 @@ const config: ForgeConfig = {
           );
         });
       }
+
+      // 复制 icons 到 resources 目录（用于托盘图标）
+      const iconsRules = [path.join(__dirname, 'icons', '**')];
+      try {
+        await cpy(iconsRules, path.join(buildPath, 'resources', 'icons'));
+        console.debug('icons 复制成功');
+      } catch (e) {
+        console.error('icons 复制失败:', e);
+      }
+
+      // 复制local-ai-service内所有的ps1脚本
+      try {
+        await cpy(
+          [
+            path.join(
+              __dirname,
+              'external-resources',
+              'local-ai-service',
+              'rts-service',
+              '*.ps1',
+            ),
+          ],
+          path.join(
+            buildPath,
+            'external-resources',
+            'local-ai-service',
+            'rts-service',
+          ),
+        );
+      } catch (e) {
+        console.error(e);
+        throw e;
+      }
+
+      try {
+        await cpy(
+          [
+            path.join(
+              __dirname,
+              'external-resources',
+              'local-ai-service',
+              'obsidian-voice-service',
+              '*.ps1',
+            ),
+          ],
+          path.join(
+            buildPath,
+            'external-resources',
+            'local-ai-service',
+            'obsidian-voice-service',
+          ),
+        );
+      } catch (e) {
+        console.error(e);
+        throw e;
+      }
+
       // DLC内的大文件不打到包内
       bigFileSuffix.forEach((suffix) => {
         copyRules.push(
           '!' + path.join(__dirname, 'external-resources', 'dlc', '**', suffix),
+        );
+      });
+      const allFileSuffix = ['*'];
+      // local-ai-service内的所有文件不打到包内
+      allFileSuffix.forEach((suffix) => {
+        copyRules.push(
+          '!' +
+            path.join(
+              __dirname,
+              'external-resources',
+              'local-ai-service',
+              '**',
+              suffix,
+            ),
+        );
+      });
+      // native-training 内的所有文件不打到包内
+      allFileSuffix.forEach((suffix) => {
+        copyRules.push(
+          '!' +
+            path.join(
+              __dirname,
+              'external-resources',
+              'native-training',
+              '**',
+              suffix,
+            ),
+        );
+      });
+      // textbook-editor 内的所有文件不打到包内
+      allFileSuffix.forEach((suffix) => {
+        copyRules.push(
+          '!' +
+            path.join(
+              __dirname,
+              'external-resources',
+              'textbook-editor',
+              '**',
+              suffix,
+            ),
+        );
+      });
+      // native-training-front-tmp 内的所有文件不打到包内
+      allFileSuffix.forEach((suffix) => {
+        copyRules.push(
+          '!' +
+            path.join(
+              __dirname,
+              'external-resources',
+              'native-training-front-tmp',
+              '**',
+              suffix,
+            ),
         );
       });
       try {

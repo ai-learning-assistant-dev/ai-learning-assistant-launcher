@@ -8,7 +8,7 @@ export default function useCmd() {
   const [wslVersion, setWSLVersion] = useState<string>('');
   const [checkingWsl, setCheckingWsl] = useState<boolean>(true);
   const [isInstallObsidian, setIsInstallObsidian] = useState<boolean>(true);
-  const [isInstallLMStudio, setIsInstallLMStudio] = useState<boolean>(true);
+  const [isInstallLMStudio, setIsInstallLMStudio] = useState<boolean>(false);
   const [loading, setLoading] = useState(false);
   function action(
     actionName: ActionName,

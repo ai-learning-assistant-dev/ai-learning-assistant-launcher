@@ -1,17 +1,23 @@
 [
   {
-    "id": "TRAINING_TAR",
+    "id": "TEXTBOOK_EDITOR_SOURCE",
+    "name": "学科培训课程编辑器",
+    "versions": {
+      "0.1.0": {
+        "magnet": "magnet:?xt=urn:btih:052e19842ee7b386aef29b2bfbacefe7e7ce36b6&dn=textbook-editor.zip&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=ws%3A%2F%2F121.40.137.135%3A8200",
+        "comment": "第一个版本",
+        "require": {}
+      }
+    }
+  },
+  {
+    "id": "TRAINING_SOURCE",
     "name": "学科培训包",
     "versions": {
-      "2.0.0": {
-        "magnet": "magnet:?xt=urn:btih:a7f8c85dcef68ae7958f0f3548603ea9016897df&dn=ala-training-v2.0.0.tar&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce",
+      "2.1.0": {
+        "magnet": "magnet:?xt=urn:btih:7f5ccc6612da43cebf3fcec8a854b2358433ac26&dn=native-training-v7.zip&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=ws%3A%2F%2F121.40.137.135%3A8200",
         "comment": "第一个版本",
-        "riquire":{}
-      },
-      "2.0.2": {
-        "magnet": "magnet:?xt=urn:btih:98995512a1cf581a1baea19132b1a6550ec424fc&dn=ala-training-v2.0.2.tar&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce",
-        "comment": "相比上一个版本修复了一些问题",
-        "riquire":{}
+        "require": {}
       }
     }
   },
@@ -19,12 +25,61 @@
     "id": "TRAINING_COURSE",
     "name": "学科培训课程数据",
     "versions": {
-      "2.0.2": {
-        "magnet": "magnet:?xt=urn:btih:cff0fb96747c5fc4696af4c9fa8cd30330050250&dn=ai_learning_assistant.sql&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=wss%3A%2F%2F114.66.58.95%3A17853%2Fannounce",
-        "comment": "第一个版本",
-        "riquire":{
-          "TRAINING_TAR": "^2.0.0"
+      "2.1.3": {
+        "magnet": "magnet:?xt=urn:btih:f427fc48093568f5fe7c697b2fc8c4ef14d19178&dn=course11v2.zip&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=ws%3A%2F%2F121.40.137.135%3A8200",
+        "comment": "填充内容",
+        "require": {
+          "TRAINING_SOURCE": "^2.0.0"
         }
+      },
+      "2.1.2": {
+        "magnet": "magnet:?xt=urn:btih:a5973ccc746379c1deebc6dc1e062974178af76c&dn=course11.zip&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=ws%3A%2F%2F121.40.137.135%3A8200",
+        "comment": "添加英语课",
+        "require": {
+          "TRAINING_SOURCE": "^2.0.0"
+        }
+      },
+      "2.1.1": {
+        "magnet": "magnet:?xt=urn:btih:3c38f82c2958010dbf2162be45b0480f6c309136&dn=course10v5.zip&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=ws%3A%2F%2F121.40.137.135%3A8200",
+        "comment": "添加课程分类",
+        "require": {
+          "TRAINING_SOURCE": "^2.0.0"
+        }
+      },
+      "2.1.0": {
+        "magnet": "magnet:?xt=urn:btih:1ae91120661d2cbf0b6baa884c018b52e2e0499e&dn=course10v4.zip&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=ws%3A%2F%2F121.40.137.135%3A8200",
+        "comment": "添加人设提示词",
+        "require": {
+          "TRAINING_SOURCE": "^2.0.0"
+        }
+      }
+    }
+  },
+  {
+    "id": "AI_LEARNING_ASSISTANT_LAUNCHER",
+    "name": "技能工作台",
+    "versions": {
+    }
+  },
+  {
+    "id": "OBSIDIAN_SETUP_EXE",
+    "name": "obsidian 安装程序",
+    "versions": {
+      "1.8.10": {
+        "magnet": "magnet:?xt=urn:btih:c05567b4ca6b53f73b0902824a3098713673f907&dn=install_obsidian.exe&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=wss%3A%2F%2F114.66.58.95%3A17853%2Fannounce",
+        "comment": "第一个版本",
+        "require": {}
+      }
+    }
+  },
+  {
+    "id": "LM_STUDIO_SETUP_EXE",
+    "name": "lm studio 安装程序",
+    "versions": {
+      "0.3.23": {
+        "magnet": "magnet:?xt=urn:btih:c368d43704e39686c8904d19816f20c08803d5c3&dn=install_lm_studio.exe&tr=wss%3A%2F%2Flearning.panchuantech.cn%2Fannounce&tr=wss%3A%2F%2F114.66.58.95%3A17853%2Fannounce",
+        "comment": "第一个版本",
+        "require": {}
       }
     }
   }

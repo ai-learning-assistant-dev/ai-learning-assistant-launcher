@@ -1,11 +1,11 @@
 {
   "name": "ai-learning-assistant-launcher",
   "productName": "AI-Learning-Assistant-Launcher",
-  "version": "2.0.1-p2p",
-  "description": "My Electron application description",
+  "version": "2.1.0",
+  "description": "共工计划技能工作台",
   "main": ".webpack/main",
   "scripts": {
-    "start": "chcp 65001 && cross-env NODE_ENV=development electron-forge start",
+    "start": "chcp 65001 && cross-env NODE_ENV=development NODE_OPTIONS=\"--trace-warnings\" electron-forge start ",
     "package": "cross-env NODE_ENV=production electron-forge package",
     "make": "cross-env NODE_ENV=production electron-forge make --target @electron-forge/maker-zip",
     "make-mini": "cross-env NODE_ENV=production MAKE_MINI=true electron-forge make --target @electron-forge/maker-zip",
@@ -15,7 +15,7 @@
   },
   "keywords": [],
   "author": {
-    "name": "James Zhang",
+    "name": "Common Wroks",
     "email": "shiftonetothree@126.com"
   },
   "license": "MIT",
@@ -32,6 +32,7 @@
     "@electron/fuses": "^1.8.0",
     "@stdlib/utils-convert-path": "^0.2.2",
     "@svgr/webpack": "^8.1.0",
+    "@types/adm-zip": "^0.5.7",
     "@types/cross-spawn": "^6.0.6",
     "@types/dockerode": "^3.3.40",
     "@types/form-data": "^2.2.1",
@@ -88,7 +89,9 @@
     "@langchain/ollama": "^0.2.4",
     "@langchain/openai": "^0.6.14",
     "@types/webtorrent": "^0.110.1",
+    "adm-zip": "^0.5.16",
     "electron-squirrel-startup": "^1.0.1",
+    "js-toml": "^1.1.0",
     "langchain": "^0.3.35",
     "pdf-lib": "^1.17.1",
     "react": "^19.1.0",

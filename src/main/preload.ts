@@ -22,6 +22,12 @@ import {
   courseHaveNewVersionTrainingServiceHandle,
 } from './training-service/type-info';
 import {
+  selectFolderHandle,
+  getDiskInfoHandle,
+  setTrayEnabledHandle,
+  DiskInfo,
+} from './joint-build/type-info';
+import {
   DLCIndex,
   logsWebtorrentHandle,
   pauseWebtorrentHandle,
@@ -29,9 +35,57 @@ import {
   removeWebtorrentHandle,
   startWebtorrentHandle,
   DLCId,
+  setUploadEnabledHandle,
+  getUploadEnabledHandle,
+  getUploadStatsHandle,
+  startHttpsDownloadHandle,
+  queryHttpsDownloadHandle,
+  cancelHttpsDownloadHandle,
+  checkHttpsDownloadFileHandle,
+  HttpsDownloadState,
 } from './dlc/type-info';
+import {
+  checkLauncherUpdateHandle,
+  downloadLauncherUpdateHandle,
+  installLauncherUpdateHandle,
+} from './launcher-update/type-info';
+import {
+  courseHaveNewVersionNativeTrainingServiceHandle,
+  haveNewVersionNativeTrainingServiceHandle,
+  installNativeTrainingServiceHandle,
+  logsNativeTrainingServiceHandle,
+  queryNativeTrainingServiceHandle,
+  removeNativeTrainingServiceHandle,
+  startNativeTrainingServiceHandle,
+  updateCourseNativeTrainingServiceHandle,
+  updateNativeTrainingServiceHandle,
+} from './native-training-service/type-info';
+import { NativeServiceInfo } from './native-script/type-info';
+import {
+  installRTSServiceHandle,
+  getRTSServiceStatusHandle,
+  runRTSServiceHandle,
+  stopRTSServiceHandle,
+  rtsProgressChannel,
+  RTSProgressInfo,
+} from './local-service/rts-service/type-info';
+import {
+  getObsidianVoiceServiceStatusHandle,
+  installObsidianVoiceServiceHandle,
+  runObsidianVoiceServiceHandle,
+  stopObsidianVoiceServiceHandle,
+} from './local-service/obsidian-voice-service/type-info';
+import {
+  queryNativeTrainingConfigHandle,
+  setNativeTrainingConfigHandle,
+  TrainingConfig,
+} from './configs/type-info';
+import { haveNewVersionTextbookEditorServiceHandle, installTextbookEditorServiceHandle, logsTextbookEditorServiceHandle, queryTextbookEditorServiceHandle, removeTextbookEditorServiceHandle, startTextbookEditorServiceHandle, updateTextbookEditorServiceHandle } from './textbook-editor-service/type-info';
 
 const electronHandler = {
+  // 系统信息
+  platform: process.platform, // 'win32' | 'darwin' | 'linux'
+  arch: process.arch, // 'x64' | 'arm64' | etc.
   ipcRenderer: {
     sendMessage<A extends AllAction, S extends AllService>(
       channel: Channels,
@@ -129,8 +183,104 @@ const mainHandle = {
       logsTrainingServiceHandle,
     );
   },
+  queryNativeTrainingConfigHandle: async () => {
+    return ipcInvoke<TrainingConfig>(queryNativeTrainingConfigHandle);
+  },
+  setNativeTrainingConfigHandle: async (config: TrainingConfig) => {
+    return ipcInvoke<TrainingConfig>(setNativeTrainingConfigHandle, config);
+  },
+  queryNativeTrainingServiceHandle: async () => {
+    return ipcInvoke<NativeServiceInfo>(queryNativeTrainingServiceHandle);
+  },
+  installNativeTrainingServiceHandle: async () => {
+    return ipcInvoke(installNativeTrainingServiceHandle);
+  },
+  startNativeTrainingServiceHandle: async () => {
+    return ipcInvoke(startNativeTrainingServiceHandle);
+  },
+  removeNativeTrainingServiceHandle: async () => {
+    return ipcInvoke(removeNativeTrainingServiceHandle);
+  },
+  updateCourseNativeTrainingServiceHandle: async () => {
+    return ipcInvoke(updateCourseNativeTrainingServiceHandle);
+  },
+  courseHaveNewVersionNativeTrainingServiceHandle: async () => {
+    return ipcInvoke<{
+      currentVersion: string;
+      latestVersion: string;
+      haveNew: boolean;
+    }>(courseHaveNewVersionNativeTrainingServiceHandle);
+  },
+  updateNativeTrainingServiceHandle: async () => {
+    return ipcInvoke(updateNativeTrainingServiceHandle);
+  },
+  haveNewVersionNativeTrainingServiceHandle: async () => {
+    return ipcInvoke<{
+      currentVersion: string;
+      latestVersion: string;
+      haveNew: boolean;
+    }>(haveNewVersionNativeTrainingServiceHandle);
+  },
+  logsNativeTrainingServiceHandle: async () => {
+    return ipcInvoke<{ imageId: string; logs: string }>(
+      logsNativeTrainingServiceHandle,
+    );
+  },
+  queryTextbookEditorServiceHandle: async () => {
+    return ipcInvoke<NativeServiceInfo>(queryTextbookEditorServiceHandle);
+  },
+  installTextbookEditorServiceHandle: async () => {
+    return ipcInvoke(installTextbookEditorServiceHandle);
+  },
+  startTextbookEditorServiceHandle: async () => {
+    return ipcInvoke(startTextbookEditorServiceHandle);
+  },
+  removeTextbookEditorServiceHandle: async () => {
+    return ipcInvoke(removeTextbookEditorServiceHandle);
+  },
+  logsTextbookEditorServiceHandle: async () => {
+    return ipcInvoke<{ imageId: string; logs: string }>(
+      logsTextbookEditorServiceHandle,
+    );
+  },
+  updateTextbookEditorServiceHandle: async () => {
+    return ipcInvoke(updateTextbookEditorServiceHandle);
+  },
+  haveNewVersionTextbookEditorServiceHandle: async () => {
+    return ipcInvoke<{
+      currentVersion: string;
+      latestVersion: string;
+      haveNew: boolean;
+    }>(haveNewVersionTextbookEditorServiceHandle);
+  },
+  // 共建计划相关
+  selectJointBuildFolder: async (): Promise<string | null> => {
+    return ipcInvoke(selectFolderHandle);
+  },
+  getJointBuildDiskInfo: async (diskPath: string): Promise<DiskInfo> => {
+    return ipcInvoke(getDiskInfoHandle, diskPath);
+  },
+  setTrayEnabled: async (enabled: boolean): Promise<boolean> => {
+    return ipcInvoke(setTrayEnabledHandle, enabled);
+  },
+  // 托盘菜单事件监听
+  onNavigateTo: (callback: (route: string) => void) => {
+    const handler = (_event: IpcRendererEvent, route: string) =>
+      callback(route);
+    ipcRenderer.on('navigate-to', handler);
+    return () => ipcRenderer.removeListener('navigate-to', handler);
+  },
+  onJointBuildStatusChanged: (callback: (enabled: boolean) => void) => {
+    const handler = (_event: IpcRendererEvent, enabled: boolean) =>
+      callback(enabled);
+    ipcRenderer.on('joint-build-status-changed', handler);
+    return () =>
+      ipcRenderer.removeListener('joint-build-status-changed', handler);
+  },
   startWebtorrentHandle: async (url: string) => {
-    return ipcInvoke(startWebtorrentHandle, url);
+    return ipcInvoke<
+      { success: true; infoHash: string } | { success: false; error: string }
+    >(startWebtorrentHandle, url);
   },
   queryWebtorrentHandle: async () => {
     return ipcInvoke<DLCIndex>(queryWebtorrentHandle);
@@ -138,11 +288,109 @@ const mainHandle = {
   pauseWebtorrentHandle: async (url: string) => {
     return ipcInvoke(pauseWebtorrentHandle, url);
   },
+  installRTSServiceHandle: async (): Promise<string> => {
+    return ipcInvoke(installRTSServiceHandle);
+  },
+  getRTSServiceStatusHandle: async (): Promise<string> => {
+    return ipcInvoke(getRTSServiceStatusHandle);
+  },
+  runRTSServiceHandle: async (): Promise<string> => {
+    return ipcInvoke(runRTSServiceHandle);
+  },
+  stopRTSServiceHandle: async (): Promise<string> => {
+    return ipcInvoke(stopRTSServiceHandle);
+  },
+  installObsidianVoiceServiceHandle: async (): Promise<string> => {
+    return ipcInvoke(installObsidianVoiceServiceHandle);
+  },
+  getObsidianVoiceServiceStatusHandle: async (): Promise<string> => {
+    return ipcInvoke(getObsidianVoiceServiceStatusHandle);
+  },
+  runObsidianVoiceServiceHandle: async (): Promise<string> => {
+    return ipcInvoke(runObsidianVoiceServiceHandle);
+  },
+  stopObsidianVoiceServiceHandle: async (): Promise<string> => {
+    return ipcInvoke(stopObsidianVoiceServiceHandle);
+  },
   removeWebtorrentHandle: async (url: string) => {
     return ipcInvoke(removeWebtorrentHandle, url);
   },
   logsWebtorrentHandle: async (url: string) => {
     return ipcInvoke(logsWebtorrentHandle, url);
+  },
+  checkLauncherUpdateHandle: async () => {
+    return ipcInvoke<{
+      currentVersion: string;
+      latestVersion: string;
+      haveNew: boolean;
+    }>(checkLauncherUpdateHandle);
+  },
+  downloadLauncherUpdateHandle: async () => {
+    return ipcInvoke<{
+      success: boolean;
+      version: string;
+      filePath: string;
+      isDev: boolean;
+    }>(downloadLauncherUpdateHandle);
+  },
+  installLauncherUpdateHandle: async () => {
+    return ipcInvoke<{
+      success: boolean;
+      message: string;
+    }>(installLauncherUpdateHandle);
+  },
+  setUploadEnabledHandle: async (enabled: boolean) => {
+    return ipcInvoke<{ success: boolean; enabled: boolean }>(
+      setUploadEnabledHandle,
+      enabled,
+    );
+  },
+  getUploadEnabledHandle: async () => {
+    return ipcInvoke<{ enabled: boolean }>(getUploadEnabledHandle);
+  },
+  getUploadStatsHandle: async () => {
+    return ipcInvoke<{
+      enabled: boolean;
+      totalUploaded: number;
+      uploadSpeed: number;
+      activeTorrents: number;
+    }>(getUploadStatsHandle);
+  },
+  // HTTPS 多源下载
+  startHttpsDownloadHandle: async (
+    dlcId: DLCId,
+    urls: string[],
+    version: string,
+  ) => {
+    return ipcInvoke<{ success: boolean; error?: string }>(
+      startHttpsDownloadHandle,
+      dlcId,
+      urls,
+      version,
+    );
+  },
+  queryHttpsDownloadHandle: async () => {
+    return ipcInvoke<HttpsDownloadState>(queryHttpsDownloadHandle);
+  },
+  cancelHttpsDownloadHandle: async (dlcId: DLCId) => {
+    return ipcInvoke<{ success: boolean }>(cancelHttpsDownloadHandle, dlcId);
+  },
+  checkHttpsDownloadFileHandle: async (dlcId: DLCId, version: string) => {
+    return ipcInvoke<{ exists: boolean; filePath: string | null }>(
+      checkHttpsDownloadFileHandle,
+      dlcId,
+      version,
+    );
+  },
+  // RTS 进度事件监听
+  onRtsProgress: (callback: (progress: RTSProgressInfo) => void) => {
+    const handler = (_event: IpcRendererEvent, progress: RTSProgressInfo) => {
+      callback(progress);
+    };
+    ipcRenderer.on(rtsProgressChannel, handler);
+    return () => {
+      ipcRenderer.removeListener(rtsProgressChannel, handler);
+    };
   },
 };
 

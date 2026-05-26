@@ -1,0 +1,528 @@
+import path from 'path';
+import { gitClone } from '../git';
+import {
+  NativeServiceItem,
+  NativeServiceName,
+  NativeServiceInfo,
+  TRAINING_PORT,
+  TRAINING_REPO_URL,
+  TRAINING_REPO_BRANCH,
+  TRAINING_SHUTDOWN_URL,
+  TEXTBOOK_EDITOR_PORT,
+  TEXTBOOK_EDITOR_SHUTDOWN_URL,
+} from './type-info';
+import { appPath, isWindows } from '../exec/util';
+import { Exec } from '../exec';
+import { loggerFactory } from '../terminal-log';
+import { existsSync, readFileSync, mkdirSync, rmSync, cpSync } from 'fs';
+import { CancellationTokenSourceImpl } from '../exec/cancellation-token';
+import http from 'http';
+import { llmConfigPath } from '../configs';
+import { queryTrainingConfig } from '../configs/training-config';
+import { getLatestVersion, startWebtorrent, waitTorrentDone } from '../dlc';
+import AdmZip from 'adm-zip';
+import { load } from 'js-toml';
+
+const commandLine = new Exec();
+
+const trainingServerSourcePath = path.join(
+  appPath,
+  'external-resources',
+  'native-training',
+);
+
+const textbookEditorPath = path.join(
+  appPath,
+  'external-resources',
+  'textbook-editor',
+);
+
+// 根据进程名终止进程
+async function killProcessByName(processName: string): Promise<void> {
+  try {
+    if (isWindows()) {
+      // Windows: 使用taskkill根据进程名终止进程
+      await commandLine.exec('taskkill', ['/F', '/IM', processName]);
+      console.debug(`已终止进程: ${processName}`);
+    } else {
+      // macOS/Linux: 使用pkill根据进程名终止进程
+      await commandLine.exec('pkill', ['-9', '-f', processName]);
+      console.debug(`已终止进程: ${processName}`);
+    }
+  } catch (error) {
+    // 如果命令执行失败（例如没有找到该进程），忽略错误
+    console.debug(`没有找到进程 ${processName} 或无法终止:`, error);
+  }
+}
+
+// 终止占用指定端口的进程
+async function killProcessOnPort(port: number): Promise<void> {
+  try {
+    if (isWindows()) {
+      // Windows: 使用netstat查找占用端口的进程ID
+      // 注意：这里使用shell命令字符串，因为netstat和findstr需要管道连接
+      const netstatResult = await commandLine.exec(
+        `netstat -ano | findstr :${port}`,
+        [],
+        {
+          shell: true,
+        },
+      );
+
+      const lines = netstatResult.stdout.split('\n');
+      const pids = new Set<string>();
+
+      for (const line of lines) {
+        const match = line.match(/\s+(\d+)$/);
+        if (match) {
+          pids.add(match[1]);
+        }
+      }
+
+      // 终止所有找到的进程
+      for (const pid of pids) {
+        try {
+          // 安全检查：不终止关键系统进程
+          const isCritical = Number(pid) == 0;
+          if (isCritical) {
+            console.warn(`跳过关键系统进程 PID: ${pid} (端口: ${port})`);
+            continue;
+          }
+
+          await commandLine.exec('taskkill', ['/F', '/PID', pid]);
+          console.debug(`已终止进程 PID: ${pid} (端口: ${port})`);
+        } catch (error) {
+          console.warn(`无法终止进程 PID: ${pid}`, error);
+        }
+      }
+    } else {
+      // macOS/Linux: 使用lsof查找占用端口的进程ID
+      const lsofResult = await commandLine.exec('lsof', ['-ti', `:${port}`]);
+
+      const pids = lsofResult.stdout
+        .trim()
+        .split('\n')
+        .filter((pid) => pid.trim() !== '');
+
+      // 终止所有找到的进程
+      for (const pid of pids) {
+        try {
+          await commandLine.exec('kill', ['-9', pid]);
+          console.debug(`已终止进程 PID: ${pid} (端口: ${port})`);
+        } catch (error) {
+          console.warn(`无法终止进程 PID: ${pid}`, error);
+        }
+      }
+    }
+  } catch (error) {
+    // 如果命令执行失败（例如没有找到占用端口的进程），忽略错误
+    console.debug(`没有找到占用端口 ${port} 的进程或无法终止:`, error);
+  }
+}
+
+// 健康检查函数，检查服务是否在运行
+async function checkServiceHealth(url: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const req = http.get(url, (res) => {
+      // 如果状态码是2xx或3xx，认为服务是健康的
+      if (res.statusCode && res.statusCode >= 200 && res.statusCode < 400) {
+        resolve(true);
+      } else {
+        resolve(false);
+      }
+      res.resume(); // 消耗响应数据以释放连接
+    });
+
+    req.on('error', () => {
+      resolve(false);
+    });
+
+    req.setTimeout(3000, () => {
+      req.destroy();
+      resolve(false);
+    });
+  });
+}
+
+export async function getServiceInfo(
+  serviceName: NativeServiceName,
+): Promise<NativeServiceInfo> {
+  if (serviceName === 'NATIVE_TRAINING') {
+
+    if (existsSync(trainingServerSourcePath)) {
+      // 检查package.json文件是否存在
+      const packageJsonPath = path.join(trainingServerSourcePath, 'package.json');
+      if (existsSync(packageJsonPath)) {
+        try {
+          const packageJsonContent = readFileSync(packageJsonPath, 'utf-8');
+          const packageJson = JSON.parse(packageJsonContent);
+          const version = packageJson.version || '0.0.0';
+
+          // 检查http://127.0.0.1:7100是否能正常访问，如果能访问,则返回的state是running，否则是stopped
+          const isHealthy = await checkServiceHealth('http://127.0.0.1:7100');
+          return { state: isHealthy ? 'running' : 'stopped', version };
+        } catch (error) {
+          // 如果读取或解析失败，返回默认值
+          return { state: 'stopped', version: '0.0.0' };
+        }
+      }
+    }
+  } else if (serviceName === 'TEXTBOOK_EDITOR') {
+
+    if (existsSync(textbookEditorPath)) {
+      // 检查package.json文件是否存在
+      const tomlPath = path.join(textbookEditorPath, 'pyproject.toml');
+      if (existsSync(tomlPath)) {
+        try {
+          const tomlContent = readFileSync(tomlPath, 'utf-8');
+          const toml = load(tomlContent) as any;
+          const version = toml.project.version || '0.0.0';
+
+          // 检查http://127.0.0.1:7200是否能正常访问，如果能访问,则返回的state是running，否则是stopped
+          const isHealthy = await checkServiceHealth('http://127.0.0.1:7200');
+          return { state: isHealthy ? 'running' : 'stopped', version };
+        } catch (error) {
+          // 如果读取或解析失败，返回默认值
+          return { state: 'stopped', version: '0.0.0' };
+        }
+      }
+    }
+  }
+
+  return { state: 'not_install', version: '0.0.0' };
+}
+export async function getServiceLogs(serviceName: NativeServiceName) {}
+
+export async function installService(
+  serviceName: NativeServiceName,
+): Promise<NativeServiceInfo> {
+  if (serviceName === 'NATIVE_TRAINING') {
+    console.debug('开始清除旧版本');
+    try {
+      rmSync(trainingServerSourcePath, { recursive: true });
+    } catch (e) {
+      console.warn(e);
+    }
+    mkdirSync(trainingServerSourcePath, { recursive: true });
+
+    console.debug('开始下载程序');
+
+    const latestVersion = getLatestVersion('TRAINING_SOURCE');
+    await startWebtorrent(latestVersion.dlcInfo.magnet);
+    let sourcePath = '';
+    try {
+      const torrent = await waitTorrentDone(
+        'TRAINING_SOURCE',
+        latestVersion.version,
+      );
+      sourcePath = path.join(torrent.path, torrent.files[0].name);
+    } catch (e) {
+      console.error(e);
+      console.error('下载程序失败');
+      return { state: 'not_install', version: '0.0.0' };
+    }
+
+    console.debug('将程序解压到目标路径');
+    try {
+      // 检查源文件是否存在
+      if (!existsSync(sourcePath)) {
+        console.error(`源文件不存在: ${sourcePath}`);
+        return { state: 'not_install', version: '0.0.0' };
+      }
+
+      console.debug(`解压文件: ${sourcePath} -> ${trainingServerSourcePath}`);
+      
+      // 使用adm-zip解压文件
+      const zip = new AdmZip(sourcePath);
+      zip.extractAllTo(trainingServerSourcePath, true);
+
+      cpSync(path.join(trainingServerSourcePath, 'native-training'), trainingServerSourcePath, { recursive: true });
+
+      rmSync(path.join(trainingServerSourcePath, 'native-training'), { recursive: true });
+
+      console.debug('解压完成');
+    } catch (e) {
+      console.error(e);
+      console.error('解压程序失败');
+      return { state: 'not_install', version: '0.0.0' };
+    }
+
+    console.debug('开始编译程序');
+    try{
+      await commandLine.exec('bun install', [], {
+        shell: true,
+        logger: loggerFactory(serviceName),
+        cwd: trainingServerSourcePath,
+      });
+    }catch(e){
+      console.error(e);
+      console.error('编译程序失败');
+    }
+
+    return { state: 'stopped', version: latestVersion.version };
+  }else if(serviceName === 'TEXTBOOK_EDITOR'){
+    console.debug('开始清除旧版本');
+    try {
+      rmSync(textbookEditorPath, { recursive: true });
+    } catch (e) {
+      console.warn(e);
+    }
+    mkdirSync(textbookEditorPath, { recursive: true });
+
+    console.debug('开始下载程序');
+
+    const latestVersion = getLatestVersion('TEXTBOOK_EDITOR_SOURCE');
+    await startWebtorrent(latestVersion.dlcInfo.magnet);
+    let sourcePath = '';
+    try {
+      const torrent = await waitTorrentDone(
+        'TEXTBOOK_EDITOR_SOURCE',
+        latestVersion.version,
+      );
+      sourcePath = path.join(torrent.path, torrent.files[0].name);
+    } catch (e) {
+      console.error(e);
+      console.error('下载程序失败');
+      return { state: 'not_install', version: '0.0.0' };
+    }
+
+    console.debug('将程序解压到目标路径');
+    try {
+      // 检查源文件是否存在
+      if (!existsSync(sourcePath)) {
+        console.error(`源文件不存在: ${sourcePath}`);
+        return { state: 'not_install', version: '0.0.0' };
+      }
+
+      console.debug(`解压文件: ${sourcePath} -> ${textbookEditorPath}`);
+      
+      // 使用adm-zip解压文件
+      const zip = new AdmZip(sourcePath);
+      zip.extractAllTo(textbookEditorPath, true);
+
+      cpSync(path.join(textbookEditorPath, 'textbook-editor'), textbookEditorPath, { recursive: true });
+
+      rmSync(path.join(textbookEditorPath, 'textbook-editor'), { recursive: true });
+
+      console.debug('解压完成');
+    } catch (e) {
+      console.error(e);
+      console.error('解压程序失败');
+      return { state: 'not_install', version: '0.0.0' };
+    }
+
+    console.debug('开始编译程序');
+    try{
+      await commandLine.exec('uv python install 3.12', [], {
+        shell: true,
+        logger: loggerFactory(serviceName),
+        cwd: textbookEditorPath,
+      });
+      await commandLine.exec('uv sync --python 3.12 --extra gpu', [], {
+        shell: true,
+        logger: loggerFactory(serviceName),
+        cwd: textbookEditorPath,
+      });
+    }catch(e){
+      console.error(e);
+      console.error('编译程序失败');
+    }
+
+    return { state: 'stopped', version: latestVersion.version };
+  }
+  
+  // 如果不是NATIVE_TRAINING服务，返回未安装状态
+  return { state: 'not_install', version: '0.0.0' };
+}
+export async function monitorStateIsRuning(
+  serviceName: NativeServiceName,
+): Promise<void> {
+  if (serviceName === 'NATIVE_TRAINING' || serviceName === 'TEXTBOOK_EDITOR') {
+    let retryCounter = 60 * 2;
+    console.debug('checking health', serviceName);
+    return new Promise<void>((resolve, reject) => {
+      const interval = setInterval(async () => {
+        const newInfo = await getServiceInfo(serviceName);
+        if (newInfo) {
+          if (newInfo.state !== 'stopped') {
+            if (newInfo.state === 'running') {
+              clearInterval(interval);
+              resolve();
+            } else {
+              clearInterval(interval);
+              reject();
+            }
+          } else {
+            // do nothing
+            if (retryCounter > 0) {
+              retryCounter--;
+            } else {
+              reject('服务超时还未启动');
+            }
+          }
+        } else {
+          clearInterval(interval);
+          reject();
+        }
+      }, 1000);
+    });
+  }
+}
+export async function uninstallService(serviceName: NativeServiceName) {
+  if (serviceName === 'NATIVE_TRAINING') {
+    await killNativeTraining();
+    
+    try {
+      rmSync(trainingServerSourcePath, { recursive: true });
+    } catch (e) {
+      console.warn(e);
+    }
+  } else if (serviceName === 'TEXTBOOK_EDITOR') {
+    try {
+      await killProcessOnPort(TEXTBOOK_EDITOR_PORT);
+    } catch (e) {
+      console.warn(e);
+    }
+    
+    try {
+      rmSync(textbookEditorPath, { recursive: true });
+    } catch (e) {
+      console.warn(e);
+    }
+  }
+}
+export async function startService(
+  serviceName: NativeServiceName,
+): Promise<NativeServiceInfo> {
+  if (serviceName === 'NATIVE_TRAINING') {
+    const info = await getServiceInfo(serviceName);
+    const trainingConfig = await queryTrainingConfig();
+    if (info.state !== 'running') {
+      const tokenSource = new CancellationTokenSourceImpl();
+      commandLine
+        .exec(
+          `set PORT=${TRAINING_PORT} && set "ALA_LLM_CONFIG_PATH=${llmConfigPath}" && set "UNLOCK_ALL_SECTION=${trainingConfig.env.UNLOCK_ALL_SECTION}" && bun dev`,
+          [],
+          {
+            shell: true,
+            encoding: 'utf8',
+            logger: loggerFactory(serviceName),
+            cwd: trainingServerSourcePath,
+            token: tokenSource.token,
+          },
+        )
+        .catch((e) => {
+          console.warn(e);
+          console.debug('学科培训服务停止了');
+        });
+    }
+    try {
+      await monitorStateIsRuning(serviceName);
+    } catch (e) {
+      console.error(e);
+      await stopService(serviceName);
+    }
+
+    return getServiceInfo(serviceName);
+  } else if (serviceName === 'TEXTBOOK_EDITOR') {
+    const info = await getServiceInfo(serviceName);
+    if (info.state !== 'running') {
+      const tokenSource = new CancellationTokenSourceImpl();
+      commandLine
+        .exec(
+          `uv run python start_web.py`,
+          [],
+          {
+            shell: true,
+            encoding: 'utf8',
+            logger: loggerFactory(serviceName),
+            cwd: textbookEditorPath,
+            token: tokenSource.token,
+            env: {
+              PYTHONIOENCODING: 'utf-8'
+            }
+          },
+        )
+        .catch((e) => {
+          console.warn(e);
+          console.debug('学科培训课程编辑器服务停止了');
+        });
+    }
+    try {
+      await monitorStateIsRuning(serviceName);
+    } catch (e) {
+      console.error(e);
+      await stopService(serviceName);
+    }
+
+    return getServiceInfo(serviceName);
+  }
+  return { state: 'stopped', version: '1.0.0' };
+}
+export async function stopService(serviceName: NativeServiceName) {
+  if (serviceName === 'NATIVE_TRAINING') {
+    await killNativeTraining();
+  }else if (serviceName === 'TEXTBOOK_EDITOR') {
+    await killTextbookEditor();
+  }
+}
+
+export async function killNativeTraining(){
+  try {
+    await new Promise((resolve) => {
+      const req = http.get(TRAINING_SHUTDOWN_URL, (res) => {
+        resolve(true);
+      });
+
+      req.on('error', () => {
+        resolve(false);
+      });
+
+      req.setTimeout(6000, () => {
+        req.destroy();
+        resolve(false);
+      });
+    });
+  }catch(e){
+    console.warn(e);
+  }
+  try {
+    await killProcessOnPort(TRAINING_PORT);
+  } catch (e) {
+    console.warn(e);
+  }
+  // 终止bun.exe进程
+  try {
+    await killProcessByName('bun.exe');
+  } catch (e) {
+    console.warn(e);
+  }
+}
+
+export async function killTextbookEditor(){
+  try {
+    await new Promise((resolve) => {
+      const req = http.get(TEXTBOOK_EDITOR_SHUTDOWN_URL, (res) => {
+        resolve(true);
+      });
+
+      req.on('error', () => {
+        resolve(false);
+      });
+
+      req.setTimeout(6000, () => {
+        req.destroy();
+        resolve(false);
+      });
+    });
+  }catch(e){
+    console.warn(e);
+  }
+  try {
+    await killProcessOnPort(TEXTBOOK_EDITOR_PORT);
+  } catch (e) {
+    console.warn(e);
+  }
+}
+
+export async function updateService(serviceName: NativeServiceName) {}

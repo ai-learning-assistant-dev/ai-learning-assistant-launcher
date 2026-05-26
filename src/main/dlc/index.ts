@@ -8,21 +8,89 @@ import {
   DLCIndex,
   DLCId,
   OneDLCInfo,
+  setUploadEnabledHandle,
+  getUploadEnabledHandle,
+  getUploadStatsHandle,
+  startHttpsDownloadHandle,
+  queryHttpsDownloadHandle,
+  cancelHttpsDownloadHandle,
+  checkHttpsDownloadFileHandle,
+  HttpsDownloadProgress,
+  HttpsDownloadState,
 } from './type-info';
 import { ipcHandle } from '../ipc-util';
 import WebTorrent, * as allExports from 'webtorrent';
 import path from 'path';
 import { appPath } from '../exec';
-import fs, { existsSync, mkdirSync, readFileSync, unlinkSync } from 'fs';
-import { compare } from 'semver';
+import fs, {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync,
+  promises as fsPromises,
+} from 'fs';
+
+import http from 'http';
+import https from 'https';
+import { compare, satisfies } from 'semver';
+import { WEBTORRENT_CONFIG } from '../webtorrent-config';
 
 let client: WebTorrent.Instance | null = null;
+let uploadEnabled = true; // 默认开启上传
+
+// 上传配置文件路径
+const uploadConfigPath = path.join(
+  appPath,
+  'external-resources',
+  'dlc',
+  'upload-config.json',
+);
+
+// 读取上传配置
+function loadUploadConfig(): boolean {
+  try {
+    if (existsSync(uploadConfigPath)) {
+      const config = JSON.parse(readFileSync(uploadConfigPath, 'utf8'));
+      return config.uploadEnabled ?? true;
+    }
+  } catch (error) {
+    console.error('读取上传配置失败:', error);
+  }
+  return true;
+}
+
+// 保存上传配置
+function saveUploadConfig(enabled: boolean): void {
+  try {
+    const dir = path.dirname(uploadConfigPath);
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(
+      uploadConfigPath,
+      JSON.stringify({ uploadEnabled: enabled }, null, 2),
+    );
+  } catch (error) {
+    console.error('保存上传配置失败:', error);
+  }
+}
+
 const getWebTorrent = async () => {
   const WebTorrentClass: WebTorrent.WebTorrent =
     // @ts-ignore
     (await allExports.default).default;
 
-  const iceServers = [{ urls: 'stun:learning.panchuantech.cn:19244' }];
+  const iceServers = [
+    { urls: 'stun:learning.panchuantech.cn:19244' },
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:121.40.137.135:3478' },
+    {
+      urls: 'turn:121.40.137.135:3478',
+      username: 'alalauncher',
+      credential: 'x9dfniubh18df',
+    },
+  ];
   // try {
   //   const ac = new AbortController();
   //   const t = setTimeout(ac.abort, 3000);
@@ -46,7 +114,11 @@ const getWebTorrent = async () => {
       rtcConfig: {
         iceServers,
       } as RTCConfiguration,
-      announce: ['wss://learning.panchuantech.cn/announce'],
+      announce: [
+        'wss://learning.panchuantech.cn/announce',
+        'wss://114.66.58.95:17853/announce',
+        'ws://121.40.137.135:8200',
+      ],
     },
   });
 
@@ -59,7 +131,14 @@ const getWebTorrent = async () => {
 // };
 
 export default async function init(ipcMain: IpcMain) {
+  // 加载上传配置
+  uploadEnabled = loadUploadConfig();
+
   client = await getWebTorrent();
+
+  // 根据配置应用上传限制
+  applyUploadThrottle();
+
   ipcHandle(ipcMain, startWebtorrentHandle, async (_event, magnet: string) =>
     startWebtorrent(magnet),
   );
@@ -75,8 +154,42 @@ export default async function init(ipcMain: IpcMain) {
   ipcHandle(ipcMain, logsWebtorrentHandle, async (_event, magnet: string) =>
     logsWebtorrent(magnet),
   );
+  ipcHandle(ipcMain, setUploadEnabledHandle, async (_event, enabled: boolean) =>
+    setUploadEnabled(enabled),
+  );
+  ipcHandle(ipcMain, getUploadEnabledHandle, async (_event) =>
+    getUploadEnabled(),
+  );
+  ipcHandle(ipcMain, getUploadStatsHandle, async (_event) => getUploadStats());
+  // HTTPS 多源下载
+  ipcHandle(
+    ipcMain,
+    startHttpsDownloadHandle,
+    async (_event, dlcId: DLCId, urls: string[], version: string) =>
+      startHttpsDownload(dlcId, urls, version),
+  );
+  ipcHandle(ipcMain, queryHttpsDownloadHandle, async (_event) =>
+    queryHttpsDownload(),
+  );
+  ipcHandle(ipcMain, cancelHttpsDownloadHandle, async (_event, dlcId: DLCId) =>
+    cancelHttpsDownload(dlcId),
+  );
+  ipcHandle(
+    ipcMain,
+    checkHttpsDownloadFileHandle,
+    async (_event, dlcId: DLCId, version: string) =>
+      checkHttpsDownloadFile(dlcId, version),
+  );
   // 检查种子文件和对应的实际文件，如果有文件，就添加到webtorrent中
   await restoreTorrentsFromFiles();
+
+  // 尝试更新DLC索引文件，失败时只记录错误日志，不向外抛出异常
+  try {
+    console.debug('开始更新DLC索引文件');
+    await updateDLCIndex();
+  } catch (error) {
+    console.error('更新DLC索引失败:', error);
+  }
 }
 
 export async function startWebtorrent(magnet: string) {
@@ -94,14 +207,16 @@ export async function startWebtorrent(magnet: string) {
       mkdirSync(filePath, { recursive: true });
     }
     if (torrent) {
-      torrent.on('metadata', () => {
+      const onMetadata = () => {
+        torrent.removeListener('metadata', onMetadata);
         saveTorrentFile(filePath, torrent);
-      });
+      };
+      torrent.on('metadata', onMetadata);
       console.debug('种子文件已经存在，继续下载');
       torrent.resume();
-      return torrent;
+      return { success: true, infoHash: torrent.infoHash };
     } else {
-      return client.add(
+      const newTorrent = client.add(
         magnet,
         {
           path: filePath,
@@ -114,9 +229,11 @@ export async function startWebtorrent(magnet: string) {
           saveTorrentFile(filePath, torrent);
         },
       );
+      return { success: true, infoHash: newTorrent.infoHash };
     }
   } else {
     console.warn('没找到链接对应的索引信息', magnet);
+    return { success: false, error: '没找到链接对应的索引信息' };
   }
 }
 
@@ -149,6 +266,35 @@ export async function pauseWebtorrent(magnet: string) {
   const torrent = await client.get(magnet);
   if (torrent) {
     torrent.pause();
+  }
+}
+
+/**
+ * 完全销毁种子并释放文件句柄
+ * 注意：这会关闭所有文件句柄，但不会删除已下载的文件
+ */
+export async function destroyWebtorrentForInstall(
+  magnet: string,
+): Promise<void> {
+  const torrent = await client.get(magnet);
+  if (torrent) {
+    return new Promise<void>((resolve) => {
+      let resolved = false;
+      const safeResolve = () => {
+        if (!resolved) {
+          resolved = true;
+          resolve();
+        }
+      };
+
+      torrent.pause();
+      torrent.destroy({ destroyStore: false }, safeResolve);
+
+      setTimeout(
+        safeResolve,
+        WEBTORRENT_CONFIG.TORRENT_DESTROY_CALLBACK_TIMEOUT,
+      );
+    });
   }
 }
 
@@ -214,9 +360,9 @@ export function getDLCFromDLCIndex(id: DLCId): OneDLCInfo {
   }
 }
 
-export function getLatestVersion(id: DLCId): {
+export function getLatestVersion(id: DLCId, installedDeps: Partial<Record<DLCId, string>> = {}): {
   version: string;
-  dlcInfo: OneDLCInfo['versions'][string];
+  dlcInfo: OneDLCInfo['versions'][DLCId];
 } {
   const dlc = getDLCFromDLCIndex(id);
   const versions = Object.keys(dlc.versions);
@@ -225,11 +371,47 @@ export function getLatestVersion(id: DLCId): {
     throw new Error(`DLC ${id} 没有可用的版本`);
   }
 
-  // 找到最新的版本
-  let latestVersion = versions[0];
-  for (let i = 1; i < versions.length; i++) {
-    if (compare(versions[i], latestVersion) > 0) {
-      latestVersion = versions[i];
+  // 筛选满足依赖要求的版本
+  const compatibleVersions: string[] = [];
+  
+  for (const version of versions) {
+    const versionInfo = dlc.versions[version];
+    // 使用类型断言处理两种可能的情况
+    const versionRequire = versionInfo.require || {} as Partial<Record<DLCId, string>>;
+    
+    let satisfiesAllDependencies = true;
+    
+    // 检查是否满足所有传入的依赖要求
+    for (const [reqiureId, requireVersion] of Object.entries(versionRequire)) {
+      const installedVersion = installedDeps[reqiureId as DLCId];
+      
+      if (!installedVersion) {
+        // 如果版本没有声明这个依赖，但用户要求了，则不满足
+        satisfiesAllDependencies = false;
+        break;
+      }
+      
+      // 使用 semver.satisfies 检查版本范围
+      if (!satisfies(installedVersion, requireVersion)) {
+        satisfiesAllDependencies = false;
+        break;
+      }
+    }
+    
+    if (satisfiesAllDependencies) {
+      compatibleVersions.push(version);
+    }
+  }
+
+  if (compatibleVersions.length === 0) {
+    throw new Error(`DLC ${id} 没有满足依赖要求的版本`);
+  }
+
+  // 从兼容的版本中找到最新的版本
+  let latestVersion = compatibleVersions[0];
+  for (let i = 1; i < compatibleVersions.length; i++) {
+    if (compare(compatibleVersions[i], latestVersion) > 0) {
+      latestVersion = compatibleVersions[i];
     }
   }
 
@@ -239,7 +421,7 @@ export function getLatestVersion(id: DLCId): {
   };
 }
 
-export function isLatestVersion(id: DLCId, version: string): boolean {
+export function isLatestVersion(id: DLCId, version: string, installedDeps: Partial<Record<DLCId, string>> = {}): boolean {
   const dlc = getDLCFromDLCIndex(id);
   const versions = Object.keys(dlc.versions);
 
@@ -247,8 +429,8 @@ export function isLatestVersion(id: DLCId, version: string): boolean {
     return false;
   }
 
-  // 找到最新的版本
-  const latestVersion = getLatestVersion(id).version;
+  // 找到最新的版本（不检查依赖）
+  const latestVersion = getLatestVersion(id, installedDeps).version;
 
   // 比较给定的版本是否等于最新版本
   return compare(version, latestVersion) === 0;
@@ -387,8 +569,8 @@ export async function waitTorrentDone(id: DLCId, version: string) {
 
   // 轮询检查种子是否完成
   return new Promise<WebTorrent.Torrent>((resolve, reject) => {
-    const checkInterval = 1000; // 1秒检查一次
-    const maxAttempts = 3600; // 最多检查1小时（3600秒）
+    const checkInterval = WEBTORRENT_CONFIG.DOWNLOAD_CHECK_INTERVAL;
+    const maxAttempts = WEBTORRENT_CONFIG.DOWNLOAD_MAX_ATTEMPTS;
     let attempts = 0;
 
     const intervalId = setInterval(() => {
@@ -408,7 +590,10 @@ export async function waitTorrentDone(id: DLCId, version: string) {
       if (currentTorrent.progress === 1) {
         clearInterval(intervalId);
         console.debug(`种子 ${currentTorrent.name} 下载完成`);
-        resolve(currentTorrent);
+        // 尝试度过文件被webtorrent占用的时间再返回，避免莫名错误
+        setTimeout(() => {
+          resolve(currentTorrent);
+        }, 1000);
         return;
       }
 
@@ -419,8 +604,8 @@ export async function waitTorrentDone(id: DLCId, version: string) {
         return;
       }
 
-      // 输出进度信息（可选，每10秒输出一次）
-      if (attempts % 10 === 0) {
+      // 输出进度信息（可选，每N秒输出一次）
+      if (attempts % WEBTORRENT_CONFIG.DOWNLOAD_PROGRESS_LOG_INTERVAL === 0) {
         console.debug(
           `种子 ${currentTorrent.name} 下载进度: ${(currentTorrent.progress * 100).toFixed(2)}%`,
         );
@@ -428,17 +613,25 @@ export async function waitTorrentDone(id: DLCId, version: string) {
     }, checkInterval);
 
     // 同时监听种子的事件
-    torrent.on('done', () => {
+    const onDone = () => {
+      torrent.removeListener('done', onDone);
       clearInterval(intervalId);
       console.debug(`种子 ${torrent.name} 下载完成（通过事件监听）`);
-      resolve(torrent);
-    });
+      // 尝试度过文件被webtorrent占用的时间再返回，避免莫名错误
+      setTimeout(() => {
+        resolve(torrent);
+      }, 1000);
+    };
 
-    torrent.on('error', (err) => {
+    torrent.on('done', onDone);
+    const onError = (err) => {
+      torrent.removeListener('error', onError);
       clearInterval(intervalId);
       const errorMessage = typeof err === 'string' ? err : err.message;
       reject(new Error(`种子下载出错: ${errorMessage}`));
-    });
+    };
+
+    torrent.on('error', onError);
   });
 }
 
@@ -549,4 +742,519 @@ async function restoreTorrentsFromFiles() {
   } catch (error) {
     console.error('恢复种子过程中发生错误:', error);
   }
+}
+
+/** 应用上传限速设置 */
+function applyUploadThrottle(): void {
+  if (!client) return;
+
+  if (uploadEnabled) {
+    // 不限制上传速度 (-1 表示无限制)
+    client.throttleUpload(-1);
+    console.debug('上传已启用，不限速');
+  } else {
+    // 限制上传速度为 0（禁用上传）
+    client.throttleUpload(0);
+    console.debug('上传已禁用，限速为 0');
+  }
+}
+
+/** 设置上传开关 */
+export function setUploadEnabled(enabled: boolean): {
+  success: boolean;
+  enabled: boolean;
+} {
+  uploadEnabled = enabled;
+  saveUploadConfig(enabled);
+  applyUploadThrottle();
+  console.debug(`上传设置已更新: ${enabled ? '启用' : '禁用'}`);
+  return { success: true, enabled };
+}
+
+/** 获取上传开关状态 */
+export function getUploadEnabled(): { enabled: boolean } {
+  return { enabled: uploadEnabled };
+}
+
+/** 获取上传统计信息 */
+export function getUploadStats(): {
+  enabled: boolean;
+  totalUploaded: number;
+  uploadSpeed: number;
+  activeTorrents: number;
+} {
+  if (!client) {
+    return {
+      enabled: uploadEnabled,
+      totalUploaded: 0,
+      uploadSpeed: 0,
+      activeTorrents: 0,
+    };
+  }
+
+  let totalUploaded = 0;
+  let uploadSpeed = 0;
+  let activeTorrents = 0;
+
+  for (const torrent of client.torrents) {
+    totalUploaded += torrent.uploaded || 0;
+    uploadSpeed += torrent.uploadSpeed || 0;
+    if (torrent.progress === 1 && !torrent.paused) {
+      activeTorrents++;
+    }
+  }
+
+  return {
+    enabled: uploadEnabled,
+    totalUploaded,
+    uploadSpeed,
+    activeTorrents,
+  };
+}
+
+const DLC_INDEX_URL = 'https://learning.panchuantech.cn/dlc/index.json';
+
+/** 从远程服务器更新DLC索引文件 */
+export async function updateDLCIndex(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const request = https.get(DLC_INDEX_URL, (response) => {
+      // 处理重定向
+      if (response.statusCode === 301 || response.statusCode === 302) {
+        const redirectUrl = response.headers.location;
+        if (redirectUrl) {
+          https.get(redirectUrl, handleResponse).on('error', reject);
+        } else {
+          reject(new Error('重定向URL为空'));
+        }
+        return;
+      }
+
+      handleResponse(response);
+    });
+
+    function handleResponse(response: http.IncomingMessage) {
+      if (response.statusCode !== 200) {
+        reject(
+          new Error(`下载DLC索引失败，HTTP状态码: ${response.statusCode}`),
+        );
+        return;
+      }
+
+      let data = '';
+      response.on('data', (chunk) => {
+        data += chunk;
+      });
+
+      response.on('end', async () => {
+        try {
+          // 验证JSON格式是否正确
+          JSON.parse(data);
+
+          // 确保目录存在
+          const dir = path.dirname(dlcIndexPath);
+          if (!existsSync(dir)) {
+            mkdirSync(dir, { recursive: true });
+          }
+
+          // 异步写入文件，避免文件死锁
+          await fsPromises.writeFile(dlcIndexPath, data, 'utf8');
+          console.debug('DLC索引文件更新成功');
+          resolve();
+        } catch (error) {
+          reject(new Error(`解析DLC索引JSON失败: ${error}`));
+        }
+      });
+
+      response.on('error', reject);
+    }
+
+    request.on('error', reject);
+  });
+}
+
+// ==================== HTTPS 多源下载功能 ====================
+
+// HTTPS 下载状态存储
+const httpsDownloadState: HttpsDownloadState = {};
+
+// 当前活跃的下载请求（用于取消）
+const activeHttpsRequests: Map<string, http.ClientRequest> = new Map();
+
+/**
+ * 从多个 URL 中尝试下载文件
+ * 会按顺序尝试每个 URL，直到成功或全部失败
+ * 文件直接下载到 dlcId 目录下，不再使用版本号子目录
+ */
+export async function startHttpsDownload(
+  dlcId: DLCId,
+  urls: string[],
+  version: string,
+): Promise<{ success: boolean; error?: string }> {
+  if (!urls || urls.length === 0) {
+    return { success: false, error: '没有提供下载链接' };
+  }
+
+  // 初始化下载状态
+  httpsDownloadState[dlcId] = {
+    dlcId,
+    version,
+    progress: 0,
+    downloadedBytes: 0,
+    totalBytes: 0,
+    speed: 0,
+    status: 'downloading',
+  };
+
+  // 创建下载目录（不再包含版本号）
+  const downloadDir = path.join(appPath, 'external-resources', 'dlc', dlcId);
+
+  if (!existsSync(downloadDir)) {
+    mkdirSync(downloadDir, { recursive: true });
+  }
+
+  // 尝试从多个源下载
+  for (let i = 0; i < urls.length; i++) {
+    const url = urls[i];
+
+    try {
+      const result = await downloadFromUrl(dlcId, url, downloadDir, version);
+      if (result.success) {
+        httpsDownloadState[dlcId].status = 'completed';
+        httpsDownloadState[dlcId].progress = 1;
+        httpsDownloadState[dlcId].filePath = result.filePath;
+        return { success: true };
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.warn(`[HTTPS Download] 源 ${i + 1} 下载失败: ${errorMsg}`);
+
+      // 如果是用户取消的，直接返回
+      if (httpsDownloadState[dlcId]?.status === 'cancelled') {
+        return { success: false, error: '下载已取消' };
+      }
+
+      // 如果还有其他源，继续尝试
+      if (i < urls.length - 1) {
+        // 重置进度以便下一个源重新开始
+        httpsDownloadState[dlcId].downloadedBytes = 0;
+        httpsDownloadState[dlcId].progress = 0;
+      }
+    }
+  }
+
+  // 所有源都失败了
+  httpsDownloadState[dlcId].status = 'error';
+  httpsDownloadState[dlcId].error = '所有下载源都失败';
+  return { success: false, error: '所有下载源都失败' };
+}
+
+// 最大重定向次数
+const MAX_REDIRECTS = 5;
+
+/**
+ * 从单个 URL 下载文件
+ * @param redirectCount 当前重定向次数，用于防止循环重定向导致栈溢出
+ */
+function downloadFromUrl(
+  dlcId: DLCId,
+  url: string,
+  downloadDir: string,
+  version: string,
+  redirectCount = 0,
+): Promise<{ success: boolean; filePath?: string }> {
+  return new Promise((resolve, reject) => {
+    const protocol = url.startsWith('https://') ? https : http;
+
+    // 从 URL 中提取文件名，如果无法提取则使用默认名称
+    let fileName = path.basename(new URL(url).pathname);
+    if (!fileName || fileName === '' || !fileName.includes('.')) {
+      fileName = `${dlcId}-${version}.exe`;
+    }
+
+    const filePath = path.join(downloadDir, fileName);
+    const tempFilePath = filePath + '.downloading';
+
+    // 如果已存在完整的下载文件，直接返回成功
+    if (existsSync(filePath)) {
+      resolve({ success: true, filePath });
+      return;
+    }
+
+    // 检查是否有未完成的下载，用于断点续传
+    let downloadedBytes = 0;
+    if (existsSync(tempFilePath)) {
+      const stats = fs.statSync(tempFilePath);
+      downloadedBytes = stats.size;
+    }
+
+    const options: https.RequestOptions = {
+      headers: {
+        'User-Agent': 'AI-Learning-Assistant-Launcher',
+        ...(downloadedBytes > 0 ? { Range: `bytes=${downloadedBytes}-` } : {}),
+      },
+    };
+
+    const request = protocol.get(url, options, (response) => {
+      // 处理重定向
+      if (response.statusCode === 301 || response.statusCode === 302) {
+        const redirectUrl = response.headers.location;
+        if (redirectUrl) {
+          if (redirectCount >= MAX_REDIRECTS) {
+            reject(
+              new Error(
+                `超过最大重定向次数限制 (${MAX_REDIRECTS})，可能存在循环重定向`,
+              ),
+            );
+            return;
+          }
+          downloadFromUrl(
+            dlcId,
+            redirectUrl,
+            downloadDir,
+            version,
+            redirectCount + 1,
+          )
+            .then(resolve)
+            .catch(reject);
+        } else {
+          reject(new Error('重定向URL为空'));
+        }
+        return;
+      }
+
+      // 检查是否支持断点续传
+      const isPartialContent = response.statusCode === 206;
+      const contentLength = parseInt(
+        response.headers['content-length'] || '0',
+        10,
+      );
+
+      let totalBytes: number;
+      if (isPartialContent) {
+        // 从 Content-Range 头获取总大小
+        const contentRange = response.headers['content-range'];
+        if (contentRange) {
+          const match = contentRange.match(/\/(\d+)/);
+          totalBytes = match
+            ? parseInt(match[1], 10)
+            : downloadedBytes + contentLength;
+        } else {
+          totalBytes = downloadedBytes + contentLength;
+        }
+      } else {
+        totalBytes = contentLength;
+        downloadedBytes = 0; // 不支持断点续传，从头开始
+      }
+
+      httpsDownloadState[dlcId].totalBytes = totalBytes;
+
+      if (response.statusCode !== 200 && response.statusCode !== 206) {
+        reject(new Error(`HTTP 状态码: ${response.statusCode}`));
+        return;
+      }
+
+      // 打开文件用于写入
+      const writeFlags = isPartialContent ? 'a' : 'w';
+      const fileStream = fs.createWriteStream(tempFilePath, {
+        flags: writeFlags,
+      });
+
+      let lastTime = Date.now();
+      let lastBytes = downloadedBytes;
+
+      response.on('data', (chunk: Buffer) => {
+        // 检查是否被取消
+        if (httpsDownloadState[dlcId]?.status === 'cancelled') {
+          request.destroy();
+          fileStream.close(() => {
+            // 删除临时文件，避免下次错误触发断点续传
+            if (existsSync(tempFilePath)) {
+              try {
+                unlinkSync(tempFilePath);
+              } catch (err) {
+                console.warn(
+                  `[HTTPS Download] 删除临时文件失败: ${tempFilePath}`,
+                  err,
+                );
+              }
+            }
+          });
+          return;
+        }
+
+        downloadedBytes += chunk.length;
+
+        // 计算下载速度（每秒更新一次）
+        const now = Date.now();
+        const timeDiff = now - lastTime;
+        if (timeDiff >= 1000) {
+          const bytesDiff = downloadedBytes - lastBytes;
+          httpsDownloadState[dlcId].speed = Math.round(
+            (bytesDiff / timeDiff) * 1000,
+          );
+          lastTime = now;
+          lastBytes = downloadedBytes;
+        }
+
+        // 更新进度
+        httpsDownloadState[dlcId].downloadedBytes = downloadedBytes;
+        if (totalBytes > 0) {
+          httpsDownloadState[dlcId].progress = downloadedBytes / totalBytes;
+        }
+      });
+
+      response.pipe(fileStream);
+
+      fileStream.on('finish', () => {
+        fileStream.close();
+        // 下载完成，重命名临时文件
+        try {
+          if (existsSync(filePath)) {
+            unlinkSync(filePath);
+          }
+          fs.renameSync(tempFilePath, filePath);
+          resolve({ success: true, filePath });
+        } catch (err) {
+          reject(err);
+        }
+      });
+
+      fileStream.on('error', (err) => {
+        fileStream.close();
+        reject(err);
+      });
+    });
+
+    // 保存请求以便取消
+    activeHttpsRequests.set(dlcId, request);
+
+    request.on('error', (err) => {
+      activeHttpsRequests.delete(dlcId);
+      reject(err);
+    });
+
+    request.on('close', () => {
+      activeHttpsRequests.delete(dlcId);
+    });
+  });
+}
+
+/**
+ * 查询 HTTPS 下载状态
+ */
+export function queryHttpsDownload(): HttpsDownloadState {
+  return { ...httpsDownloadState };
+}
+
+/**
+ * 取消 HTTPS 下载
+ */
+export function cancelHttpsDownload(dlcId: DLCId): { success: boolean } {
+  if (httpsDownloadState[dlcId]) {
+    httpsDownloadState[dlcId].status = 'cancelled';
+  }
+
+  const request = activeHttpsRequests.get(dlcId);
+  if (request) {
+    request.destroy();
+    activeHttpsRequests.delete(dlcId);
+  }
+
+  // 清理临时文件，避免下次错误触发断点续传
+  const downloadDir = path.join(appPath, 'external-resources', 'dlc', dlcId);
+  if (existsSync(downloadDir)) {
+    try {
+      const files = fs.readdirSync(downloadDir);
+      for (const file of files) {
+        if (file.endsWith('.downloading')) {
+          const tempFilePath = path.join(downloadDir, file);
+          unlinkSync(tempFilePath);
+        }
+      }
+    } catch (err) {
+      console.warn(`[HTTPS Download] 清理临时文件失败:`, err);
+    }
+  }
+
+  return { success: true };
+}
+
+/**
+ * 检查 HTTPS 下载是否已完成
+ */
+export function isHttpsDownloadComplete(dlcId: DLCId): boolean {
+  const state = httpsDownloadState[dlcId];
+  return state?.status === 'completed' && state?.progress >= 1;
+}
+
+/**
+ * 获取 HTTPS 下载的文件路径
+ */
+export function getHttpsDownloadFilePath(
+  dlcId: DLCId,
+  version: string,
+): string | null {
+  const state = httpsDownloadState[dlcId];
+  if (state?.filePath) {
+    return state.filePath;
+  }
+
+  // 尝试从目录中查找已下载的文件
+  const downloadDir = path.join(
+    appPath,
+    'external-resources',
+    'dlc',
+    dlcId,
+    version,
+  );
+
+  if (existsSync(downloadDir)) {
+    const files = fs.readdirSync(downloadDir);
+    const exeFile = files.find(
+      (f) => f.endsWith('.exe') && !f.endsWith('.downloading'),
+    );
+    if (exeFile) {
+      return path.join(downloadDir, exeFile);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * 检查指定 DLC 是否已有下载完成的文件
+ * @returns 如果已有下载好的文件，返回文件路径；否则返回 null
+ */
+export function checkHttpsDownloadFile(
+  dlcId: DLCId,
+  version: string,
+): { exists: boolean; filePath: string | null } {
+  // 直接在 dlcId 目录下查找，不再使用版本号子目录
+  const downloadDir = path.join(appPath, 'external-resources', 'dlc', dlcId);
+
+  if (existsSync(downloadDir)) {
+    const files = fs.readdirSync(downloadDir);
+
+    const exeFile = files.find(
+      (f) => f.endsWith('.exe') && !f.endsWith('.downloading'),
+    );
+
+    if (exeFile) {
+      const filePath = path.join(downloadDir, exeFile);
+      // 更新下载状态为已完成
+      httpsDownloadState[dlcId] = {
+        dlcId,
+        version,
+        progress: 1,
+        downloadedBytes: 0,
+        totalBytes: 0,
+        speed: 0,
+        status: 'completed',
+        filePath,
+      };
+      return { exists: true, filePath };
+    }
+  }
+
+  return { exists: false, filePath: null };
 }

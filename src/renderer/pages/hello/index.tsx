@@ -1,45 +1,40 @@
-import { Button, message, Space, Modal, notification, Popconfirm } from 'antd';
+import {
+  Button,
+  message,
+  Space,
+  Modal,
+  notification,
+  Popconfirm,
+  Progress,
+} from 'antd';
 import { NavLink } from 'react-router-dom';
-import { useEffect, useState, useRef } from 'react'; // 添加 useRef 导入
+import { useEffect, useState, useRef, useCallback } from 'react'; // 添加 useRef 导入
 import obsidianLogo from './2023_Obsidian_logo.png';
-import toolsIcon from './Tools_Icon.png';
 import llmIcon from './LLM_Icon.png';
-import heroImage from './Frame 2.png';
-import welcomeImage from './Welcome.png';
+import heroImage from './Frame2.png';
 import qrCodeImage from './QR_code_image.png';
 import subjectIcon from './subject_icon.png';
-import wslLogo from './wslLogo.png';
-// 新增导入Frame 3和Frame 8图片
-import frame3 from './Frame 3.png';
-import frame8 from './Frame 8.png';
+import frame8 from './Frame8.png';
+import jointBuildIcon from '../../../../icons/joint_build.png';
 import './index.scss';
 import { LeftOutlined, RightOutlined } from '@ant-design/icons';
-import { useTrainingServiceShortcut } from '../../containers/use-training-service-shortcut';
+import { useNativeTrainingServiceShortcut } from '../../containers/use-native-training-service-shortcut';
 import { useLogContainer } from '../../containers/backup';
-import { useVM } from '../../containers/use-vm';
+import { useRtsService } from '../../containers/use-rts-service';
 import { TorrentProgress } from '../../containers/torrent-progress';
+import { TerminalLogScreen } from '../../containers/terminal-log-screen';
+import toolsIcon from './Tools_Icon.png';
+import Checkbox, { CheckboxChangeEvent } from 'antd/es/checkbox/Checkbox';
+import { TrainingConfig } from '../../../main/configs/type-info';
 
 export default function Hello() {
-  const trainingServiceShortcut = useTrainingServiceShortcut();
+  const trainingShortcut = useNativeTrainingServiceShortcut();
   const { exportLogs, setupBackupListener } = useLogContainer();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [scale, setScale] = useState(1);
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-
-  const {
-    isWSLInstalled,
-    podmanChecking,
-    needResintallPodman,
-    wslVersion,
-    wslChecking,
-    wslLoading,
-    wslOperation,
-    handleCmdAction,
-    isPodmanInstalled,
-    showRebootModal,
-    vTReady,
-  } = useVM();
+  const [showTerminalLog, setShowTerminalLog] = useState(false);
 
   useEffect(() => {
     const cancel = setupBackupListener();
@@ -49,19 +44,36 @@ export default function Hello() {
     };
   }, [setupBackupListener]);
 
+  // 初始化托盘状态（根据共建开关）
+  useEffect(() => {
+    const initTrayStatus = async () => {
+      const masterSwitch = localStorage.getItem('joint_build_master_switch');
+      const welcomeChoice = localStorage.getItem(
+        'ai_learning_assistant_welcome_shown',
+      );
+
+      let trayEnabled = false;
+      if (masterSwitch !== null) {
+        trayEnabled = masterSwitch === 'true';
+      } else if (welcomeChoice === 'true') {
+        trayEnabled = true;
+      }
+
+      try {
+        await window.mainHandle.setTrayEnabled(trayEnabled);
+      } catch (error) {
+        console.error('初始化托盘状态失败:', error);
+      }
+    };
+
+    initTrayStatus();
+  }, []);
+
   const [currentSlide, setCurrentSlide] = useState(0);
 
   const slides = [
     {
-      content: (
-        <img src={welcomeImage} alt="Welcome" className="hero-image-slide" />
-      ),
-    },
-    {
       content: <img src={heroImage} alt="Hero" className="hero-image-slide" />,
-    },
-    {
-      content: <img src={frame3} alt="Frame 3" className="hero-image-slide" />,
     },
     {
       content: <img src={frame8} alt="Frame 8" className="hero-image-slide" />,
@@ -117,7 +129,7 @@ export default function Hello() {
       'open-external-url',
       'open',
       'browser',
-      'https://docs.qq.com/aio/DS1NnZkZkdkFiSVdP',
+      'https://docs.qq.com/aio/DS05IWHFFTUFkUUNm',
     );
   };
   // 新增：打开使用文档
@@ -152,6 +164,7 @@ export default function Hello() {
 
   useEffect(() => {
     startAutoSlide();
+    checkLauncherUpdate();
 
     return () => {
       clearSlideInterval();
@@ -179,9 +192,10 @@ export default function Hello() {
   const [trainingServiceStarting, setTrainingServiceStarting] = useState(false);
 
   const openTrainingService = async () => {
+    setShowTerminalLog(true);
     setTrainingServiceStarting(true);
     try {
-      await trainingServiceShortcut.start();
+      await trainingShortcut.start();
     } catch (e) {
       message.error(e.message);
     }
@@ -189,33 +203,214 @@ export default function Hello() {
   };
 
   const [trainingServiceRemoving, setTrainingServiceRemoving] = useState(false);
+  const [launcherUpdateInfo, setLauncherUpdateInfo] = useState<{
+    currentVersion: string;
+    latestVersion: string;
+    haveNew: boolean;
+  } | null>(null);
+  const [launcherUpdating, setLauncherUpdating] = useState(false);
+  const [launcherDownloadProgress, setLauncherDownloadProgress] = useState(0);
+  const [launcherDownloadComplete, setLauncherDownloadComplete] =
+    useState(false);
+  const [launcherMagnet, setLauncherMagnet] = useState<string | null>(null);
+
+  // 轮询下载进度
+  useEffect(() => {
+    if (!launcherUpdating || !launcherUpdateInfo?.haveNew) return;
+
+    let mounted = true;
+    const fetchProgress = async () => {
+      try {
+        const dlcIndex = await window.mainHandle.queryWebtorrentHandle();
+        const dlc = dlcIndex.find(
+          (item) => item.id === 'AI_LEARNING_ASSISTANT_LAUNCHER',
+        );
+        if (!dlc || !mounted) return;
+
+        const versionInfo = dlc.versions[launcherUpdateInfo.latestVersion];
+        if (versionInfo?.progress) {
+          const progress = (versionInfo.progress.progress || 0) * 100;
+          if (mounted) {
+            setLauncherDownloadProgress(progress);
+          }
+        }
+      } catch (error) {
+        console.error('获取下载进度失败:', error);
+      }
+    };
+
+    fetchProgress();
+    const intervalId = setInterval(fetchProgress, 1000);
+
+    return () => {
+      mounted = false;
+      clearInterval(intervalId);
+    };
+  }, [launcherUpdating, launcherUpdateInfo]);
 
   const removeTrainingService = async () => {
     setTrainingServiceRemoving(true);
-    await trainingServiceShortcut.remove();
+    await trainingShortcut.remove();
     setTrainingServiceRemoving(false);
   };
 
   const updateCourseTrainingService = async () => {
     setTrainingServiceStarting(true);
     setTrainingServiceRemoving(true);
-    await trainingServiceShortcut.updateCourse();
+    await trainingShortcut.updateCourse();
+    message.success('学科培训课程更新成功');
+    setTrainingServiceStarting(false);
+    setTrainingServiceRemoving(false);
+  };
+
+  const updateTrainingService = async () => {
+    setShowTerminalLog(true);
+    setTrainingServiceStarting(true);
+    setTrainingServiceRemoving(true);
+    await trainingShortcut.update();
     message.success('学科培训更新成功');
     setTrainingServiceStarting(false);
     setTrainingServiceRemoving(false);
   };
 
-  const wslStatusText = () => {
-    if (!vTReady) {
-      return '请在BIOS开启虚拟化';
-    } else {
-      if (isWSLInstalled) {
-        return `已安装 ${wslVersion ? `(${wslVersion.split('\n')[0]})` : ''}`;
-      } else {
-        return '未安装';
+  const checkLauncherUpdate = async () => {
+    try {
+      const info = await window.mainHandle.checkLauncherUpdateHandle();
+      setLauncherUpdateInfo(info);
+
+      // 检查是否已有下载完成的更新包，或正在下载中（用于恢复后台下载状态）
+      if (info?.haveNew) {
+        const dlcIndex = await window.mainHandle.queryWebtorrentHandle();
+        const dlc = dlcIndex.find(
+          (item) => item.id === 'AI_LEARNING_ASSISTANT_LAUNCHER',
+        );
+        if (dlc) {
+          const versionInfo = dlc.versions[info.latestVersion];
+          if (versionInfo?.progress) {
+            const progress = versionInfo.progress.progress || 0;
+            if (progress >= 1) {
+              // 下载已完成
+              setLauncherDownloadComplete(true);
+              setLauncherDownloadProgress(100);
+              setLauncherUpdating(false);
+            } else if (progress > 0) {
+              // 正在下载中，恢复下载状态
+              setLauncherUpdating(true);
+              setLauncherDownloadProgress(progress * 100);
+              setLauncherMagnet(versionInfo.magnet);
+              setLauncherDownloadComplete(false);
+            }
+          }
+        }
       }
+    } catch (error) {
+      console.error('检查启动器更新失败:', error);
     }
   };
+
+  const handleLauncherUpdate = async () => {
+    if (!launcherUpdateInfo || !launcherUpdateInfo.haveNew) {
+      message.info('已是最新版本');
+      return;
+    }
+
+    // 如果下载已完成，直接执行安装
+    if (launcherDownloadComplete) {
+      setLauncherUpdating(true);
+      try {
+        const result = await window.mainHandle.installLauncherUpdateHandle();
+        if (result.success) {
+          message.success(result.message);
+        } else {
+          message.warning(result.message);
+        }
+      } catch (error) {
+        console.error('安装启动器更新失败:', error);
+        message.error('安装失败：' + error.message);
+      } finally {
+        setLauncherUpdating(false);
+      }
+      return;
+    }
+
+    setLauncherUpdating(true);
+    setLauncherDownloadProgress(0);
+    setLauncherDownloadComplete(false);
+
+    try {
+      // 获取 DLC 信息并保存 magnet
+      const dlcIndex = await window.mainHandle.queryWebtorrentHandle();
+      const dlc = dlcIndex.find(
+        (item) => item.id === 'AI_LEARNING_ASSISTANT_LAUNCHER',
+      );
+      if (dlc && launcherUpdateInfo) {
+        const versionInfo = dlc.versions[launcherUpdateInfo.latestVersion];
+        if (versionInfo?.magnet) {
+          setLauncherMagnet(versionInfo.magnet);
+        }
+      }
+
+      const downloadResult =
+        await window.mainHandle.downloadLauncherUpdateHandle();
+
+      // 开发模式下不执行安装，直接提示
+      if (downloadResult.isDev) {
+        message.warning('开发模式下不支持自动更新，请手动解压');
+        setLauncherUpdating(false);
+        return;
+      }
+
+      setLauncherDownloadProgress(100);
+      setLauncherDownloadComplete(true);
+      setLauncherUpdating(false);
+      setLauncherMagnet(null);
+      message.success('下载完成，点击按钮重启并更新');
+    } catch (error) {
+      console.error('更新启动器失败:', error);
+      message.error('更新失败：' + error.message);
+      setLauncherUpdating(false);
+      setLauncherDownloadProgress(0);
+      setLauncherMagnet(null);
+    }
+  };
+
+  const handleCancelLauncherUpdate = async () => {
+    if (!launcherMagnet) {
+      message.warning('没有正在进行的下载');
+      return;
+    }
+    try {
+      await window.mainHandle.pauseWebtorrentHandle(launcherMagnet);
+      setLauncherUpdating(false);
+      setLauncherDownloadProgress(0);
+      setLauncherMagnet(null);
+      message.info('已取消下载');
+    } catch (error) {
+      console.error('取消下载失败:', error);
+      message.error('取消下载失败');
+    }
+  };
+
+  const [trainingConfig, setTrainingConfig] = useState<TrainingConfig | null>(
+    null,
+  );
+
+  useEffect(() => {
+    window.mainHandle
+      .queryNativeTrainingConfigHandle()
+      .then((res) => setTrainingConfig(res));
+  });
+
+  const handleTrainingConfigChange = useCallback(
+    async (e: CheckboxChangeEvent) => {
+      window.mainHandle.setNativeTrainingConfigHandle({
+        env: {
+          UNLOCK_ALL_SECTION: e.target.checked,
+        },
+      });
+    },
+    [],
+  );
 
   return (
     <div className="hello-root" ref={containerRef}>
@@ -227,217 +422,67 @@ export default function Hello() {
       >
         <div className="hello-container" ref={contentRef}>
           <div className="hello-content">
-            <div className="hello-header">
-              <div className="header-content">
-                <div className="hero-image">
-                  <div className="carousel-container">
-                    {slides.map((slide, index) => (
-                      <div
-                        key={index}
-                        className={`carousel-slide ${index === currentSlide ? 'active' : ''}`}
-                      >
-                        {slide.content}
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="carousel-bottom-controls">
-                    <div className="carousel-indicators">
-                      {slides.map((_, index) => (
+            {showTerminalLog ? (
+              <div className="hello-header">
+                <TerminalLogScreen
+                  id="hello-terminal-log"
+                  cols={100}
+                  rows={30}
+                  style={{
+                    width: 'calc(100%)',
+                    marginTop: '16px',
+                    height: '430px',
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="hello-header">
+                <div className="header-content">
+                  <div className="hero-image">
+                    <div className="carousel-container">
+                      {slides.map((slide, index) => (
                         <div
                           key={index}
-                          className={`indicator ${index === currentSlide ? 'active' : ''}`}
-                          onClick={() => goToSlide(index)}
-                        />
+                          className={`carousel-slide ${index === currentSlide ? 'active' : ''}`}
+                        >
+                          {slide.content}
+                        </div>
                       ))}
                     </div>
-                    <div className="carousel-navigation">
-                      <button
-                        className="carousel-control-bottom"
-                        onClick={prevSlide}
-                      >
-                        <Space>
-                          <LeftOutlined />
-                        </Space>
-                      </button>
-                      <button
-                        className="carousel-control-bottom"
-                        onClick={nextSlide}
-                      >
-                        <Space>
-                          <RightOutlined />
-                        </Space>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
 
-            {/* WSL功能区域 */}
-            <div className="wsl-section">
-              <div className="wsl-container">
-                <div className="wsl-wrapper">
-                  <div className="wsl-content-wrapper">
-                    <div className="wsl-header">
-                      <img className="wsl-logo" src={wslLogo} alt="WSL Logo" />
-                      <span className="wsl-title">WSL</span>
-                    </div>
-                    <p className="wsl-description">
-                      工具箱和学科培训的依赖项，请先启用wsl，安装podman，再使用工具箱和学科培训
-                    </p>
-                    <div className="wsl-status-container">
-                      {wslChecking ? (
-                        <Button
-                          type="default"
-                          className="wsl-status-button"
-                          loading={true}
+                    <div className="carousel-bottom-controls">
+                      <div className="carousel-indicators">
+                        {slides.map((_, index) => (
+                          <div
+                            key={index}
+                            className={`indicator ${index === currentSlide ? 'active' : ''}`}
+                            onClick={() => goToSlide(index)}
+                          />
+                        ))}
+                      </div>
+                      <div className="carousel-navigation">
+                        <button
+                          className="carousel-control-bottom"
+                          onClick={prevSlide}
                         >
-                          检查中...
-                        </Button>
-                      ) : (
-                        <Button
-                          type="primary"
-                          className={`wsl-status-button ${vTReady && isWSLInstalled ? 'installed' : 'not-installed'}`}
+                          <Space>
+                            <LeftOutlined />
+                          </Space>
+                        </button>
+                        <button
+                          className="carousel-control-bottom"
+                          onClick={nextSlide}
                         >
-                          {wslStatusText()}
-                        </Button>
-                      )}
+                          <Space>
+                            <RightOutlined />
+                          </Space>
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  <div className="wsl-buttons-wrapper">
-                    <Popconfirm
-                      title="启动WSL"
-                      description="确认启用WSL吗？启用完成后可能需要重启计算机才能生效。"
-                      onConfirm={() => handleCmdAction('install', 'WSL')}
-                      okText="启用"
-                      cancelText="取消"
-                    >
-                      <Button
-                        className="wsl-button install"
-                        loading={
-                          wslLoading &&
-                          wslOperation.action === 'install' &&
-                          wslOperation.service === 'WSL'
-                        }
-                        disabled={
-                          !vTReady ||
-                          wslChecking ||
-                          isWSLInstalled ||
-                          (wslLoading &&
-                            !(
-                              wslOperation.action === 'install' &&
-                              wslOperation.service === 'WSL'
-                            ))
-                        }
-                      >
-                        <span className="button-text">启用WSL</span>
-                      </Button>
-                    </Popconfirm>
-                    <Popconfirm
-                      title="升级WSL"
-                      description={
-                        <div>
-                          <div>您当前的WSL版本是 {wslVersion || '未知'}</div>
-                          <div>确认升级WSL吗？</div>
-                        </div>
-                      }
-                      onConfirm={() => handleCmdAction('update', 'WSL')}
-                      okText="升级"
-                      cancelText="取消"
-                    >
-                      <Button
-                        className="wsl-button upgrade"
-                        loading={
-                          wslLoading &&
-                          wslOperation.action === 'update' &&
-                          wslOperation.service === 'WSL'
-                        }
-                        disabled={
-                          !isWSLInstalled ||
-                          wslChecking ||
-                          (wslLoading &&
-                            !(
-                              wslOperation.action === 'update' &&
-                              wslOperation.service === 'WSL'
-                            ))
-                        }
-                      >
-                        <span className="button-text">升级WSL</span>
-                      </Button>
-                    </Popconfirm>
-                    <Popconfirm
-                      title="安装Podman"
-                      description={
-                        <div>
-                          <div>
-                            {isPodmanInstalled
-                              ? '修改Podman位置'
-                              : '安装Podman'}
-                            可能需要5分钟时间，实际用时和你的磁盘读写速度有关。
-                          </div>
-                          <div style={{ color: 'red' }}>
-                            提示Docker用户：如果您的电脑上还有Docker软件，请您先手动关闭Docker软件前台和后台程序以避免Docker文件被损坏。安装完成后如果出现无法正常运行Docker的情况，请您重启电脑后再打开Docker。
-                          </div>
-                        </div>
-                      }
-                      onConfirm={() => handleCmdAction('move', 'podman')}
-                      okText="安装"
-                      cancelText="取消"
-                    >
-                      <Button
-                        className="wsl-button change-path"
-                        loading={
-                          podmanChecking ||
-                          (wslOperation.action === 'move' &&
-                            wslOperation.service === 'podman')
-                        }
-                        disabled={
-                          !isWSLInstalled ||
-                          wslChecking ||
-                          (wslLoading &&
-                            !(
-                              wslOperation.action === 'move' &&
-                              wslOperation.service === 'podman'
-                            ))
-                        }
-                      >
-                        <span className="button-text">
-                          {isPodmanInstalled ? '修改Podman位置' : '安装Podman'}
-                        </span>
-                      </Button>
-                    </Popconfirm>
-                    <Popconfirm
-                      title="卸载Podman"
-                      description="你确定要卸载Podman吗？卸载后再次安装会需要很长时间！"
-                      onConfirm={() => handleCmdAction('remove', 'podman')}
-                      okText="确认卸载"
-                      cancelText="取消"
-                    >
-                      <Button
-                        className="wsl-button uninstall"
-                        loading={
-                          wslLoading &&
-                          wslOperation.action === 'remove' &&
-                          wslOperation.service === 'podman'
-                        }
-                        disabled={
-                          !isWSLInstalled ||
-                          wslChecking ||
-                          (wslLoading &&
-                            !(
-                              wslOperation.action === 'remove' &&
-                              wslOperation.service === 'podman'
-                            ))
-                        }
-                      >
-                        <span className="button-text">卸载Podman</span>
-                      </Button>
-                    </Popconfirm>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
 
             <div className="features-section">
               <div className="features-container">
@@ -483,13 +528,8 @@ export default function Hello() {
                     </p>
                   </div>
                   <div className="feature-button-container">
-                    <NavLink to="/ai-service" style={{ width: '100%' }}>
-                      <Button
-                        className="feature-button"
-                        block
-                        size="large"
-                        disabled={!isPodmanInstalled || wslLoading}
-                      >
+                    <NavLink to="/native-ai-service" style={{ width: '100%' }}>
+                      <Button className="feature-button" block size="large">
                         开始
                       </Button>
                     </NavLink>
@@ -537,79 +577,92 @@ export default function Hello() {
                     <div className="feature-description">
                       <p className="description-text">
                         AI辅助的学科知识培训，学员建档设立目标，帮助补齐技能知识短板。
-                        {trainingServiceShortcut.state !== '还未安装' &&
-                          `当前版本：${trainingServiceShortcut.versionInfo.currentVersion}`}
+                        {trainingShortcut.state !== 'not_install' &&
+                          `当前版本：${trainingShortcut.courseVersionInfo.currentVersion}`}
+                        <Checkbox
+                          checked={trainingConfig?.env.UNLOCK_ALL_SECTION}
+                          onChange={handleTrainingConfigChange}
+                        >
+                          进行非线性学习
+                        </Checkbox>
                       </p>
                     </div>
-                    {trainingServiceShortcut.versionInfo.haveNew && (
+                    {trainingShortcut.state === 'updating' && (
                       <TorrentProgress
-                        id={'TRAINING_TAR'}
+                        id={'TRAINING_COURSE'}
                         version={
-                          trainingServiceShortcut.versionInfo.latestVersion
+                          trainingShortcut.courseVersionInfo.latestVersion
                         }
                       />
                     )}
                   </div>
                   <div className="feature-button-container">
-                    {((trainingServiceShortcut.state !== '还未安装' &&
-                      !trainingServiceShortcut.versionInfo.haveNew) ||
-                      trainingServiceShortcut.state === '还未安装') && (
+                    {!(
+                      (trainingShortcut.state === 'stopped' ||
+                        trainingShortcut.state === 'updating') &&
+                      (trainingShortcut.courseVersionInfo.haveNew ||
+                        trainingShortcut.programVersionInfo.haveNew)
+                    ) && (
                       <Button
                         className="feature-button"
                         block
                         size="large"
                         onClick={openTrainingService}
                         loading={
-                          trainingServiceStarting ||
-                          trainingServiceShortcut.initing
+                          trainingServiceStarting || trainingShortcut.initing
                         }
-                        disabled={
-                          trainingServiceRemoving ||
-                          !isPodmanInstalled ||
-                          wslLoading
-                        }
+                        disabled={trainingServiceRemoving}
                       >
-                        {trainingServiceShortcut.state === '还未安装'
+                        {trainingShortcut.state === 'not_install'
                           ? '安装'
                           : '开始'}
                       </Button>
                     )}
-                    {trainingServiceShortcut.state !== '还未安装' &&
-                      trainingServiceShortcut.versionInfo.haveNew && (
+                    {(trainingShortcut.state === 'stopped' ||
+                      trainingShortcut.state === 'updating') &&
+                      trainingShortcut.courseVersionInfo.haveNew &&
+                      !trainingShortcut.programVersionInfo.haveNew && (
                         <Button
                           className="feature-button"
                           block
                           size="large"
                           onClick={updateCourseTrainingService}
                           loading={trainingServiceRemoving}
-                          disabled={!isPodmanInstalled || wslLoading}
                         >
                           更新课程
                         </Button>
                       )}
-                    {trainingServiceShortcut.state !== '还未安装' && (
+                    {(trainingShortcut.state === 'stopped' ||
+                      trainingShortcut.state === 'updating') &&
+                      trainingShortcut.programVersionInfo.haveNew && (
+                        <Button
+                          className="feature-button"
+                          block
+                          size="large"
+                          onClick={updateTrainingService}
+                          loading={trainingServiceRemoving}
+                        >
+                          更新
+                        </Button>
+                      )}
+                    {trainingShortcut.state !== 'not_install' && (
                       <Button
                         className="feature-button"
                         block
                         size="large"
-                        onClick={trainingServiceShortcut.downloadLogs}
-                        disabled={
-                          !isPodmanInstalled ||
-                          wslLoading ||
-                          trainingServiceRemoving
-                        }
+                        onClick={() => setShowTerminalLog(true)}
+                        disabled={trainingServiceRemoving}
                       >
                         日志
                       </Button>
                     )}
-                    {trainingServiceShortcut.state !== '还未安装' && (
+                    {trainingShortcut.state !== 'not_install' && (
                       <Button
                         className="feature-button uninstall"
                         block
                         size="large"
                         onClick={removeTrainingService}
                         loading={trainingServiceRemoving}
-                        disabled={!isPodmanInstalled || wslLoading}
                       >
                         卸载
                       </Button>
@@ -623,9 +676,51 @@ export default function Hello() {
                 版本号：{__NPM_PACKAGE_VERSION__} 源码版本：{__COMMIT_HASH__}
               </div>
               <div className="log-export">
-                <NavLink to="/p2p-test">
-                  <Button className="manual-button">P2P测试</Button>
+                <NavLink to="/joint-build" className="joint-build-link">
+                  <Button className="joint-build-button">
+                    <img
+                      src={jointBuildIcon}
+                      alt="共建计划"
+                      className="joint-build-icon"
+                    />
+                    <span>共建计划</span>
+                  </Button>
                 </NavLink>
+                {/* <NavLink to="/p2p-test">
+                  <Button className="manual-button">P2P测试</Button>
+                </NavLink> */}
+                {launcherUpdateInfo?.haveNew && (
+                  <div className="launcher-update-wrapper">
+                    {launcherUpdating && !launcherDownloadComplete && (
+                      <Progress
+                        type="circle"
+                        percent={Math.round(launcherDownloadProgress)}
+                        size={28}
+                        strokeWidth={10}
+                        strokeColor="#1677ff"
+                      />
+                    )}
+                    {launcherUpdating && !launcherDownloadComplete ? (
+                      <Button
+                        className="status-indicator update-button"
+                        danger
+                        onClick={handleCancelLauncherUpdate}
+                      >
+                        <span className="log-text">取消下载</span>
+                      </Button>
+                    ) : (
+                      <Button
+                        className={`status-indicator update-button ${launcherDownloadComplete ? 'download-complete' : ''}`}
+                        onClick={handleLauncherUpdate}
+                        loading={launcherUpdating && launcherDownloadComplete}
+                      >
+                        <span className="log-text">
+                          {launcherDownloadComplete ? '重启并更新' : '更新'}
+                        </span>
+                      </Button>
+                    )}
+                  </div>
+                )}
                 <Button
                   className="status-indicator"
                   onClick={handleExportLogs}
@@ -655,33 +750,6 @@ export default function Hello() {
         <p className="qr-description">
           扫描二维码加入QQ群，关于AI学习助手，在群中提出你的任何疑问，会有专业人员解答
         </p>
-      </Modal>
-      <Modal open={showRebootModal} footer={false} closable={false}>
-        已经成功打开windows系统自带WSL组件，需要重启电脑才能进行后续操作，请确保你保存了所有的文件后手动重启电脑
-      </Modal>
-      <Modal open={needResintallPodman} footer={false} closable={false}>
-        检测到您使用过启动器V1版，新版启动器需要卸载启动器V1版的Podman组件，然后重新安装Podman才能正常使用语音功能，请卸载Podman组件
-        <br />
-        <Button
-          className="wsl-button uninstall"
-          loading={
-            wslLoading &&
-            wslOperation.action === 'remove' &&
-            wslOperation.service === 'podman'
-          }
-          disabled={
-            !isWSLInstalled ||
-            wslChecking ||
-            (wslLoading &&
-              !(
-                wslOperation.action === 'remove' &&
-                wslOperation.service === 'podman'
-              ))
-          }
-          onClick={() => handleCmdAction('remove', 'podman')}
-        >
-          <span className="button-text">卸载Podman</span>
-        </Button>
       </Modal>
     </div>
   );

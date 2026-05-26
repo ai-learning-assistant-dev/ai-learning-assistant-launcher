@@ -9,7 +9,7 @@ import {
 } from '../configs';
 import { MESSAGE_TYPE, MessageData } from '../ipc-data-type';
 import path from 'node:path';
-import { statSync } from 'node:fs';
+import fs from 'node:fs';
 import {
   ensurePodmanWorks,
   getPodmanCli,
@@ -23,6 +23,216 @@ import { RunResult } from '@podman-desktop/api';
 import { podMachineName } from '../podman-desktop/type-info';
 import { isVTReady, isWSLInstall, wslVersion } from './is-wsl-install';
 import { loggerFactory } from '../terminal-log';
+import { WEBTORRENT_CONFIG } from '../webtorrent-config';
+
+/**
+ * 判断错误是否为 EBUSY 错误（文件被占用）
+ */
+function isEBUSYError(error: unknown): boolean {
+  if (error instanceof Error) {
+    return error.message.includes('EBUSY');
+  }
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    return String((error as { message: unknown }).message).includes('EBUSY');
+  }
+  return false;
+}
+
+/**
+ * 获取错误信息
+ */
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  return String(error);
+}
+
+interface RetryExecuteOptions {
+  /** 执行的程序路径 */
+  exePath: string;
+  /** 执行参数 */
+  args: string[];
+  /** 日志前缀，用于区分不同的安装程序 */
+  logPrefix: string;
+}
+
+/**
+ * 带重试机制执行安装程序
+ * 处理 EBUSY 错误（文件被占用）的情况
+ */
+async function executeWithRetry(
+  options: RetryExecuteOptions,
+): Promise<boolean> {
+  const { exePath, args, logPrefix } = options;
+  const maxRetries = WEBTORRENT_CONFIG.MAX_RETRIES;
+
+  for (let retry = 0; retry < maxRetries; retry++) {
+    try {
+      // 每次重试前等待更长时间，让文件句柄有充足时间释放
+      const waitTime =
+        retry === 0
+          ? WEBTORRENT_CONFIG.RETRY_BASE_WAIT
+          : WEBTORRENT_CONFIG.RETRY_BASE_WAIT +
+            retry * WEBTORRENT_CONFIG.RETRY_INCREMENT;
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
+
+      const result = await commandLine.exec(exePath, args);
+      return true;
+    } catch (e) {
+      if (isEBUSYError(e) && retry < maxRetries - 1) {
+        console.warn(
+          `[${logPrefix}] 执行安装程序失败 (EBUSY)，重试 ${retry + 1}/${maxRetries}...`,
+        );
+      } else if (isEBUSYError(e)) {
+        // 所有重试都失败了，尝试最后一次长等待
+        console.warn(`[${logPrefix}] 所有重试都失败，尝试最后一次长等待...`);
+        await new Promise((resolve) =>
+          setTimeout(resolve, WEBTORRENT_CONFIG.FINAL_RETRY_WAIT),
+        );
+        try {
+          const result = await commandLine.exec(exePath, args);
+          console.debug(`[${logPrefix}] 最后一次尝试成功:`, result);
+          return true;
+        } catch (finalError) {
+          console.error(`[${logPrefix}] 最后一次尝试也失败了:`, finalError);
+          throw finalError;
+        }
+      } else {
+        throw e;
+      }
+    }
+  }
+  return false;
+}
+
+interface P2PInstallOptions {
+  /** DLC 索引中的 key */
+  dlcKey:
+    | 'OBSIDIAN_SETUP_EXE'
+    | 'LM_STUDIO_SETUP_EXE'
+    | 'PDF_TAR'
+    | 'VOICE_TAR'
+    | 'TRAINING_TAR'
+    | 'TRAINING_VOICE_TAR'
+    | 'TRAINING_COURSE'
+    | 'LMSTUDIO_WINDOWS'
+    | 'AI_LEARNING_ASSISTANT_LAUNCHER'
+    | 'TEST_FILE';
+  /** 安装程序参数 */
+  installerArgs: string[];
+  /** 日志前缀 */
+  logPrefix: string;
+  /** 降级时使用的本地安装包相对路径 */
+  fallbackInstallerPath: string;
+}
+
+/**
+ * 通用的 P2P 下载安装逻辑
+ * 优先使用 P2P 下载的安装包，失败时降级到本地安装包
+ */
+async function installFromP2POrFallback(
+  options: P2PInstallOptions,
+): Promise<boolean> {
+  const { dlcKey, installerArgs, logPrefix, fallbackInstallerPath } = options;
+
+  try {
+    // 首先直接在 DLC 目录下检查是否有已下载的 exe 文件（不使用版本号子目录）
+    const dlcDir = path.join(appPath, 'external-resources', 'dlc', dlcKey);
+
+    if (fs.existsSync(dlcDir)) {
+      const allItems = fs.readdirSync(dlcDir);
+
+      // 直接在 DLC 目录下查找 exe 文件
+      const exeFile = allItems.find(
+        (f: string) => f.endsWith('.exe') && !f.endsWith('.downloading'),
+      );
+
+      if (exeFile) {
+        const exePath = path.join(dlcDir, exeFile);
+
+        if (fs.existsSync(exePath)) {
+          const stats = fs.statSync(exePath);
+
+          return await executeWithRetry({
+            exePath,
+            args: installerArgs,
+            logPrefix,
+          });
+        }
+      }
+    }
+
+    // 如果 HTTPS 下载目录没有文件，尝试从 P2P 下载（保留旧逻辑兼容）
+    const { getDLCFromDLCIndex, destroyWebtorrentForInstall } = await import(
+      '../dlc'
+    );
+    const dlcInfo = getDLCFromDLCIndex(dlcKey);
+
+    if (dlcInfo) {
+      const latestVersion = Object.keys(dlcInfo.versions).sort().pop();
+
+      if (latestVersion) {
+        const versionInfo = dlcInfo.versions[latestVersion];
+
+        // 完全销毁 torrent 以释放文件句柄，避免 EBUSY 错误
+        if (versionInfo.magnet) {
+          try {
+            console.debug(`[${logPrefix}] 开始销毁种子以释放文件句柄...`);
+            await destroyWebtorrentForInstall(versionInfo.magnet);
+            // 等待额外的时间确保文件句柄完全释放
+            await new Promise((resolve) =>
+              setTimeout(resolve, WEBTORRENT_CONFIG.TORRENT_DESTROY_WAIT),
+            );
+            console.debug(`[${logPrefix}] 种子已销毁，等待完成`);
+          } catch (e) {
+            console.warn(`[${logPrefix}] 销毁torrent失败:`, e);
+          }
+        }
+
+        const downloadPath = path.join(
+          appPath,
+          'external-resources',
+          'dlc',
+          dlcKey,
+          latestVersion,
+        );
+
+        if (fs.existsSync(downloadPath)) {
+          const files = fs.readdirSync(downloadPath);
+
+          const exeFile = files.find((f: string) => f.endsWith('.exe'));
+
+          if (exeFile) {
+            const exePath = path.join(downloadPath, exeFile);
+            return await executeWithRetry({
+              exePath,
+              args: installerArgs,
+              logPrefix,
+            });
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error(`[${logPrefix}] 尝试使用下载包失败，使用默认方式:`, error);
+  }
+
+  // 降级到原有的本地安装包方式
+  const fallbackPath = path.join(
+    appPath,
+    'external-resources',
+    'ai-assistant-backend',
+    fallbackInstallerPath,
+  );
+
+  const result = await commandLine.exec(fallbackPath, installerArgs);
+  console.debug(`[${logPrefix}] 本地安装包执行结果:`, result);
+  return true;
+}
 
 const commandLine = new Exec();
 
@@ -488,17 +698,12 @@ async function checkWSLComponent() {
 }
 
 export async function installObsidian() {
-  const result = await commandLine.exec(
-    path.join(
-      appPath,
-      'external-resources',
-      'ai-assistant-backend',
-      'install_obsidian.exe',
-    ),
-    ['/s'],
-  );
-  console.debug(result);
-  return true;
+  return installFromP2POrFallback({
+    dlcKey: 'OBSIDIAN_SETUP_EXE',
+    installerArgs: ['/s'],
+    logPrefix: 'Obsidian',
+    fallbackInstallerPath: 'install_obsidian.exe',
+  });
 }
 
 export async function isObsidianInstall() {
@@ -507,7 +712,7 @@ export async function isObsidianInstall() {
   try {
     obsidianPath = replaceVarInPath(obsidianPath);
     console.debug('getObsidianConfig', obsidianPath);
-    const stat = statSync(obsidianPath);
+    const stat = fs.statSync(obsidianPath);
     if (stat.isFile()) {
       return true;
     } else {
@@ -520,26 +725,24 @@ export async function isObsidianInstall() {
 }
 
 export async function installLMStudio() {
-  const result = await commandLine.exec(
-    path.join(
-      appPath,
-      'external-resources',
-      'ai-assistant-backend',
-      'install_lm_studio.exe',
-    ),
-    ['/s'],
-  );
-  console.debug(result);
-  return true;
+  return installFromP2POrFallback({
+    dlcKey: 'LM_STUDIO_SETUP_EXE',
+    installerArgs: [],
+    logPrefix: 'LM Studio',
+    fallbackInstallerPath: 'install_lm_studio.exe',
+  });
 }
 
 export async function isLMStudioInstall() {
   try {
     const result = await Promise.race([
       new Promise<RunResult>((resolve, reject) =>
-        setTimeout(() => reject('isLMStudioInstall命令超时'), 15000),
+        setTimeout(
+          () => reject('isLMStudioInstall命令超时'),
+          WEBTORRENT_CONFIG.LM_STUDIO_CHECK_TIMEOUT,
+        ),
       ),
-      // 如果用户安装lmstudio然后又卸载了lmstudio，那么这个命令会一直卡着，也不报错，所以要用一个10000ms的报错promise与它竞赛
+      // 如果用户安装lmstudio然后又卸载了lmstudio，那么这个命令会一直卡着，也不报错，所以要用一个超时promise与它竞赛
       commandLine.exec('lms', ['ls']),
     ]);
     console.debug('isLMStudioInstall', result);

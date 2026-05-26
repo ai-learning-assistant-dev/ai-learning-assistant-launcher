@@ -596,10 +596,26 @@ body{
           padding: 8px 0;
           gap: 10px;
           width: auto;
-          max-width: 300px;
+          max-width: 400px;
           min-height: 53px;
           flex: none;
           order: 1;
+          
+          .launcher-update-wrapper {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 8px;
+            background: linear-gradient(135deg, rgba(22, 119, 255, 0.1) 0%, rgba(22, 119, 255, 0.05) 100%);
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(22, 119, 255, 0.15);
+            
+            .ant-progress {
+              .ant-progress-inner {
+                background-color: rgba(22, 119, 255, 0.15);
+              }
+            }
+          }
           
           .status-indicator {
             box-sizing: border-box;
@@ -619,6 +635,24 @@ body{
             &:hover {
               background: #ff7875;
               transform: translateY(-2px);
+            }
+            
+            // 更新按钮使用蓝色
+            &.update-button {
+              background: #1677ff;
+              
+              &:hover {
+                background: #4096ff;
+              }
+              
+              &.download-complete {
+                background: linear-gradient(135deg, #52c41a 0%, #73d13d 100%);
+                animation: pulse-green 2s infinite;
+                
+                &:hover {
+                  background: linear-gradient(135deg, #73d13d 0%, #95de64 100%);
+                }
+              }
             }
             
             .log-text {
@@ -664,6 +698,44 @@ body{
             
             &:hover {
               background: #73d13d;
+              transform: translateY(-2px);
+            }
+          }
+
+          .joint-build-link {
+            text-decoration: none;
+          }
+
+          .joint-build-button {
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: row;
+            justify-content: center;
+            align-items: center;
+            padding: 2px 8px;
+            gap: 4px;
+            width: auto;
+            min-width: 90px;
+            min-height: 22px;
+            background: #52c41a;
+            border: 1px solid #52c41a;
+            border-radius: 6px;
+            color: #fff;
+            font-family: 'Inter', sans-serif;
+            font-style: normal;
+            font-weight: 500;
+            font-size: clamp(10px, 2vw, 12px);
+            line-height: 16px;
+            cursor: pointer;
+
+            .joint-build-icon {
+              width: 16px;
+              height: 16px;
+            }
+
+            &:hover {
+              background: #73d13d;
+              border-color: #73d13d;
               transform: translateY(-2px);
             }
           }
@@ -1106,6 +1178,18 @@ body{
     margin-top: 16px;
     font-size: 16px;
     color: #333;
+  }
+}
+
+@keyframes pulse-green {
+  0% {
+    box-shadow: 0 0 0 0 rgba(82, 196, 26, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(82, 196, 26, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(82, 196, 26, 0);
   }
 }
 

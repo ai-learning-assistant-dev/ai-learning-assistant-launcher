@@ -1,19 +1,22 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import initLogger from './logger';
-import initPodman from './podman-desktop/simple-container-manage';
 import initCmd from './cmd';
 import initConfigs from './configs';
 import initObsidianPlugin, { updateTemplate } from './obsidian-plugin';
 import initWorkspace from './workspace';
-import initContainerLogs from './podman-desktop/container-logs';
 import initLMStudio from './lm-studio';
 import initExampleMain from './example-main';
 import initTerminalLog from './terminal-log';
 import initPdfConvert from './pdf-convert';
-import initTrainingService from './training-service';
+import initNativeTrainingService from './native-training-service';
 import initLogService from './backup';
 import initExternalUrl from './external-url';
+import { setupJointBuildHandlers, setupWindowCloseHandler, isTrayEnabled } from './joint-build';
 import initDLC from './dlc';
+import initLauncherUpdate from './launcher-update';
+import initRTSService from './local-service/rts-service';
+import initObsidianVoiceService from './local-service/obsidian-voice-service';
+import initTextbookEditorService from './textbook-editor-service'
 import path from 'node:path';
 import { appPath, autoAdaptEncodingForWindows } from './exec';
 import { logDeviceInfo } from './logger/log-device-info';
@@ -74,13 +77,18 @@ initCmd(ipcMain);
 initConfigs(ipcMain);
 initObsidianPlugin(ipcMain);
 initWorkspace(ipcMain);
-initContainerLogs(ipcMain);
+// initContainerLogs(ipcMain);
 initLMStudio(ipcMain);
 initExampleMain(ipcMain);
 initPdfConvert(ipcMain);
-initTrainingService(ipcMain);
+initNativeTrainingService(ipcMain);
 initExternalUrl(ipcMain);
+setupJointBuildHandlers(ipcMain);
 initDLC(ipcMain);
+initLauncherUpdate(ipcMain);
+initRTSService(ipcMain);
+initObsidianVoiceService(ipcMain);
+initTextbookEditorService(ipcMain);
 updateTemplate();
 
 const createWindow = async () => {
@@ -95,6 +103,9 @@ const createWindow = async () => {
     autoHideMenuBar: true,
   });
 
+  // 设置窗口关闭行为（托盘最小化）
+  setupWindowCloseHandler(mainWindow);
+
   // 最大化窗口
   mainWindow.maximize();
 
@@ -102,7 +113,7 @@ const createWindow = async () => {
   mainWindow.show();
 
   // 需要等待连接podman
-  await initPodman(ipcMain);
+  // await initPodman(ipcMain);
 
   // and load the index.html of the app.
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
@@ -121,6 +132,10 @@ app.on('ready', createWindow);
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
 app.on('window-all-closed', () => {
+  // 如果托盘启用，不退出应用
+  if (isTrayEnabled()) {
+    return;
+  }
   if (process.platform !== 'darwin') {
     app.quit();
   }

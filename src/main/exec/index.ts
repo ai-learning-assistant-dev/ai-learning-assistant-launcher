@@ -32,8 +32,21 @@ export const appPath = app.isPackaged
   ? path.dirname(app.getPath('exe'))
   : app.getAppPath();
 
-export const macosExtraPath =
-  '/opt/podman/bin:/usr/local/bin:/opt/homebrew/bin:/opt/local/bin';
+export const bunPath = path.join(
+  appPath,
+  'external-resources',
+  'native-runtime',
+  'bun',
+);
+
+export const uvPath = path.join(
+  appPath,
+  'external-resources',
+  'native-runtime',
+  'uv',
+);
+
+export const macosExtraPath = `/opt/podman/bin:/usr/local/bin:/opt/homebrew/bin:/opt/local/bin:${bunPath}:${uvPath}`;
 
 function bufferToString(data: Buffer | string, encoding?: string) {
   if (data) {
@@ -320,7 +333,7 @@ export function getInstallationPath(envPATH?: string): string {
   envPATH ??= process.env.PATH;
 
   if (isWindows()) {
-    return `c:\\Program Files\\RedHat\\Podman;${envPATH}`;
+    return `c:\\Program Files\\RedHat\\Podman;${bunPath};${uvPath};${envPATH}`;
   }
   if (isMac()) {
     if (!envPATH) {
