@@ -3,6 +3,7 @@ const nativeServiceNames = [
   'NATIVE_TRAINING_RTS',
   'NATIVE_OBSIDIAN_VOICE',
   'TEXTBOOK_EDITOR',
+  'OPENCLAW',
 ] as const;
 
 export type NativeServiceName = (typeof nativeServiceNames)[number];

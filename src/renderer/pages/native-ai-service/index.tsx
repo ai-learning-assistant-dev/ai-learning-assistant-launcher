@@ -14,6 +14,7 @@ import { useRtsService } from '../../containers/use-rts-service';
 import './index.scss';
 import { TerminalLogScreen } from '../../containers/terminal-log-screen';
 import { useTextbookEditorServiceShortcut } from '../../containers/use-textbook-editor-service-shortcut';
+import { useOpenclawServiceShortcut } from '../../containers/use-openclaw-service-shortcut';
 import { useState } from 'react';
 
 export default function NativeAiService() {
@@ -44,6 +45,74 @@ export default function NativeAiService() {
   
   const textbookEditorShortcut = useTextbookEditorServiceShortcut();
   const [textbookEditorServiceStarting, setTextbookEditorServiceStarting] = useState(false);
+
+  const openclawShortcut = useOpenclawServiceShortcut();
+
+  const openclawStateText = {
+    not_install: '未安装',
+    installing: '安装中',
+    installed: '已安装',
+    uninstalling: '卸载中',
+  }[openclawShortcut.state] || '检测中...';
+
+  const installOpenclawService = async () => {
+    try {
+      await openclawShortcut.install();
+    } catch (e) {
+      message.error(e.message);
+    }
+  };
+
+  const removeOpenclawService = async () => {
+    try {
+      await openclawShortcut.remove();
+    } catch (e) {
+      message.error(e.message);
+    }
+  };
+
+  const [openclawOperating, setOpenclawOperating] = useState<
+    'run' | 'stop' | null
+  >(null);
+
+  const runOpenclawService = async () => {
+    setOpenclawOperating('run');
+    try {
+      await openclawShortcut.run();
+    } catch (e) {
+      message.error(e.message);
+    } finally {
+      setOpenclawOperating(null);
+    }
+  };
+
+  const stopOpenclawService = async () => {
+    setOpenclawOperating('stop');
+    try {
+      await openclawShortcut.stop();
+    } catch (e) {
+      message.error(e.message);
+    } finally {
+      setOpenclawOperating(null);
+    }
+  };
+
+  const openOpenclawWindow = async () => {
+    try {
+      await openclawShortcut.openWindow();
+    } catch (e) {
+      message.error(e.message);
+    }
+  };
+
+  const copyOpenclawPageLink = async () => {
+    try {
+      await openclawShortcut.copyPageLink();
+      message.success('页面链接已复制到剪贴板');
+    } catch (e) {
+      message.error(e.message);
+    }
+  };
 
   const openTextbookEditorService = async () => {
     setTextbookEditorServiceStarting(true);
@@ -287,6 +356,90 @@ export default function NativeAiService() {
           <List.Item.Meta
             title="学科培训课程编辑器"
             description={`为学科培训提供课程编辑功能 服务状态：${textbookEditorShortcut.state || 'unknown'}（端口 7200）`}
+          />
+        </List.Item>
+        <List.Item
+          actions={[
+            openclawShortcut.state !== 'installed' && (
+              <Button
+                key="install-openclaw-service"
+                className="rts-button install"
+                loading={openclawShortcut.state === 'installing'}
+                disabled={openclawShortcut.state === 'uninstalling'}
+                onClick={installOpenclawService}
+              >
+                <span className="button-text">安装</span>
+              </Button>
+            ),
+            openclawShortcut.state === 'installed' &&
+              !openclawShortcut.running && (
+                <Button
+                  key="run-openclaw-service"
+                  className="rts-button run"
+                  loading={openclawOperating === 'run'}
+                  disabled={openclawOperating === 'stop'}
+                  onClick={runOpenclawService}
+                >
+                  <span className="button-text">运行</span>
+                </Button>
+              ),
+            openclawShortcut.running && (
+              <Button
+                key="open-openclaw-window"
+                className="rts-button run"
+                onClick={openOpenclawWindow}
+              >
+                <span className="button-text">打开界面</span>
+              </Button>
+            ),
+            openclawShortcut.running && (
+              <Button
+                key="copy-openclaw-page-link"
+                onClick={copyOpenclawPageLink}
+              >
+                <span className="button-text">复制页面链接</span>
+              </Button>
+            ),
+            openclawShortcut.running && (
+              <Button
+                key="stop-openclaw-service"
+                className="rts-button uninstall"
+                danger
+                loading={openclawOperating === 'stop'}
+                disabled={openclawOperating === 'run'}
+                onClick={stopOpenclawService}
+              >
+                <span className="button-text">停止</span>
+              </Button>
+            ),
+            (openclawShortcut.state === 'installed' || 
+              openclawShortcut.state === 'uninstalling') && openclawShortcut.running === false && (
+              <Button
+                key="remove-openclaw-service"
+                className="rts-button uninstall"
+                danger
+                loading={openclawShortcut.state === 'uninstalling'}
+                onClick={removeOpenclawService}
+              >
+                <span className="button-text">卸载</span>
+              </Button>
+            ),
+            <Button
+              key="refresh-openclaw-service"
+              loading={openclawShortcut.initing}
+              onClick={openclawShortcut.refresh}
+            >
+              刷新状态
+            </Button>,
+          ].filter((item) => item)}
+        >
+          <List.Item.Meta
+            title="OpenClaw"
+            description={`AI 编程助手（bun 全局安装） 服务状态：${openclawStateText}${
+              openclawShortcut.running ? '（运行中）' : ''
+            }${
+              openclawShortcut.version ? ` 版本：${openclawShortcut.version}` : ''
+            }`}
           />
         </List.Item>
       </List>

@@ -81,6 +81,16 @@ import {
   TrainingConfig,
 } from './configs/type-info';
 import { haveNewVersionTextbookEditorServiceHandle, installTextbookEditorServiceHandle, logsTextbookEditorServiceHandle, queryTextbookEditorServiceHandle, removeTextbookEditorServiceHandle, startTextbookEditorServiceHandle, updateTextbookEditorServiceHandle } from './textbook-editor-service/type-info';
+import {
+  installOpenclawServiceHandle,
+  queryOpenclawServiceHandle,
+  removeOpenclawServiceHandle,
+  runOpenclawServiceHandle,
+  stopOpenclawServiceHandle,
+  openOpenclawWindowHandle,
+  copyOpenclawDashboardUrlHandle,
+  OpenclawServiceInfo,
+} from './openclaw-service/type-info';
 
 const electronHandler = {
   // 系统信息
@@ -252,6 +262,27 @@ const mainHandle = {
       latestVersion: string;
       haveNew: boolean;
     }>(haveNewVersionTextbookEditorServiceHandle);
+  },
+  queryOpenclawServiceHandle: async () => {
+    return ipcInvoke<OpenclawServiceInfo>(queryOpenclawServiceHandle);
+  },
+  installOpenclawServiceHandle: async () => {
+    return ipcInvoke<OpenclawServiceInfo>(installOpenclawServiceHandle);
+  },
+  removeOpenclawServiceHandle: async () => {
+    return ipcInvoke<OpenclawServiceInfo>(removeOpenclawServiceHandle);
+  },
+  runOpenclawServiceHandle: async () => {
+    return ipcInvoke<OpenclawServiceInfo>(runOpenclawServiceHandle);
+  },
+  stopOpenclawServiceHandle: async () => {
+    return ipcInvoke<OpenclawServiceInfo>(stopOpenclawServiceHandle);
+  },
+  openOpenclawWindowHandle: async () => {
+    return ipcInvoke<OpenclawServiceInfo>(openOpenclawWindowHandle);
+  },
+  copyOpenclawDashboardUrlHandle: async () => {
+    return ipcInvoke<string>(copyOpenclawDashboardUrlHandle);
   },
   // 共建计划相关
   selectJointBuildFolder: async (): Promise<string | null> => {

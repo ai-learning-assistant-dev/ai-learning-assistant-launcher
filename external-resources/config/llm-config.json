@@ -1,13 +1,13 @@
 {
   "models": [
     {
-      "name": "deepseek-chat",
-      "displayName": "deepseek-chat",
+      "name": "deepseek-v4-flash",
+      "displayName": "deepseek-v4-flash",
       "provider": "deepseek",
       "baseUrl": "https://api.deepseek.com/",
       "apiKey": "",
       "isEmbeddingModel": false,
-      "id": "deepseek-deepseek-chat"
+      "id": "deepseek-deepseek-v4-flash"
     },
     {
       "name": "Qwen/Qwen3-8B",

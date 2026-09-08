@@ -19,7 +19,8 @@ export type Channels =
   | 'webtorrent'
   | 'launcher-update'
   | 'native-training-service'
-  | 'textbook-editor-service';
+  | 'textbook-editor-service'
+  | 'openclaw-service';
 
 export enum MESSAGE_TYPE {
   /** 阻断性错误，会把转圈中的按钮变成不转圈 */

@@ -25,6 +25,7 @@ import * as sudo from 'sudo-prompt';
 
 import { app } from 'electron';
 import path from 'path';
+import { homedir } from 'node:os';
 import { isLinux, isMac, isWindows } from './util';
 import iconv from 'iconv-lite';
 
@@ -46,7 +47,10 @@ export const uvPath = path.join(
   'uv',
 );
 
-export const macosExtraPath = `/opt/podman/bin:/usr/local/bin:/opt/homebrew/bin:/opt/local/bin:${bunPath}:${uvPath}`;
+// bun 全局 bin 目录（bun add -g 生成的命令所在位置）
+export const bunGlobalBinDir = path.join(homedir(), '.bun', 'bin');
+
+export const macosExtraPath = `/opt/podman/bin:/usr/local/bin:/opt/homebrew/bin:/opt/local/bin:${bunPath}:${bunGlobalBinDir}:${uvPath}`;
 
 function bufferToString(data: Buffer | string, encoding?: string) {
   if (data) {
@@ -91,13 +95,18 @@ export async function autoAdaptEncodingForWindows() {
   }
 }
 
+interface ExecOptions extends RunOptions {
+  /** 进程 spawn 后立即回调，用于获取子进程句柄（例如后续停止长驻进程） */
+  onSpawn?: (childProcess: ChildProcessWithoutNullStreams) => void;
+}
+
 export class Exec {
   constructor() {}
 
   exec(
     command: string,
     args?: string[],
-    options?: RunOptions,
+    options?: ExecOptions,
   ): Promise<RunResult> {
     let env = { ...process.env };
 
@@ -237,6 +246,8 @@ export class Exec {
         { env, cwd, shell },
       );
 
+      options?.onSpawn?.(childProcess);
+
       options?.token?.onCancellationRequested(() => {
         if (!childProcess.killed) {
           childProcess.kill();
@@ -333,7 +344,7 @@ export function getInstallationPath(envPATH?: string): string {
   envPATH ??= process.env.PATH;
 
   if (isWindows()) {
-    return `c:\\Program Files\\RedHat\\Podman;${bunPath};${uvPath};${envPATH}`;
+    return `c:\\Program Files\\RedHat\\Podman;${bunPath};${bunGlobalBinDir};${uvPath};${envPATH}`;
   }
   if (isMac()) {
     if (!envPATH) {
