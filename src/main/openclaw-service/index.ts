@@ -69,14 +69,7 @@ const openclawConfigPath = path.join(homedir(), '.openclaw', 'openclaw.json');
 interface NodeToolchain {
   /** 版本号（不带 v 前缀，例如 24.20.0） */
   version: string;
-  /** 包含 node.exe 的目录 */
-  nodeDir: string;
-  /** node.exe 完整路径 */
-  nodeExe: string;
 }
-
-// 缓存的当前可用的 node 工具链（undefined 表示尚未探测过）
-let toolchainCache: NodeToolchain | null | undefined;
 
 // 去掉版本号前面的 v 前缀（v24.20.0 -> 24.20.0）
 function cleanNodeVersion(raw: string): string {
@@ -90,11 +83,9 @@ function isNodeVersionSupported(version: string): boolean {
 }
 
 // 构造 node 工具链
-function createNodeToolchain(version: string, nodeDir: string): NodeToolchain {
+function createNodeToolchain(version: string): NodeToolchain {
   return {
     version: cleanNodeVersion(version),
-    nodeDir,
-    nodeExe: path.join(nodeDir, 'node.exe'),
   };
 }
 
@@ -191,75 +182,42 @@ async function syncProcessEnvPath(nodeDir: string): Promise<void> {
 }
 
 // 检测已安装的 node：要求版本位于 openclaw 建议范围；
-// preferDefaultDir 为 true 时优先检查 Node 官方安装包的默认安装目录（覆盖安装后使用）
-async function detectSystemNode(
-  preferDefaultDir = false,
-): Promise<NodeToolchain | null> {
+async function detectSystemNode(): Promise<NodeToolchain | null> {
   if (!isWindows()) {
     return null;
   }
-  const candidates: string[] = [];
-  const whereNode = await findFirstOnPath('node');
-  if (whereNode && existsSync(whereNode)) {
-    candidates.push(path.dirname(whereNode));
+  let version = '';
+  try {
+    const result = await commandLine.exec('node', ['-v'], {
+      logger: loggerFactory('OPENCLAW'),
+    });
+    version = cleanNodeVersion(result.stdout);
+  } catch (e) {
+    console.warn(`执行 node -v 失败:`, e);
+    return null;
   }
-  candidates.push(getDefaultNodeInstallDir());
-  if (preferDefaultDir) {
-    candidates.reverse();
-  }
-
-  for (const nodeDir of candidates) {
-    const nodeExe = path.join(nodeDir, 'node.exe');
-    if (!existsSync(nodeExe)) {
-      continue;
-    }
-    let version = '';
-    try {
-      const result = await commandLine.exec(nodeExe, ['-v'], {
-        logger: loggerFactory('OPENCLAW'),
-      });
-      version = cleanNodeVersion(result.stdout);
-    } catch (e) {
-      console.warn(`执行 ${nodeExe} 失败:`, e);
-      continue;
-    }
-    if (!isNodeVersionSupported(version)) {
-      console.warn(
-        `[OPENCLAW] ${nodeDir} 下的 node 版本 ${version} 不在 openclaw 建议范围（${OPENCLAW_NODE_RANGE}）内`,
-      );
-      continue;
-    }
-    // node 官方发行版自带 npm：直接执行 npm（不传自定义 env，靠 process.env.PATH 解析）
-    const toolchain = createNodeToolchain(version, nodeDir);
-    // 把注册表里最新的用户/系统 PATH 合并到 process.env.PATH，避免 Electron 启动后才装的 pnpm/npm 解析不到
-    await syncProcessEnvPath(nodeDir);
-    try {
-      const npmCheck = await commandLine.exec('npm', ['--version'], {
-        logger: loggerFactory('OPENCLAW'),
-      });
-      if (!(npmCheck.stdout || '').trim()) {
-        continue;
-      }
-    } catch (e) {
-      console.warn(`[OPENCLAW] ${nodeDir} 下的 npm 不可用:`, e);
-      continue;
-    }
-    console.log(
-      `[OPENCLAW] 检测到 node v${version}（${nodeDir}），满足 openclaw 建议版本，直接复用`,
+  if (!isNodeVersionSupported(version)) {
+    console.warn(
+      `[OPENCLAW] node 版本 ${version} 不在 openclaw 建议范围（${OPENCLAW_NODE_RANGE}）内`,
     );
-    return toolchain;
+    return null
   }
-  return null;
-}
-
-// 解析当前可用的 node 工具链（未缓存时重新检测）
-async function resolveNodeToolchain(): Promise<NodeToolchain | null> {
-  if (toolchainCache !== undefined) {
-    return toolchainCache;
+  // node 官方发行版自带 npm：直接执行 npm（不传自定义 env，靠 process.env.PATH 解析）
+  const toolchain = createNodeToolchain(version);
+  try {
+    const npmCheck = await commandLine.exec('npm', ['--version'], {
+      logger: loggerFactory('OPENCLAW'),
+    });
+    if (!(npmCheck.stdout || '').trim()) {
+    }
+  } catch (e) {
+    console.warn(`[OPENCLAW] node 下的 npm 不可用:`, e);
+    return null
   }
-  const system = await detectSystemNode();
-  toolchainCache = system;
-  return system;
+  console.log(
+    `[OPENCLAW] 检测到 node v${version}，满足 openclaw 建议版本，直接复用`,
+  );
+  return toolchain;
 }
 
 // 发起 https GET，自动跟随重定向，返回响应体
@@ -431,7 +389,7 @@ async function installNodeWithMsi(): Promise<NodeToolchain> {
   rmSync(installCacheDir, { recursive: true, force: true });
 
   // 3. 校验安装结果（优先检查默认安装目录）
-  const toolchain = await detectSystemNode(true);
+  const toolchain = await detectSystemNode();
   if (!toolchain) {
     throw new Error(
       'Node 官方安装包安装后仍不可用，可能安装被取消或需要重启电脑，请重试或手动安装 Node.js',
@@ -479,9 +437,7 @@ function setNpmRegistryTaobaoGlobal(): void {
 }
 
 // 检测 pnpm 是否可用：直接执行 pnpm --version，由 PATH 解析命令，不做路径查找
-async function isPnpmAvailable(toolchain: NodeToolchain): Promise<boolean> {
-  // 执行前先把注册表最新 PATH 同步到 process.env.PATH（不向 exec 传自定义 env）
-  await syncProcessEnvPath(toolchain.nodeDir);
+async function isPnpmAvailable(): Promise<boolean> {
   try {
     const { stdout } = await commandLine.exec('pnpm', ['--version'], {
       logger: loggerFactory('OPENCLAW'),
@@ -543,8 +499,15 @@ async function runGlobalMaybeElevated(
 }
 
 // 确保 pnpm 已全局安装（没有时通过 npm 安装，走淘宝源）
-async function ensurePnpmInstalled(toolchain: NodeToolchain): Promise<void> {
-  const available = await isPnpmAvailable(toolchain);
+async function ensurePnpmInstalled(): Promise<void> {
+  let toolchain = await detectSystemNode();
+  if (!toolchain) {
+    console.log(
+      '[OPENCLAW] 未检测到满足建议版本的 node，准备下载 Node 官方 Windows 安装包并静默安装（会覆盖原 node）',
+    );
+    toolchain = await installNodeWithMsi();
+  }
+  const available = await isPnpmAvailable();
   if (!available) {
     console.log(
       '[OPENCLAW] 未找到 pnpm，先通过 npm 全局安装 pnpm（淘宝源）...',
@@ -563,7 +526,7 @@ async function ensurePnpmInstalled(toolchain: NodeToolchain): Promise<void> {
       ],
       '安装 pnpm',
     );
-    if (!(await isPnpmAvailable(toolchain))) {
+    if (!(await isPnpmAvailable())) {
       throw new Error(
         'pnpm 安装后仍不可用（可能安装失败或 PATH 未刷新），请重新运行安装',
       );
@@ -572,8 +535,8 @@ async function ensurePnpmInstalled(toolchain: NodeToolchain): Promise<void> {
 }
 
 // 通过 pnpm 全局安装 openclaw
-async function pnpmInstallOpenclaw(toolchain: NodeToolchain): Promise<void> {
-  await ensurePnpmInstalled(toolchain);
+async function pnpmInstallOpenclaw(): Promise<void> {
+  await ensurePnpmInstalled();
   console.log('[OPENCLAW] 开始通过 pnpm 全局安装 openclaw（淘宝源）...');
   await runGlobalMaybeElevated(
     'pnpm',
@@ -596,8 +559,8 @@ async function pnpmInstallOpenclaw(toolchain: NodeToolchain): Promise<void> {
 }
 
 // 通过 pnpm 全局卸载 openclaw
-async function pnpmRemoveOpenclaw(toolchain: NodeToolchain): Promise<void> {
-  await ensurePnpmInstalled(toolchain);
+async function pnpmRemoveOpenclaw(): Promise<void> {
+  await ensurePnpmInstalled();
   await runGlobalMaybeElevated(
     'pnpm',
     ['remove', '-g', 'openclaw'],
@@ -610,7 +573,7 @@ async function runOpenclawCli(
   args: string[],
   token?: CancellationToken,
 ): Promise<string> {
-  const toolchain = await resolveNodeToolchain();
+  let toolchain = await detectSystemNode();
   if (!toolchain) {
     throw new Error(
       `未找到满足 OpenClaw 建议版本的 Node.js（建议版本：${OPENCLAW_NODE_RANGE}）`,
@@ -779,7 +742,7 @@ async function onboardOpenclaw(): Promise<void> {
 export async function queryOpenclawService(): Promise<OpenclawServiceInfo> {
   const running = await checkGatewayRunning();
   try {
-    const toolchain = await resolveNodeToolchain();
+    const toolchain = await detectSystemNode();
     if (toolchain) {
       const version = await runOpenclawCli(['-V']);
       if (version) {
@@ -802,23 +765,13 @@ export async function installOpenclawService(): Promise<OpenclawServiceInfo> {
     console.warn('停止 openclaw 网关失败（可忽略）:', e);
   }
 
-  // 1. 检查 node 版本是否在 openclaw 建议范围内
-  // 2/3. 不在范围内（或未安装）时，下载 Node 官方 Windows 安装包并静默安装，覆盖用户原来的 node
-  let toolchain = await resolveNodeToolchain();
-  if (!toolchain) {
-    console.log(
-      '[OPENCLAW] 未检测到满足建议版本的 node，准备下载 Node 官方 Windows 安装包并静默安装（会覆盖原 node）',
-    );
-    toolchain = await installNodeWithMsi();
-    toolchainCache = toolchain;
-  }
 
   // 4. 设置 npm 源为淘宝源（写入用户级 .npmrc，全局生效）
   setNpmRegistryTaobaoGlobal();
 
   // 5. 使用 pnpm 全局安装 openclaw
   console.log('[OPENCLAW] 开始通过 pnpm 全局安装 openclaw（淘宝源）...');
-  await pnpmInstallOpenclaw(toolchain);
+  await pnpmInstallOpenclaw();
 
   // 6. 使用项目内读取的大模型配置初始化 openclaw
   console.log('[OPENCLAW] 使用项目大模型配置初始化 openclaw ...');
@@ -849,10 +802,10 @@ export async function removeOpenclawService(): Promise<OpenclawServiceInfo> {
   } catch (e) {
     console.warn('卸载 openclaw 网关服务失败（可忽略）:', e);
   }
-  const toolchain = await resolveNodeToolchain();
+  const toolchain = await detectSystemNode();
   if (toolchain) {
     try {
-      await pnpmRemoveOpenclaw(toolchain);
+      await pnpmRemoveOpenclaw();
     } catch (e) {
       console.warn('卸载 openclaw pnpm 包失败:', e);
     }
@@ -861,7 +814,7 @@ export async function removeOpenclawService(): Promise<OpenclawServiceInfo> {
 }
 
 export async function runOpenclawService(): Promise<OpenclawServiceInfo> {
-  const toolchain = await resolveNodeToolchain();
+  const toolchain = await detectSystemNode();
   if (!toolchain) {
     throw new Error('未找到可用的 Node.js，请先安装 OpenClaw');
   }
