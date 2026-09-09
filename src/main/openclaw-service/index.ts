@@ -11,7 +11,7 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import https from 'node:https';
-import { version, type CancellationToken } from '@podman-desktop/api';
+import type { CancellationToken } from '@podman-desktop/api';
 import {
   queryOpenclawServiceHandle,
   installOpenclawServiceHandle,
@@ -73,8 +73,6 @@ interface NodeToolchain {
   nodeDir: string;
   /** node.exe 完整路径 */
   nodeExe: string;
-  /** 已把 nodeDir 放到最前面的子进程环境变量 */
-  env: { [key: string]: string };
 }
 
 // 缓存的当前可用的 node 工具链（undefined 表示尚未探测过）
@@ -91,22 +89,12 @@ function isNodeVersionSupported(version: string): boolean {
   return !!cleaned && satisfies(cleaned, OPENCLAW_NODE_RANGE);
 }
 
-// 构造 node 工具链（Windows：用分号把 nodeDir 放在 PATH 最前面，并强制 registry 为淘宝源）
+// 构造 node 工具链
 function createNodeToolchain(version: string, nodeDir: string): NodeToolchain {
-  const env: { [key: string]: string } = {};
-  for (const key of Object.keys(process.env)) {
-    const value = process.env[key];
-    if (typeof value === 'string') {
-      env[key] = value;
-    }
-  }
-  env.PATH = `${nodeDir};${env.PATH || ''}`;
-  env.npm_config_registry = TAOBAO_NPM_REGISTRY;
   return {
     version: cleanNodeVersion(version),
     nodeDir,
     nodeExe: path.join(nodeDir, 'node.exe'),
-    env,
   };
 }
 
@@ -175,7 +163,7 @@ async function readRegistryPath(regKeyPath: string): Promise<string> {
   }
 }
 
-// 读取注册表中最新的“用户 PATH + 系统 PATH”（已安装 pnpm 后新开的 cmd 能生效，
+// 读取注册表中最新的“系统 PATH + 用户 PATH”（已安装 pnpm 后新开的 cmd 能生效，
 // 但当前 Electron 进程的 process.env.PATH 还是启动时的旧快照，因此需要这里补充）
 async function getLatestSystemPath(): Promise<string> {
   const userPath = await readRegistryPath('HKCU\\Environment');
@@ -185,18 +173,11 @@ async function getLatestSystemPath(): Promise<string> {
   return [machinePath, userPath].filter(Boolean).join(';');
 }
 
-// 刷新工具链的子进程 PATH，顺序尽量与“新开的 cmd”一致：
-//   1. nodeDir（保证 npm/pnpm 用的是该 node 自带的或紧随其后的那一份）
-//   2. 注册表里最新的 系统 PATH + 用户 PATH（用户可能安装过多个 pnpm，
-//      例如 %LOCALAPPDATA%\pnpm\bin 的独立版在前、%APPDATA%\npm 里 npm 装的 shim 在后）
-//   3. 当前进程 PATH 中剩余未覆盖的目录（兜底，避免丢条目）
-// 目的：Electron 里执行 pnpm/npm 时，与用户在 cmd 里解析到的是同一份，
-// 不会命中“npm 全局装进与 pnpm 全局目标同目录”的坏副本（报 points back at the shim）
-async function refreshToolchainEnvPath(
-  toolchain: NodeToolchain,
-): Promise<void> {
+// 把“nodeDir → 注册表最新(系统+用户) PATH → 当前 process PATH”合并写回 process.env.PATH
+// （进程级生效，后续 commandLine.exec 无需再传自定义 env，即可解析到与 cmd 一致的最新 npm/pnpm）
+async function syncProcessEnvPath(nodeDir: string): Promise<void> {
   const latestPath = await getLatestSystemPath();
-  const merged = [toolchain.nodeDir, latestPath, process.env.PATH || '']
+  const merged = [nodeDir, latestPath, process.env.PATH || '']
     .filter(Boolean)
     .join(';');
   const parts: string[] = [];
@@ -206,7 +187,7 @@ async function refreshToolchainEnvPath(
       parts.push(part);
     }
   }
-  toolchain.env.PATH = parts.join(';');
+  process.env.PATH = parts.join(';');
 }
 
 // 检测已安装的 node：要求版本位于 openclaw 建议范围；
@@ -248,13 +229,12 @@ async function detectSystemNode(
       );
       continue;
     }
-    // node 官方发行版自带 npm：直接执行 npm（nodeDir 已在 PATH 最前），无需查找 npm 路径
+    // node 官方发行版自带 npm：直接执行 npm（不传自定义 env，靠 process.env.PATH 解析）
     const toolchain = createNodeToolchain(version, nodeDir);
-    // 把注册表里最新的用户/系统 PATH 合并进来，避免 Electron 启动后才装的 pnpm 解析不到
-    await refreshToolchainEnvPath(toolchain);
+    // 把注册表里最新的用户/系统 PATH 合并到 process.env.PATH，避免 Electron 启动后才装的 pnpm/npm 解析不到
+    await syncProcessEnvPath(nodeDir);
     try {
       const npmCheck = await commandLine.exec('npm', ['--version'], {
-        env: toolchain.env,
         logger: loggerFactory('OPENCLAW'),
       });
       if (!(npmCheck.stdout || '').trim()) {
@@ -500,9 +480,10 @@ function setNpmRegistryTaobaoGlobal(): void {
 
 // 检测 pnpm 是否可用：直接执行 pnpm --version，由 PATH 解析命令，不做路径查找
 async function isPnpmAvailable(toolchain: NodeToolchain): Promise<boolean> {
+  // 执行前先把注册表最新 PATH 同步到 process.env.PATH（不向 exec 传自定义 env）
+  await syncProcessEnvPath(toolchain.nodeDir);
   try {
     const { stdout } = await commandLine.exec('pnpm', ['--version'], {
-      env: toolchain.env,
       logger: loggerFactory('OPENCLAW'),
     });
     return !!(stdout || '').trim();
@@ -513,22 +494,21 @@ async function isPnpmAvailable(toolchain: NodeToolchain): Promise<boolean> {
 
 // 直接执行 pnpm 命令（pnpm 由 PATH 解析，无需查找安装路径）
 async function runPnpm(
-  toolchain: NodeToolchain,
+  _toolchain: NodeToolchain,
   args: string[],
   logger = loggerFactory('OPENCLAW'),
 ): Promise<string> {
   const { stdout } = await commandLine.exec('pnpm', args, {
-    env: toolchain.env,
     logger,
   });
   return stdout;
 }
 
 // 执行全局命令；目标目录（如 Program Files\nodejs）无写权限时自动 UAC 提权重试
+// 不传自定义 env：直接使用进程环境（process.env.PATH 已在别处同步为最新）
 async function runGlobalMaybeElevated(
   command: string,
   args: string[],
-  env: { [key: string]: string },
   action = '操作',
 ): Promise<void> {
   const logger = loggerFactory('OPENCLAW');
@@ -544,11 +524,11 @@ async function runGlobalMaybeElevated(
 
   const elevated = await isRunningAsAdmin();
   if (elevated) {
-    await commandLine.exec(command, args, { env, logger });
+    await commandLine.exec(command, args, { logger });
     return;
   }
   try {
-    await commandLine.exec(command, args, { env, logger });
+    await commandLine.exec(command, args, { logger });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     if (!/(EACCES|EPERM|EISDIR|EROFS|EINVAL)/.test(message)) {
@@ -581,7 +561,6 @@ async function ensurePnpmInstalled(toolchain: NodeToolchain): Promise<void> {
         '--allow-scripts=pnpm',
         TAOBAO_NPM_REGISTRY,
       ],
-      toolchain.env,
       '安装 pnpm',
     );
     if (!(await isPnpmAvailable(toolchain))) {
@@ -598,14 +577,20 @@ async function pnpmInstallOpenclaw(toolchain: NodeToolchain): Promise<void> {
   console.log('[OPENCLAW] 开始通过 pnpm 全局安装 openclaw（淘宝源）...');
   await runGlobalMaybeElevated(
     'pnpm',
-    ['add', '-g', '--allow-build=openclaw', 'openclaw@latest', '--registry', TAOBAO_NPM_REGISTRY],
-    toolchain.env,
+    [
+      'add',
+      '-g',
+      '--allow-build=openclaw',
+      'openclaw@latest',
+      '--registry',
+      TAOBAO_NPM_REGISTRY,
+    ],
     '安装 openclaw',
   );
 
-  try{
-    await runOpenclawCli(['-V'])
-  }catch(e){
+  try {
+    await runOpenclawCli(['-V']);
+  } catch (e) {
     throw new Error('openclaw pnpm 全局安装失败，请检查网络后重试');
   }
 }
@@ -616,7 +601,6 @@ async function pnpmRemoveOpenclaw(toolchain: NodeToolchain): Promise<void> {
   await runGlobalMaybeElevated(
     'pnpm',
     ['remove', '-g', 'openclaw'],
-    toolchain.env,
     '卸载 openclaw',
   );
 }
@@ -632,15 +616,10 @@ async function runOpenclawCli(
       `未找到满足 OpenClaw 建议版本的 Node.js（建议版本：${OPENCLAW_NODE_RANGE}）`,
     );
   }
-  const { stdout } = await commandLine.exec(
-    'openclaw',
-    args,
-    {
-      env: toolchain.env,
-      logger: loggerFactory('OPENCLAW'),
-      token,
-    },
-  );
+  const { stdout } = await commandLine.exec('openclaw', args, {
+    logger: loggerFactory('OPENCLAW'),
+    token,
+  });
   return stdout;
 }
 
@@ -782,6 +761,7 @@ async function onboardOpenclaw(): Promise<void> {
     model.baseUrl,
     '--custom-model-id',
     model.name,
+    '--install-daemon',
   ];
 
   if (model.apiKey) {
@@ -794,9 +774,6 @@ async function onboardOpenclaw(): Promise<void> {
   }
 
   await runOpenclawCli(args);
-
-  // 以 node 运行时安装网关服务（node 是 openclaw 官方推荐的托管运行时）
-  await runOpenclawCli(['gateway', 'install', '--runtime', 'node']);
 }
 
 export async function queryOpenclawService(): Promise<OpenclawServiceInfo> {
@@ -932,7 +909,7 @@ export async function stopOpenclawService(): Promise<OpenclawServiceInfo> {
   openclawWindow = null;
 
   try {
-    await runOpenclawCli(['gateway', 'stop']);
+    await runOpenclawCli(['gateway', 'stop', '--force']);
   } catch (e) {
     console.warn('停止 openclaw 网关失败:', e);
   }
