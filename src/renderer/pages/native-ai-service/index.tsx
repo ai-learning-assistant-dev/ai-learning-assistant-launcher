@@ -42,18 +42,19 @@ export default function NativeAiService() {
     stopRts,
   } = useRtsService();
 
-  
   const textbookEditorShortcut = useTextbookEditorServiceShortcut();
-  const [textbookEditorServiceStarting, setTextbookEditorServiceStarting] = useState(false);
+  const [textbookEditorServiceStarting, setTextbookEditorServiceStarting] =
+    useState(false);
 
   const openclawShortcut = useOpenclawServiceShortcut();
 
-  const openclawStateText = {
-    not_install: '未安装',
-    installing: '安装中',
-    installed: '已安装',
-    uninstalling: '卸载中',
-  }[openclawShortcut.state] || '检测中...';
+  const openclawStateText =
+    {
+      not_install: '未安装',
+      installing: '安装中',
+      installed: '已安装',
+      uninstalling: '卸载中',
+    }[openclawShortcut.state] || '检测中...';
 
   const installOpenclawService = async () => {
     try {
@@ -124,7 +125,8 @@ export default function NativeAiService() {
     setTextbookEditorServiceStarting(false);
   };
 
-  const [textbookEditorServiceRemoving, setTextbookEditorServiceRemoving] = useState(false);
+  const [textbookEditorServiceRemoving, setTextbookEditorServiceRemoving] =
+    useState(false);
   const removeTextbookEditorService = async () => {
     setTextbookEditorServiceRemoving(true);
     await textbookEditorShortcut.remove();
@@ -315,19 +317,21 @@ export default function NativeAiService() {
             !(
               (textbookEditorShortcut.state === 'stopped' ||
                 textbookEditorShortcut.state === 'updating') &&
-              (textbookEditorShortcut.programVersionInfo.haveNew)
+              textbookEditorShortcut.programVersionInfo.haveNew
             ) && (
               <Button
                 className="rts-button run"
                 onClick={openTextbookEditorService}
                 loading={
-                  textbookEditorServiceStarting || textbookEditorShortcut.initing
+                  textbookEditorServiceStarting ||
+                  textbookEditorShortcut.initing
                 }
                 disabled={textbookEditorServiceRemoving}
               >
-                <span className="button-text">{textbookEditorShortcut.state === 'not_install'
-                  ? '安装'
-                  : '开始'}
+                <span className="button-text">
+                  {textbookEditorShortcut.state === 'not_install'
+                    ? '安装'
+                    : '开始'}
                 </span>
               </Button>
             ),
@@ -350,7 +354,7 @@ export default function NativeAiService() {
               >
                 <span className="button-text">卸载</span>
               </Button>
-            )
+            ),
           ].filter((item) => item)}
         >
           <List.Item.Meta
@@ -412,18 +416,19 @@ export default function NativeAiService() {
                 <span className="button-text">停止</span>
               </Button>
             ),
-            (openclawShortcut.state === 'installed' || 
-              openclawShortcut.state === 'uninstalling') && openclawShortcut.running === false && (
-              <Button
-                key="remove-openclaw-service"
-                className="rts-button uninstall"
-                danger
-                loading={openclawShortcut.state === 'uninstalling'}
-                onClick={removeOpenclawService}
-              >
-                <span className="button-text">卸载</span>
-              </Button>
-            ),
+            (openclawShortcut.state === 'installed' ||
+              openclawShortcut.state === 'uninstalling') &&
+              openclawShortcut.running === false && (
+                <Button
+                  key="remove-openclaw-service"
+                  className="rts-button uninstall"
+                  danger
+                  loading={openclawShortcut.state === 'uninstalling'}
+                  onClick={removeOpenclawService}
+                >
+                  <span className="button-text">卸载</span>
+                </Button>
+              ),
             <Button
               key="refresh-openclaw-service"
               loading={openclawShortcut.initing}
@@ -435,10 +440,12 @@ export default function NativeAiService() {
         >
           <List.Item.Meta
             title="OpenClaw"
-            description={`AI 编程助手（bun 全局安装） 服务状态：${openclawStateText}${
+            description={`AI助理 服务状态：${openclawStateText}${
               openclawShortcut.running ? '（运行中）' : ''
             }${
-              openclawShortcut.version ? ` 版本：${openclawShortcut.version}` : ''
+              openclawShortcut.version
+                ? ` 版本：${openclawShortcut.version}`
+                : ''
             }`}
           />
         </List.Item>
