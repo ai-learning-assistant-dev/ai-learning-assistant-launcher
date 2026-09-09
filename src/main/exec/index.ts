@@ -95,18 +95,13 @@ export async function autoAdaptEncodingForWindows() {
   }
 }
 
-interface ExecOptions extends RunOptions {
-  /** 进程 spawn 后立即回调，用于获取子进程句柄（例如后续停止长驻进程） */
-  onSpawn?: (childProcess: ChildProcessWithoutNullStreams) => void;
-}
-
 export class Exec {
   constructor() {}
 
   exec(
     command: string,
     args?: string[],
-    options?: ExecOptions,
+    options?: RunOptions,
   ): Promise<RunResult> {
     let env = { ...process.env };
 
@@ -245,8 +240,6 @@ export class Exec {
         args,
         { env, cwd, shell },
       );
-
-      options?.onSpawn?.(childProcess);
 
       options?.token?.onCancellationRequested(() => {
         if (!childProcess.killed) {

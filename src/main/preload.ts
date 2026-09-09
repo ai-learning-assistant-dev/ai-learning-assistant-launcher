@@ -91,6 +91,7 @@ import {
   copyOpenclawDashboardUrlHandle,
   OpenclawServiceInfo,
 } from './openclaw-service/type-info';
+import { openBunDebugHandle } from './bun-debug/type-info';
 
 const electronHandler = {
   // 系统信息
@@ -283,6 +284,9 @@ const mainHandle = {
   },
   copyOpenclawDashboardUrlHandle: async () => {
     return ipcInvoke<string>(copyOpenclawDashboardUrlHandle);
+  },
+  openBunDebugHandle: async () => {
+    return ipcInvoke<void>(openBunDebugHandle);
   },
   // 共建计划相关
   selectJointBuildFolder: async (): Promise<string | null> => {
