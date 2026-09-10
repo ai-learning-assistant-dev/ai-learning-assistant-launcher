@@ -375,11 +375,14 @@ const LLMConfig: React.FC = () => {
 
   return (
     <div className="llm-api-config">
-      <Card title="大语言模型API配置" extra={
-        <Link to="/lm-service">
-          <Button>返回</Button>
-        </Link>
-      }>
+      <Card 
+        title={
+          <Link to="/lm-service">
+            <Button>返回</Button>
+          </Link>
+        }
+        extra={"大语言模型API配置"}
+      >
         <div style={{ marginBottom: 16 }}>
           <Button type="primary" onClick={handleAddModel}>
             添加模型

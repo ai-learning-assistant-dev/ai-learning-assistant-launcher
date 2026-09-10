@@ -500,12 +500,8 @@ export default function PdfConvert() {
         </Space>
       </Card>
       
-      <TerminalLogScreen
-        id="terminal-log"
-        cols={100}
-        rows={6}
-        style={{ width: 'calc(100% - 20px)', marginTop: '16px' }}
-      />
+      {/* 高度交给容器自适应：占满卡片下方的剩余空间 */}
+      <TerminalLogScreen id="terminal-log" style={{ marginTop: '16px' }} />
     </div>
   );
 } 

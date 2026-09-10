@@ -666,15 +666,19 @@ export default function Hello() {
                       </Button>
                     )}
                     {trainingShortcut.state !== 'not_install' && (
-                      <Button
-                        className="feature-button uninstall"
-                        block
-                        size="large"
-                        onClick={removeTrainingService}
-                        loading={trainingServiceRemoving}
-                      >
-                        卸载
-                      </Button>
+                      <Popconfirm title="确认卸载学科培训服务吗？"
+                        okText="确认"
+                        cancelText="取消"
+                        onConfirm={removeTrainingService}>
+                        <Button
+                          className="feature-button uninstall"
+                          block
+                          size="large"
+                          loading={trainingServiceRemoving}
+                        >
+                          卸载
+                        </Button>
+                      </Popconfirm>
                     )}
                   </div>
                 </div>

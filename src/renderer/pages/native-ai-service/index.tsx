@@ -450,15 +450,10 @@ export default function NativeAiService() {
           />
         </List.Item>
       </List>
+      {/* 高度交给容器自适应：占满列表下方的剩余空间 */}
       <TerminalLogScreen
         id="native-ai-terminal-log"
-        cols={100}
-        rows={26}
-        style={{
-          width: 'calc(100% - 20px)',
-          marginTop: '16px',
-          height: '340px',
-        }}
+        style={{ width: 'calc(100% - 20px)', marginTop: '16px' }}
       />
     </div>
   );
