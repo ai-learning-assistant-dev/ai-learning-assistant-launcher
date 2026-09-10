@@ -1,5 +1,5 @@
 import { BrowserWindow, IpcMain, clipboard } from 'electron';
-import { satisfies } from 'semver';
+import { gt, rcompare, satisfies, valid } from 'semver';
 import {
   existsSync,
   mkdirSync,
@@ -49,16 +49,29 @@ const NODE_MIRROR_BASES = process.env.OPENCLAW_NODE_MIRROR
       'https://registry.npmmirror.com/-/binary/node',
     ];
 
-// 在线解析失败时的兜底 Node 版本（均满足 openclaw 建议范围）
-const FALLBACK_NODE_VERSIONS = ['24.20.0', '26.1.0'];
+/** node 安装候选版本：version 不带 v 前缀，lts 为 LTS 代号（非 LTS 为 null） */
+interface NodeVersionCandidate {
+  version: string;
+  lts: string | null;
+}
+
+/** 在线解析出的可用版本：latestLts 为范围内最新 LTS，newest 为范围内最新版本 */
+interface NodeVersionOptions {
+  latestLts: NodeVersionCandidate | null;
+  newest: NodeVersionCandidate | null;
+}
+
+// 在线解析失败时的兜底 Node 版本（按优先级排序：先最新 LTS，再退到更早的 LTS 补丁版本，
+// 只有 LTS 全部不可用时才用非 LTS 版本）。正常联网时会在线挑选最新 LTS，这里只是离线兜底。
+const FALLBACK_NODE_RELEASES: NodeVersionCandidate[] = [
+  { version: '24.21.0', lts: 'Krypton' },
+  { version: '24.20.0', lts: 'Krypton' },
+  { version: '24.16.0', lts: 'Krypton' }, // openclaw 建议范围里的最低 LTS 版本
+  { version: '26.1.0', lts: null }, // 最后兜底：非 LTS，但满足 openclaw 建议范围
+];
 
 // Node 官方 Windows 安装包（MSI）的下载缓存目录
 const installCacheDir = path.join(homedir(), '.openclaw-install-cache');
-
-// Node 官方 Windows 安装包的默认安装目录（Program Files\nodejs）
-function getDefaultNodeInstallDir(): string {
-  return path.join(process.env.ProgramFiles || 'C:\\Program Files', 'nodejs');
-}
 
 // openclaw dashboard 窗口实例
 let openclawWindow: BrowserWindow | null = null;
@@ -89,96 +102,30 @@ function createNodeToolchain(version: string): NodeToolchain {
   };
 }
 
-// 通过 where 查找 PATH 上的第一个可执行文件
-async function findFirstOnPath(command: string): Promise<string | null> {
+/**
+ * 统一的抛错函数：一次完成三件事 —— 落盘日志、界面命令行日志、抛出错误。
+ * cause 为底层错误（例如 exec/写文件的报错），只用于日志，会拼进同一行。
+ */
+function throwWithLog(message: string, cause?: unknown): never {
+  const detail = cause === undefined ? '' : `（${cause}）`;
+  const line = `[OPENCLAW] ${message}${detail}`;
+  console.error(line); // 落盘：主进程 console 已接入 electron-log（launcher.log）
+  loggerFactory('OPENCLAW').error(line); // 界面：命令行日志（terminal-log 通道）
+  throw new Error(message);
+}
+
+// 读取 PATH 上 node 的版本号；返回 null 表示没有 node 或执行失败。
+// 与 detectSystemNode 不同：这里不判断是否符合 openclaw 建议范围（已装 25.x 这类版本也需要知道）
+async function detectNodeVersionOnPath(): Promise<string | null> {
   try {
-    const { stdout } = await commandLine.exec('where', [command]);
-    const line = (stdout || '')
-      .split(/\r?\n/)
-      .map((s) => s.trim())
-      .find((s) => s.length > 0);
-    return line || null;
+    const result = await commandLine.exec('node', ['-v'], {
+      logger: loggerFactory('OPENCLAW'),
+    });
+    return cleanNodeVersion(result.stdout) || null;
   } catch (e) {
-    console.warn(`查找 ${command} 失败:`, e);
+    console.warn(`执行 node -v 失败:`, e);
     return null;
   }
-}
-
-// 展开 %VAR% 环境变量占位符（Windows 注册表里保存的是 REG_EXPAND_SZ）
-function expandEnvVars(value: string): string {
-  const envMap: Record<string, string> = {};
-  for (const key of Object.keys(process.env)) {
-    const val = process.env[key];
-    if (typeof val === 'string') {
-      envMap[key.toLowerCase()] = val;
-    }
-  }
-  let result = value;
-  for (let i = 0; i < 8; i++) {
-    const before = result;
-    result = result.replace(/%([^%]+)%/g, (_match, name: string) => {
-      const found = envMap[String(name).toLowerCase()];
-      return found !== undefined ? found : `%${name}%`;
-    });
-    if (result === before) {
-      break;
-    }
-  }
-  return result;
-}
-
-// 从注册表读取一条 PATH（用户：HKCU\Environment，系统：HKLM\...\Environment）
-async function readRegistryPath(regKeyPath: string): Promise<string> {
-  try {
-    const { stdout } = await commandLine.exec('reg', [
-      'query',
-      regKeyPath,
-      '/v',
-      'PATH',
-    ]);
-    const line = (stdout || '')
-      .split(/\r?\n/)
-      .find((l) => /REG_(EXPAND_)?SZ/.test(l));
-    if (!line) {
-      return '';
-    }
-    const typeMatch = line.match(/REG_(EXPAND_)?SZ/);
-    if (!typeMatch) {
-      return '';
-    }
-    return expandEnvVars(
-      line.slice((typeMatch.index || 0) + typeMatch[0].length).trim(),
-    );
-  } catch (e) {
-    return '';
-  }
-}
-
-// 读取注册表中最新的“系统 PATH + 用户 PATH”（已安装 pnpm 后新开的 cmd 能生效，
-// 但当前 Electron 进程的 process.env.PATH 还是启动时的旧快照，因此需要这里补充）
-async function getLatestSystemPath(): Promise<string> {
-  const userPath = await readRegistryPath('HKCU\\Environment');
-  const machinePath = await readRegistryPath(
-    'HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment',
-  );
-  return [machinePath, userPath].filter(Boolean).join(';');
-}
-
-// 把“nodeDir → 注册表最新(系统+用户) PATH → 当前 process PATH”合并写回 process.env.PATH
-// （进程级生效，后续 commandLine.exec 无需再传自定义 env，即可解析到与 cmd 一致的最新 npm/pnpm）
-async function syncProcessEnvPath(nodeDir: string): Promise<void> {
-  const latestPath = await getLatestSystemPath();
-  const merged = [nodeDir, latestPath, process.env.PATH || '']
-    .filter(Boolean)
-    .join(';');
-  const parts: string[] = [];
-  for (const raw of merged.split(';')) {
-    const part = raw.trim();
-    if (part && !parts.some((p) => p.toLowerCase() === part.toLowerCase())) {
-      parts.push(part);
-    }
-  }
-  process.env.PATH = parts.join(';');
 }
 
 // 检测已安装的 node：要求版本位于 openclaw 建议范围；
@@ -186,33 +133,25 @@ async function detectSystemNode(): Promise<NodeToolchain | null> {
   if (!isWindows()) {
     return null;
   }
-  let version = '';
-  try {
-    const result = await commandLine.exec('node', ['-v'], {
-      logger: loggerFactory('OPENCLAW'),
-    });
-    version = cleanNodeVersion(result.stdout);
-  } catch (e) {
-    console.warn(`执行 node -v 失败:`, e);
+  const version = await detectNodeVersionOnPath();
+  if (!version) {
     return null;
   }
   if (!isNodeVersionSupported(version)) {
     console.warn(
       `[OPENCLAW] node 版本 ${version} 不在 openclaw 建议范围（${OPENCLAW_NODE_RANGE}）内`,
     );
-    return null
+    return null;
   }
   // node 官方发行版自带 npm：直接执行 npm（不传自定义 env，靠 process.env.PATH 解析）
   const toolchain = createNodeToolchain(version);
   try {
-    const npmCheck = await commandLine.exec('npm', ['--version'], {
+    await commandLine.exec('npm', ['--version'], {
       logger: loggerFactory('OPENCLAW'),
     });
-    if (!(npmCheck.stdout || '').trim()) {
-    }
   } catch (e) {
     console.warn(`[OPENCLAW] node 下的 npm 不可用:`, e);
-    return null
+    return null;
   }
   console.log(
     `[OPENCLAW] 检测到 node v${version}，满足 openclaw 建议版本，直接复用`,
@@ -269,12 +208,84 @@ async function downloadFile(url: string, destPath: string): Promise<void> {
     writeFileSync(destPath, buffer);
   } catch (e) {
     rmSync(destPath, { force: true });
-    throw e;
+    throwWithLog(`写入下载文件失败：${destPath}`, e);
   }
 }
 
-// 从淘宝 node 镜像 index.json 挑选最新的、位于 openclaw 建议范围内的 LTS 版本
-async function pickNodeVersionToInstall(): Promise<string> {
+/**
+ * 从 node index.json 里挑出可用版本（只考虑 openclaw 建议范围内的版本）。
+ * 按 semver 自行降序排序，不依赖镜像返回的先后顺序：
+ * - latestLts：范围内最新的 LTS 版本（例如 24.x LTS 线的最新补丁版本）
+ * - newest：范围内最新的版本（可能是 Current 非 LTS，用于避开降级安装）
+ */
+function pickNodeVersionsFromIndex(
+  list: Array<{ version?: string; lts?: string | boolean }>,
+): NodeVersionOptions | null {
+  const available = list
+    .map<NodeVersionCandidate>((entry) => ({
+      version: cleanNodeVersion(entry.version || ''),
+      lts: typeof entry.lts === 'string' && entry.lts ? entry.lts : null,
+    }))
+    .filter(
+      (item) => !!valid(item.version) && isNodeVersionSupported(item.version),
+    )
+    .sort((a, b) => rcompare(a.version, b.version));
+  if (available.length === 0) {
+    return null;
+  }
+  return {
+    latestLts: available.find((item) => item.lts) || null,
+    newest: available[0],
+  };
+}
+
+// 离线兜底版本（在线解析失败时使用）：优先最新 LTS，同时给出范围内最新版本以便避开降级安装
+function offlineNodeVersionOptions(): NodeVersionOptions {
+  const sorted = [...FALLBACK_NODE_RELEASES].sort((a, b) =>
+    rcompare(a.version, b.version),
+  );
+  return {
+    latestLts: sorted.find((item) => item.lts) || null,
+    newest: sorted[0] || null,
+  };
+}
+
+/**
+ * 生成按优先级排序的 Node 安装候选版本。
+ * Node 官方 MSI 不允许“降级安装”：当机器上已有更高版本的 Node 时，安装包会直接失败
+ * （"A later version of Node.js is already installed, setup will now exit"）。
+ * 因此这里结合现有 node 的版本调整顺序、剔除必然失败的降级候选：
+ * - 没有 node，或现有 node 比 LTS 旧（如 22.x）→ 最新 LTS 优先，其次是更早的 LTS 补丁版本
+ * - 现有 node 比最新 LTS 还新（如已装 25.x、26.0.x，而 LTS 是 24.x）→ 改选范围内比它更新的版本（26.x）
+ * 返回空数组表示所有候选都比现有 node 旧，只能降级安装（MSI 一定会失败），由调用方报错。
+ */
+function buildNodeInstallCandidates(
+  options: NodeVersionOptions,
+  existingVersion: string | null,
+): NodeVersionCandidate[] {
+  // LTS 候选排在前面、非 LTS 候选排在后面，避免非 LTS 版本插到 LTS 补丁版本前面
+  const ltsCandidates = [
+    options.latestLts,
+    ...FALLBACK_NODE_RELEASES.filter((item) => item.lts),
+  ];
+  const otherCandidates = [
+    options.newest,
+    ...FALLBACK_NODE_RELEASES.filter((item) => !item.lts),
+  ];
+  const pool = [...ltsCandidates, ...otherCandidates]
+    .filter((item): item is NodeVersionCandidate => !!item)
+    .filter(
+      (item, index, list) =>
+        list.findIndex((other) => other.version === item.version) === index,
+    );
+  if (!existingVersion || !valid(existingVersion)) {
+    return pool;
+  }
+  return pool.filter((item) => !gt(existingVersion, item.version));
+}
+
+// 从淘宝 node 镜像 index.json 挑选要安装的版本：优先最新 LTS
+async function pickNodeVersionToInstall(): Promise<NodeVersionOptions> {
   for (const base of NODE_MIRROR_BASES) {
     try {
       const list = JSON.parse(
@@ -283,26 +294,28 @@ async function pickNodeVersionToInstall(): Promise<string> {
       if (!Array.isArray(list)) {
         continue;
       }
-      for (const entry of list) {
-        const version = cleanNodeVersion(entry.version || '');
-        if (version && isNodeVersionSupported(version) && entry.lts) {
-          return version;
-        }
+      const options = pickNodeVersionsFromIndex(list);
+      if (options) {
+        const { latestLts, newest } = options;
+        console.log(
+          latestLts
+            ? `[OPENCLAW] 范围内最新 LTS：v${latestLts.version}（${latestLts.lts}）；范围内最新版本：v${newest?.version}`
+            : `[OPENCLAW] ${OPENCLAW_NODE_RANGE} 范围内没有 LTS 版本，可选最新版本 v${newest?.version}（非 LTS）`,
+        );
+        return options;
       }
-      for (const entry of list) {
-        const version = cleanNodeVersion(entry.version || '');
-        if (version && isNodeVersionSupported(version)) {
-          return version;
-        }
-      }
+      console.warn(
+        `[OPENCLAW] ${base} 的 index.json 中没有满足 ${OPENCLAW_NODE_RANGE} 的版本`,
+      );
     } catch (e) {
       console.warn(`从 ${base} 解析 node 版本列表失败:`, e);
     }
   }
+  const fallback = offlineNodeVersionOptions();
   console.warn(
-    `[OPENCLAW] 解析 node 最新版本失败，使用兜底版本 ${FALLBACK_NODE_VERSIONS[0]}`,
+    `[OPENCLAW] 在线解析 node 版本失败，使用内置兜底版本：最新 LTS v${fallback.latestLts?.version}、范围内最新版本 v${fallback.newest?.version}`,
   );
-  return FALLBACK_NODE_VERSIONS[0];
+  return fallback;
 }
 
 // 判断当前进程是否已拥有管理员权限
@@ -316,7 +329,7 @@ async function isRunningAsAdmin(): Promise<boolean> {
 }
 
 // 用 Node 官方 Windows 安装包（MSI）静默安装/覆盖 node；
-// 非管理员时通过 sudo-prompt 触发 UAC 提权（msiexec 3010 = 安装成功但需重启，视为成功）
+// 非管理员时通过 sudo-prompt 触发 UAC 提权（msiexec 3010/1641 = 安装成功但需重启，视为成功）
 async function silentInstallNodeMsi(msiPath: string): Promise<void> {
   const logger = loggerFactory('OPENCLAW');
   const elevated = await isRunningAsAdmin();
@@ -335,44 +348,156 @@ async function silentInstallNodeMsi(msiPath: string): Promise<void> {
     }
   } catch (e) {
     const exitCode = (e as { exitCode?: number }).exitCode;
-    if (exitCode === 3010) {
+    if (exitCode === 3010 || exitCode === 1641) {
       // 安装成功但提示重启后生效
       return;
     }
-    throw e;
+    if (exitCode === 1638) {
+      throwWithLog(
+        '机器上已安装同版本或更高版本的 Node.js，官方安装包不支持降级/重复安装，请先卸载现有 Node.js 后重试',
+      );
+    }
+    if (exitCode === 1603) {
+      throwWithLog(
+        'Node.js 安装包执行失败（1603）：常见原因是已安装更高版本的 Node.js（官方安装包不允许降级安装）或 node.exe 正在运行被占用。请先卸载现有 Node.js 并关闭正在使用 node 的程序后重试',
+      );
+    }
+    throwWithLog('Node.js 安装包执行失败', e);
   }
+}
+
+/**
+ * 判断现有的 node 能否确定被 Node 官方安装包覆盖安装。
+ * 返回 null 表示可以覆盖安装；返回字符串表示不能确定，字符串是引导用户手动升级的报错信息。
+ * 官方 MSI 只会覆盖它自己装的那份 node（默认 C:\Program Files\nodejs，或注册表
+ * HKLM/HKCU\SOFTWARE\Node.js 里记录的 InstallPath）；nvm、scoop、手工解压等方式装的 node
+ * 无法保证被覆盖，装完 PATH 里可能仍解析到旧版本，所以这时不自动安装，改为让用户手动升级。
+ */
+async function checkNodeOverwritableByMsi(
+  targetVersion: string,
+): Promise<string | null> {
+  // 当前真正生效的 node.exe：用 node 自己报的 process.execPath，
+  // 比 where node 可靠（where 可能返回 node.cmd 垫片或别处的 node）
+  let nodePath = '';
+  try {
+    const { stdout } = await commandLine.exec('node', [
+      '-p',
+      'process.execPath',
+    ]);
+    nodePath = (stdout || '').trim().split(/\r?\n/).pop()?.trim() || '';
+  } catch (e) {
+    // 取不到说明没有可用的 node，直接安装即可
+    return null;
+  }
+  if (!nodePath) {
+    return null;
+  }
+
+  const upgradeHint = `请手动把 Node 升级到 v${targetVersion}（openclaw 建议版本：${OPENCLAW_NODE_RANGE}）后重试`;
+
+  // nvm 管理的 node：官方 MSI 覆盖的是 C:\Program Files\nodejs 这个软链，会破坏 nvm 环境
+  const nvmHome = process.env.NVM_HOME || process.env.NVM_SYMLINK;
+  if (nvmHome) {
+    return `检测到当前 node 由 nvm 管理（${nodePath}，NVM_HOME=${nvmHome}），官方安装包无法覆盖 nvm 安装的版本。${upgradeHint}，nvm 用户可执行 "nvm install ${targetVersion} && nvm use ${targetVersion}"`;
+  }
+
+  // 官方安装包记录的安装目录（没有记录时退化为默认安装目录判断）
+  let installerDir = '';
+  for (const key of ['HKLM\\SOFTWARE\\Node.js', 'HKCU\\SOFTWARE\\Node.js']) {
+    try {
+      const { stdout } = await commandLine.exec('reg', [
+        'query',
+        key,
+        '/v',
+        'InstallPath',
+      ]);
+      const matched = (stdout || '')
+        .split(/\r?\n/)
+        .map((line) => line.match(/REG_SZ\s+(.+)$/i))
+        .find((match) => !!match);
+      if (matched) {
+        installerDir = matched[1].trim().replace(/[\\/]+$/, '');
+        break;
+      }
+    } catch (e) {
+      // 这个注册表项不存在：说明不是官方安装包装的，继续看下一个
+    }
+  }
+  const defaultDir = path.join(
+    process.env.ProgramFiles || 'C:\\Program Files',
+    'nodejs',
+  );
+  const officialDir = installerDir || defaultDir;
+  const nodeDir = path.dirname(nodePath).replace(/[\\/]+$/, '');
+  if (nodeDir.toLowerCase() === officialDir.toLowerCase()) {
+    return null;
+  }
+
+  return `当前 node（${nodePath}）不是 Node 官方安装包安装的（官方安装目录：${officialDir}），自动安装无法确保覆盖它，装完可能仍解析到这个旧版本。${upgradeHint}`;
 }
 
 // 从淘宝源下载 Node 官方 Windows 安装包（MSI），静默安装并覆盖用户原来的 node
 async function installNodeWithMsi(): Promise<NodeToolchain> {
   if (!isWindows()) {
-    throw new Error('自动安装 Node 目前仅支持 Windows 系统');
+    throwWithLog('自动安装 Node 目前仅支持 Windows 系统');
   }
   if (!['x64', 'arm64'].includes(process.arch)) {
-    throw new Error(`暂不支持 ${process.arch} 架构的 Node 自动安装`);
+    throwWithLog(`暂不支持 ${process.arch} 架构的 Node 自动安装`);
   }
 
-  // 依次尝试的版本：在线解析出的最新版本优先，失败后回退到内置兜底版本
-  const preferredVersion = await pickNodeVersionToInstall();
-  const candidates = [
-    preferredVersion,
-    ...FALLBACK_NODE_VERSIONS.filter((v) => v !== preferredVersion),
-  ];
+  // 已安装的 node 版本（可能不在 openclaw 建议范围内，例如用户装了 25.x）
+  const existingVersion = await detectNodeVersionOnPath();
+  // 在线解析出的可用版本（范围内最新 LTS + 范围内最新版本）
+  const versionOptions = await pickNodeVersionToInstall();
+  // 按现有 node 版本生成候选顺序：官方 MSI 不允许降级安装，
+  // 已装 25.x 这类“比 LTS 更新”的版本时，改选范围内更新的版本（26.x）
+  const candidates = buildNodeInstallCandidates(
+    versionOptions,
+    existingVersion,
+  );
+  if (candidates.length === 0) {
+    throwWithLog(
+      `当前 node v${existingVersion} 比所有可安装的 Node 版本都新，而官方安装包不允许降级安装（openclaw 建议范围：${OPENCLAW_NODE_RANGE}）。请手动安装范围内的版本，或用 nvm 切换到范围内版本后重试`,
+    );
+  }
+  console.log(
+    `[OPENCLAW] ${existingVersion ? `当前 node v${existingVersion}，` : ''}安装候选顺序：${candidates
+      .map((item) => `v${item.version}${item.lts ? '' : '（非 LTS）'}`)
+      .join(' → ')}`,
+  );
+
+  // 无法确定官方安装包能覆盖现有 node 时，不做自动安装，直接报错引导用户手动升级
+  const blockedReason = await checkNodeOverwritableByMsi(candidates[0].version);
+  if (blockedReason) {
+    throwWithLog(`已停止自动安装：${blockedReason}`);
+  }
 
   // 1. 从淘宝源下载官方 MSI 安装包
   let msiPath = '';
   for (const candidate of candidates) {
-    const fileName = `node-v${candidate}-${process.arch}.msi`;
+    const fileName = `node-v${candidate.version}-${process.arch}.msi`;
     const destPath = path.join(installCacheDir, fileName);
+    if (!candidate.lts) {
+      console.warn(
+        `[OPENCLAW] 选择非 LTS 版本 Node v${candidate.version}（仍满足 openclaw 建议范围）：${
+          existingVersion && gt(candidate.version, existingVersion)
+            ? `现有 node v${existingVersion} 比最新 LTS 更新，官方安装包不支持降级安装`
+            : '范围内没有可用的 LTS 版本'
+        }`,
+      );
+    }
     for (const base of NODE_MIRROR_BASES) {
       try {
-        const url = `${base}/v${candidate}/${fileName}`;
+        const url = `${base}/v${candidate.version}/${fileName}`;
         console.log(`[OPENCLAW] 从淘宝源下载 Node 官方安装包：${url}`);
         await downloadFile(url, destPath);
         msiPath = destPath;
         break;
       } catch (e) {
-        console.warn(`[OPENCLAW] 从 ${base} 下载 Node ${candidate} 失败:`, e);
+        console.warn(
+          `[OPENCLAW] 从 ${base} 下载 Node ${candidate.version} 失败:`,
+          e,
+        );
       }
     }
     if (msiPath) {
@@ -380,7 +505,7 @@ async function installNodeWithMsi(): Promise<NodeToolchain> {
     }
   }
   if (!msiPath) {
-    throw new Error('从淘宝源下载 Node 官方安装包失败，请检查网络后重试');
+    throwWithLog('从淘宝源下载 Node 官方安装包失败，请检查网络后重试');
   }
 
   // 2. 静默安装（会覆盖用户原来的 node）
@@ -391,7 +516,7 @@ async function installNodeWithMsi(): Promise<NodeToolchain> {
   // 3. 校验安装结果（优先检查默认安装目录）
   const toolchain = await detectSystemNode();
   if (!toolchain) {
-    throw new Error(
+    throwWithLog(
       'Node 官方安装包安装后仍不可用，可能安装被取消或需要重启电脑，请重试或手动安装 Node.js',
     );
   }
@@ -448,18 +573,6 @@ async function isPnpmAvailable(): Promise<boolean> {
   }
 }
 
-// 直接执行 pnpm 命令（pnpm 由 PATH 解析，无需查找安装路径）
-async function runPnpm(
-  _toolchain: NodeToolchain,
-  args: string[],
-  logger = loggerFactory('OPENCLAW'),
-): Promise<string> {
-  const { stdout } = await commandLine.exec('pnpm', args, {
-    logger,
-  });
-  return stdout;
-}
-
 // 执行全局命令；目标目录（如 Program Files\nodejs）无写权限时自动 UAC 提权重试
 // 不传自定义 env：直接使用进程环境（process.env.PATH 已在别处同步为最新）
 async function runGlobalMaybeElevated(
@@ -488,7 +601,7 @@ async function runGlobalMaybeElevated(
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     if (!/(EACCES|EPERM|EISDIR|EROFS|EINVAL)/.test(message)) {
-      throw e;
+      throwWithLog(`${action}失败`, e);
     }
     console.warn(
       `[OPENCLAW] 全局目录无写权限，正在通过管理员权限（UAC）${action}:`,
@@ -527,7 +640,7 @@ async function ensurePnpmInstalled(): Promise<void> {
       '安装 pnpm',
     );
     if (!(await isPnpmAvailable())) {
-      throw new Error(
+      throwWithLog(
         'pnpm 安装后仍不可用（可能安装失败或 PATH 未刷新），请重新运行安装',
       );
     }
@@ -554,7 +667,7 @@ async function pnpmInstallOpenclaw(): Promise<void> {
   try {
     await runOpenclawCli(['-V']);
   } catch (e) {
-    throw new Error('openclaw pnpm 全局安装失败，请检查网络后重试');
+    throwWithLog('openclaw pnpm 全局安装失败，请检查网络后重试', e);
   }
 }
 
@@ -573,9 +686,9 @@ async function runOpenclawCli(
   args: string[],
   token?: CancellationToken,
 ): Promise<string> {
-  let toolchain = await detectSystemNode();
+  const toolchain = await detectSystemNode();
   if (!toolchain) {
-    throw new Error(
+    throwWithLog(
       `未找到满足 OpenClaw 建议版本的 Node.js（建议版本：${OPENCLAW_NODE_RANGE}）`,
     );
   }
@@ -710,7 +823,7 @@ export default async function init(ipcMain: IpcMain) {
 async function onboardOpenclaw(): Promise<void> {
   const model = getLlmConfig().models.find((m) => !m.isEmbeddingModel);
   if (!model) {
-    throw new Error('未配置大模型，请先在设置中配置大模型');
+    throwWithLog('未配置大模型，请先在设置中配置大模型');
   }
 
   const args = [
@@ -765,7 +878,6 @@ export async function installOpenclawService(): Promise<OpenclawServiceInfo> {
     console.warn('停止 openclaw 网关失败（可忽略）:', e);
   }
 
-
   // 4. 设置 npm 源为淘宝源（写入用户级 .npmrc，全局生效）
   setNpmRegistryTaobaoGlobal();
 
@@ -816,11 +928,11 @@ export async function removeOpenclawService(): Promise<OpenclawServiceInfo> {
 export async function runOpenclawService(): Promise<OpenclawServiceInfo> {
   const toolchain = await detectSystemNode();
   if (!toolchain) {
-    throw new Error('未找到可用的 Node.js，请先安装 OpenClaw');
+    throwWithLog('未找到可用的 Node.js，请先安装 OpenClaw');
   }
   const info = await queryOpenclawService();
   if (info.state !== 'installed') {
-    throw new Error('OpenClaw 未安装，请先安装');
+    throwWithLog('OpenClaw 未安装，请先安装');
   }
 
   // 网关未运行时先启动（后台常驻）
