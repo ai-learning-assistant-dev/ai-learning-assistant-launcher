@@ -614,14 +614,16 @@ async function runGlobalMaybeElevated(
 // 确保 pnpm 已全局安装（没有时通过 npm 安装，走淘宝源）
 async function ensurePnpmInstalled(): Promise<void> {
   let toolchain = await detectSystemNode();
+  let newNode = false;
   if (!toolchain) {
     console.log(
       '[OPENCLAW] 未检测到满足建议版本的 node，准备下载 Node 官方 Windows 安装包并静默安装（会覆盖原 node）',
     );
     toolchain = await installNodeWithMsi();
+    newNode = true;
   }
   const available = await isPnpmAvailable();
-  if (!available) {
+  if ((!available) || newNode) {
     console.log(
       '[OPENCLAW] 未找到 pnpm，先通过 npm 全局安装 pnpm（淘宝源）...',
     );
@@ -630,7 +632,7 @@ async function ensurePnpmInstalled(): Promise<void> {
       [
         'install',
         '-g',
-        'pnpm',
+        'pnpm@latest',
         '--no-fund',
         '--no-audit',
         '--allow-scripts=pnpm',
