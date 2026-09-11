@@ -159,6 +159,149 @@ async function detectSystemNode(): Promise<NodeToolchain | null> {
   return toolchain;
 }
 
+// ===== 安装 node / npm / pnpm 后刷新 PATH 环境变量 =====
+//
+// Electron 主进程启动时，process.env.PATH 只是当时的快照。安装 node（MSI）、通过
+// npm 全局安装 pnpm、通过 pnpm 全局安装 openclaw 时，都会往系统/用户环境变量里写入
+// 新的可执行目录，但当前进程拿不到这些更新，导致后续 node / npm / pnpm / openclaw
+// 命令在 PATH 上找不到（典型表现：Node 官方安装包装完后 detectSystemNode 仍失败）。
+// 下面的函数在每次安装步骤完成后把最新 PATH 重新读进 process.env，并把 npm / pnpm
+// 的全局 bin 目录显式补上。
+
+// 展开 Windows 路径里的 %VAR%（如 %APPDATA%\npm），查不到时原样保留
+function expandWindowsEnvVars(value: string): string {
+  return value.replace(/%([^%]+)%/g, (match, name: string) => {
+    const direct = process.env[name];
+    if (direct !== undefined) {
+      return direct;
+    }
+    const key = Object.keys(process.env).find(
+      (k) => k.toLowerCase() === name.toLowerCase(),
+    );
+    return key ? (process.env[key] ?? match) : match;
+  });
+}
+
+// 读取 Windows 注册表里的系统 PATH + 用户 PATH（Windows 生效 PATH = 系统 PATH + 用户 PATH）
+async function readWindowsPathFromRegistry(): Promise<string> {
+  const segments: string[] = [];
+  for (const key of [
+    'HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment',
+    'HKCU\\Environment',
+  ]) {
+    try {
+      const { stdout } = await commandLine.exec('reg', [
+        'query',
+        key,
+        '/v',
+        'Path',
+      ]);
+      // reg query 输出形如：
+      //   Path    REG_SZ    C:\Windows\system32;C:\Program Files\nodejs
+      //   Path    REG_EXPAND_SZ    C:\Windows\system32;%APPDATA%\npm
+      const matched = (stdout || '')
+        .split(/\r?\n/)
+        .map((line) => line.match(/REG_(?:EXPAND_)?SZ\s+(.+)$/i))
+        .find((m) => !!m);
+      if (matched) {
+        segments.push(matched[1].trim());
+      }
+    } catch {
+      // 该项不存在（例如没有用户级 PATH），跳过
+    }
+  }
+  return expandWindowsEnvVars(segments.join(';'));
+}
+
+// 把目录前置到 process.env.PATH（展开 %VAR%、去重、保留原有内容）
+function prependToProcessPath(...dirs: Array<string | null | undefined>): void {
+  const clean = dirs
+    .filter((dir): dir is string => !!dir)
+    .map((dir) =>
+      expandWindowsEnvVars(dir)
+        .trim()
+        .replace(/[\\/]+$/, ''),
+    )
+    .filter(Boolean);
+  if (clean.length === 0) {
+    return;
+  }
+  const current = (process.env.PATH || '')
+    .split(';')
+    .map((p) => p.trim())
+    .filter(Boolean);
+  const seen = new Set(current.map((p) => p.toLowerCase()));
+  const added: string[] = [];
+  for (const dir of clean) {
+    if (!seen.has(dir.toLowerCase())) {
+      seen.add(dir.toLowerCase());
+      added.push(dir);
+    }
+  }
+  if (added.length === 0) {
+    return;
+  }
+  process.env.PATH = [...added, ...current].join(';');
+  console.log(`[OPENCLAW] 已把以下目录前置到 PATH：${added.join('; ')}`);
+}
+
+// npm 的全局 bin 目录（Windows 上全局包的 .cmd 直接放在 npm prefix 目录里）
+async function resolveNpmGlobalBinDir(): Promise<string> {
+  try {
+    const { stdout } = await commandLine.exec('npm', ['prefix', '-g']);
+    return (stdout || '').trim().split(/\r?\n/).pop()?.trim() || '';
+  } catch {
+    return '';
+  }
+}
+
+// pnpm 的全局 bin 目录（pnpm add -g 后 openclaw 等命令所在位置；pnpm v7+ 支持 bin -g）
+async function resolvePnpmGlobalBinDir(): Promise<string> {
+  try {
+    const { stdout } = await commandLine.exec('pnpm', ['bin', '-g']);
+    return (stdout || '').trim().split(/\r?\n/).pop()?.trim() || '';
+  } catch {
+    return '';
+  }
+}
+
+// 安装步骤完成后统一刷新 PATH：先读注册表最新值，再补上 npm / pnpm 全局 bin 目录
+async function refreshPathAfterInstall(): Promise<void> {
+  if (!isWindows()) {
+    return;
+  }
+  const registryPath = await readWindowsPathFromRegistry();
+  if (registryPath) {
+    process.env.PATH = registryPath;
+    console.log('[OPENCLAW] 已从注册表刷新 process.env.PATH');
+  }
+  // 显式补充常见的 npm / pnpm 全局 bin 目录，防止注册表 PATH 里没有（例如 pnpm
+  // 通过 npm 安装且未执行 pnpm setup 时，pnpm 的 bin 目录不在 PATH 里）
+  prependToProcessPath(
+    process.env.ProgramFiles
+      ? path.join(process.env.ProgramFiles, 'nodejs')
+      : null,
+    process.env.APPDATA ? path.join(process.env.APPDATA, 'npm') : null,
+    process.env.PNPM_HOME,
+    process.env.PNPM_HOME ? path.join(process.env.PNPM_HOME, 'bin') : null,
+    process.env.LOCALAPPDATA
+      ? path.join(process.env.LOCALAPPDATA, 'pnpm', 'bin')
+      : null,
+    process.env.LOCALAPPDATA
+      ? path.join(process.env.LOCALAPPDATA, 'pnpm')
+      : null,
+  );
+  // 用 npm / pnpm 自己的答案修正（最准确，覆盖按默认规则猜不到的目录）
+  const npmBin = await resolveNpmGlobalBinDir();
+  if (npmBin) {
+    prependToProcessPath(npmBin);
+  }
+  const pnpmBin = await resolvePnpmGlobalBinDir();
+  if (pnpmBin) {
+    prependToProcessPath(pnpmBin);
+  }
+}
+
 // 发起 https GET，自动跟随重定向，返回响应体
 function httpsGetBuffer(url: string, timeoutMs = 30000): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -513,6 +656,10 @@ async function installNodeWithMsi(): Promise<NodeToolchain> {
   await silentInstallNodeMsi(msiPath);
   rmSync(installCacheDir, { recursive: true, force: true });
 
+  // 2.5 安装后刷新 PATH：MSI 已把 node 目录写入系统/用户 PATH，但当前进程拿到的
+  // process.env.PATH 仍是启动时的旧快照，不刷新就无法执行 node -v
+  await refreshPathAfterInstall();
+
   // 3. 校验安装结果（优先检查默认安装目录）
   const toolchain = await detectSystemNode();
   if (!toolchain) {
@@ -574,7 +721,7 @@ async function isPnpmAvailable(): Promise<boolean> {
 }
 
 // 执行全局命令；目标目录（如 Program Files\nodejs）无写权限时自动 UAC 提权重试
-// 不传自定义 env：直接使用进程环境（process.env.PATH 已在别处同步为最新）
+// 不传自定义 env：直接使用进程环境（process.env.PATH 已由 refreshPathAfterInstall 同步为最新）
 async function runGlobalMaybeElevated(
   command: string,
   args: string[],
@@ -613,6 +760,9 @@ async function runGlobalMaybeElevated(
 
 // 确保 pnpm 已全局安装（没有时通过 npm 安装，走淘宝源）
 async function ensurePnpmInstalled(): Promise<void> {
+  // 先刷新 PATH：进程启动时拿到的 process.env.PATH 是旧快照，用户可能在此期间
+  // 手动装过 node/pnpm，先同步到最新再检测，避免误判“未安装”
+  await refreshPathAfterInstall();
   let toolchain = await detectSystemNode();
   let newNode = false;
   if (!toolchain) {
@@ -623,7 +773,7 @@ async function ensurePnpmInstalled(): Promise<void> {
     newNode = true;
   }
   const available = await isPnpmAvailable();
-  if ((!available) || newNode) {
+  if (!available || newNode) {
     console.log(
       '[OPENCLAW] 未找到 pnpm，先通过 npm 全局安装 pnpm（淘宝源）...',
     );
@@ -641,6 +791,9 @@ async function ensurePnpmInstalled(): Promise<void> {
       ],
       '安装 pnpm',
     );
+    // 安装后刷新 PATH：npm 全局安装会把 pnpm 写进 npm 的全局 bin 目录，
+    // 需要让当前进程能解析到 pnpm 命令
+    await refreshPathAfterInstall();
     if (!(await isPnpmAvailable())) {
       throwWithLog(
         'pnpm 安装后仍不可用（可能安装失败或 PATH 未刷新），请重新运行安装',
@@ -665,6 +818,10 @@ async function pnpmInstallOpenclaw(): Promise<void> {
     ],
     '安装 openclaw',
   );
+
+  // 安装后刷新 PATH：openclaw 的命令放在 pnpm 的全局 bin 目录里，
+  // 刷新后 runOpenclawCli 才能找到 openclaw
+  await refreshPathAfterInstall();
 
   try {
     await runOpenclawCli(['-V']);
@@ -821,6 +978,113 @@ export default async function init(ipcMain: IpcMain) {
   );
 }
 
+/** 模型的上下文窗口与最大输出（token） */
+interface ModelLimits {
+  contextWindow: number;
+  maxTokens: number;
+}
+
+// openclaw 的自定义 provider（onboard --auth-choice custom-api-key）拿不到真实模型规格，
+// 只会写入很小的默认值（contextWindow 16000 / maxTokens 4096），长上下文和长输出会被截断，
+// 所以这里按模型补上实际值。数值按各家模型规格维护，后续新增模型在这里加一行即可。
+const MODEL_LIMITS: Array<{ match: RegExp; limits: ModelLimits }> = [
+  // DeepSeek：V4 系列 1M / 384k，reasoner 131k / 65k，chat 131k / 8k
+  {
+    match: /deepseek.*(v4|flash|pro)/i,
+    limits: { contextWindow: 1000000, maxTokens: 384000 },
+  },
+  {
+    match: /deepseek.*reasoner/i,
+    limits: { contextWindow: 131072, maxTokens: 65536 },
+  },
+  { match: /deepseek/i, limits: { contextWindow: 131072, maxTokens: 8192 } },
+  // OpenAI
+  { match: /gpt-5/i, limits: { contextWindow: 400000, maxTokens: 128000 } },
+  {
+    match: /(gpt-4\.1|gpt-4o|gpt-4-turbo|chatgpt-4o)/i,
+    limits: { contextWindow: 128000, maxTokens: 16384 },
+  },
+  {
+    match: /(^|\/)o[134](-|$)/i,
+    limits: { contextWindow: 200000, maxTokens: 100000 },
+  },
+  // Anthropic Claude
+  { match: /claude/i, limits: { contextWindow: 200000, maxTokens: 8192 } },
+  // Google Gemini
+  { match: /gemini/i, limits: { contextWindow: 1048576, maxTokens: 65536 } },
+  // xAI / Mistral
+  { match: /grok/i, limits: { contextWindow: 131072, maxTokens: 8192 } },
+  {
+    match: /(mistral|magistral|devstral)/i,
+    limits: { contextWindow: 131072, maxTokens: 8192 },
+  },
+];
+
+// 未知模型（含 Ollama / LM Studio 本地模型）用保守值，避免写出超过模型能力的上限
+const DEFAULT_MODEL_LIMITS: ModelLimits = {
+  contextWindow: 32768,
+  maxTokens: 4096,
+};
+
+// 按模型名解析上下文窗口/最大输出；名字看不出来时再按 provider 兜底
+function resolveModelLimits(provider: string, modelName: string): ModelLimits {
+  const matched = MODEL_LIMITS.find((item) => item.match.test(modelName || ''));
+  if (matched) {
+    return matched.limits;
+  }
+  // Azure 的部署名通常看不出模型，用 openclaw 自己的 Azure 默认值
+  if ((provider || '').toLowerCase().includes('azure')) {
+    return { contextWindow: 400000, maxTokens: 16384 };
+  }
+  return DEFAULT_MODEL_LIMITS;
+}
+
+// 把 contextWindow / maxTokens 写进 openclaw 配置里对应的模型条目
+// （onboard 已经生成了 provider 和模型条目，这里只补这两个字段）
+function applyOpenclawModelLimits(
+  modelName: string,
+  limits: ModelLimits,
+): void {
+  try {
+    if (!existsSync(openclawConfigPath)) {
+      console.warn(
+        '[OPENCLAW] 未找到 openclaw 配置文件，跳过 contextWindow/maxTokens 写入',
+      );
+      return;
+    }
+    const config = JSON.parse(readFileSync(openclawConfigPath, 'utf-8'));
+    const providers = config?.models?.providers ?? {};
+    for (const providerId of Object.keys(providers)) {
+      const models = providers[providerId]?.models;
+      const target = Array.isArray(models)
+        ? models.find((item) => item?.id === modelName)
+        : undefined;
+      if (!target) {
+        continue;
+      }
+      target.contextWindow = limits.contextWindow;
+      target.maxTokens = limits.maxTokens;
+      writeFileSync(
+        openclawConfigPath,
+        `${JSON.stringify(config, null, 2)}\n`,
+        'utf-8',
+      );
+      console.log(
+        `[OPENCLAW] 已为 ${providerId}/${modelName} 写入 contextWindow=${limits.contextWindow}、maxTokens=${limits.maxTokens}`,
+      );
+      return;
+    }
+    console.warn(
+      `[OPENCLAW] openclaw 配置里没有找到模型 ${modelName}，跳过 contextWindow/maxTokens 写入`,
+    );
+  } catch (e) {
+    console.warn(
+      '[OPENCLAW] 写入 contextWindow/maxTokens 失败（不影响安装）:',
+      e,
+    );
+  }
+}
+
 // 使用本项目的大模型配置对 openclaw 做非交互式 onboarding
 async function onboardOpenclaw(): Promise<void> {
   const model = getLlmConfig().models.find((m) => !m.isEmbeddingModel);
@@ -852,6 +1116,12 @@ async function onboardOpenclaw(): Promise<void> {
   }
 
   await runOpenclawCli(args);
+
+  // onboard 只会给自定义 provider 写入很小的默认上下文窗口/输出上限，这里按实际模型补上
+  applyOpenclawModelLimits(
+    model.name,
+    resolveModelLimits(model.provider, model.name),
+  );
 }
 
 export async function queryOpenclawService(): Promise<OpenclawServiceInfo> {
