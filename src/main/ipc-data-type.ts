@@ -21,6 +21,7 @@ export type Channels =
   | 'native-training-service'
   | 'textbook-editor-service'
   | 'openclaw-service'
+  | 'deepseek-harness-service'
   | 'bun-debug';
 
 export enum MESSAGE_TYPE {

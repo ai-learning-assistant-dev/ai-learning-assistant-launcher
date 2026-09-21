@@ -18,6 +18,7 @@ import initRTSService from './local-service/rts-service';
 import initObsidianVoiceService from './local-service/obsidian-voice-service';
 import initTextbookEditorService from './textbook-editor-service'
 import initOpenclawService from './openclaw-service'
+import initDeepseekHarnessService from './deepseek-harness-service'
 import initBunDebug from './bun-debug'
 import path from 'node:path';
 import { appPath, autoAdaptEncodingForWindows } from './exec';
@@ -92,6 +93,7 @@ initRTSService(ipcMain);
 initObsidianVoiceService(ipcMain);
 initTextbookEditorService(ipcMain);
 initOpenclawService(ipcMain);
+initDeepseekHarnessService(ipcMain);
 initBunDebug(ipcMain);
 updateTemplate();
 

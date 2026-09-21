@@ -4,6 +4,7 @@ const nativeServiceNames = [
   'NATIVE_OBSIDIAN_VOICE',
   'TEXTBOOK_EDITOR',
   'OPENCLAW',
+  'DEEPSEEK_HARNESS',
 ] as const;
 
 export type NativeServiceName = (typeof nativeServiceNames)[number];

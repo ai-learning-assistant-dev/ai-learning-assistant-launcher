@@ -15,7 +15,11 @@ import './index.scss';
 import { TerminalLogScreen } from '../../containers/terminal-log-screen';
 import { useTextbookEditorServiceShortcut } from '../../containers/use-textbook-editor-service-shortcut';
 import { useOpenclawServiceShortcut } from '../../containers/use-openclaw-service-shortcut';
+import { useDeepseekHarnessServiceShortcut } from '../../containers/use-deepseek-harness-service-shortcut';
 import { useState } from 'react';
+
+// OpenClaw 管理界面暂不展示：相关代码全部保留，之后需要重新启用时把这里改成 true 即可
+const OPENCLAW_UI_ENABLED = false;
 
 export default function NativeAiService() {
   const {
@@ -46,7 +50,76 @@ export default function NativeAiService() {
   const [textbookEditorServiceStarting, setTextbookEditorServiceStarting] =
     useState(false);
 
-  const openclawShortcut = useOpenclawServiceShortcut();
+  const openclawShortcut = useOpenclawServiceShortcut(OPENCLAW_UI_ENABLED);
+
+  const deepseekHarnessShortcut = useDeepseekHarnessServiceShortcut();
+
+  const deepseekHarnessStateText =
+    {
+      not_install: '未安装',
+      installing: '安装中',
+      installed: '已安装',
+      uninstalling: '卸载中',
+    }[deepseekHarnessShortcut.state] || '检测中...';
+
+  const [deepseekHarnessOperating, setDeepseekHarnessOperating] = useState<
+    'run' | 'stop' | null
+  >(null);
+
+  const installDeepseekHarnessService = async () => {
+    try {
+      await deepseekHarnessShortcut.install();
+    } catch (e) {
+      message.error(e.message);
+    }
+  };
+
+  const removeDeepseekHarnessService = async () => {
+    try {
+      await deepseekHarnessShortcut.remove();
+    } catch (e) {
+      message.error(e.message);
+    }
+  };
+
+  const runDeepseekHarnessService = async () => {
+    setDeepseekHarnessOperating('run');
+    try {
+      await deepseekHarnessShortcut.run();
+    } catch (e) {
+      message.error(e.message);
+    } finally {
+      setDeepseekHarnessOperating(null);
+    }
+  };
+
+  const stopDeepseekHarnessService = async () => {
+    setDeepseekHarnessOperating('stop');
+    try {
+      await deepseekHarnessShortcut.stop();
+    } catch (e) {
+      message.error(e.message);
+    } finally {
+      setDeepseekHarnessOperating(null);
+    }
+  };
+
+  const openDeepseekHarnessWindow = async () => {
+    try {
+      await deepseekHarnessShortcut.openWindow();
+    } catch (e) {
+      message.error(e.message);
+    }
+  };
+
+  const copyDeepseekHarnessPageLink = async () => {
+    try {
+      await deepseekHarnessShortcut.copyPageLink();
+      message.success('页面链接已复制到剪贴板');
+    } catch (e) {
+      message.error(e.message);
+    }
+  };
 
   const openclawStateText =
     {
@@ -362,89 +435,188 @@ export default function NativeAiService() {
             description={`为学科培训提供课程编辑功能 服务状态：${textbookEditorShortcut.state || 'unknown'}（端口 7200）`}
           />
         </List.Item>
+        {OPENCLAW_UI_ENABLED && (
+          <List.Item
+            actions={[
+              openclawShortcut.state !== 'installed' && (
+                <Button
+                  key="install-openclaw-service"
+                  className="rts-button install"
+                  loading={openclawShortcut.state === 'installing'}
+                  disabled={openclawShortcut.state === 'uninstalling'}
+                  onClick={installOpenclawService}
+                >
+                  <span className="button-text">安装</span>
+                </Button>
+              ),
+              openclawShortcut.state === 'installed' &&
+                !openclawShortcut.running && (
+                  <Button
+                    key="run-openclaw-service"
+                    className="rts-button run"
+                    loading={openclawOperating === 'run'}
+                    disabled={openclawOperating === 'stop'}
+                    onClick={runOpenclawService}
+                  >
+                    <span className="button-text">运行</span>
+                  </Button>
+                ),
+              openclawShortcut.running && (
+                <Button
+                  key="open-openclaw-window"
+                  className="rts-button run"
+                  onClick={openOpenclawWindow}
+                >
+                  <span className="button-text">打开界面</span>
+                </Button>
+              ),
+              openclawShortcut.running && (
+                <Button
+                  key="copy-openclaw-page-link"
+                  onClick={copyOpenclawPageLink}
+                >
+                  <span className="button-text">复制页面链接</span>
+                </Button>
+              ),
+              openclawShortcut.running && (
+                <Button
+                  key="stop-openclaw-service"
+                  className="rts-button uninstall"
+                  danger
+                  loading={openclawOperating === 'stop'}
+                  disabled={openclawOperating === 'run'}
+                  onClick={stopOpenclawService}
+                >
+                  <span className="button-text">停止</span>
+                </Button>
+              ),
+              (openclawShortcut.state === 'installed' ||
+                openclawShortcut.state === 'uninstalling') &&
+                openclawShortcut.running === false && (
+                  <Button
+                    key="remove-openclaw-service"
+                    className="rts-button uninstall"
+                    danger
+                    loading={openclawShortcut.state === 'uninstalling'}
+                    onClick={removeOpenclawService}
+                  >
+                    <span className="button-text">卸载</span>
+                  </Button>
+                ),
+              <Button
+                key="refresh-openclaw-service"
+                loading={openclawShortcut.initing}
+                onClick={openclawShortcut.refresh}
+              >
+                刷新状态
+              </Button>,
+            ].filter((item) => item)}
+          >
+            <List.Item.Meta
+              title="OpenClaw"
+              description={`AI助理 服务状态：${openclawStateText}${
+                openclawShortcut.running ? '（运行中）' : ''
+              }${
+                openclawShortcut.version
+                  ? ` 版本：${openclawShortcut.version}`
+                  : ''
+              }`}
+            />
+          </List.Item>
+        )}
         <List.Item
           actions={[
-            openclawShortcut.state !== 'installed' && (
+            deepseekHarnessShortcut.state !== 'installed' && (
               <Button
-                key="install-openclaw-service"
+                key="install-deepseek-harness-service"
                 className="rts-button install"
-                loading={openclawShortcut.state === 'installing'}
-                disabled={openclawShortcut.state === 'uninstalling'}
-                onClick={installOpenclawService}
+                loading={deepseekHarnessShortcut.state === 'installing'}
+                disabled={
+                  deepseekHarnessShortcut.state === 'uninstalling' ||
+                  deepseekHarnessShortcut.refreshing
+                }
+                onClick={installDeepseekHarnessService}
               >
                 <span className="button-text">安装</span>
               </Button>
             ),
-            openclawShortcut.state === 'installed' &&
-              !openclawShortcut.running && (
+            deepseekHarnessShortcut.state === 'installed' &&
+              !deepseekHarnessShortcut.running && (
                 <Button
-                  key="run-openclaw-service"
+                  key="run-deepseek-harness-service"
                   className="rts-button run"
-                  loading={openclawOperating === 'run'}
-                  disabled={openclawOperating === 'stop'}
-                  onClick={runOpenclawService}
+                  loading={deepseekHarnessOperating === 'run'}
+                  disabled={deepseekHarnessOperating === 'stop'}
+                  onClick={runDeepseekHarnessService}
                 >
                   <span className="button-text">运行</span>
                 </Button>
               ),
-            openclawShortcut.running && (
+            deepseekHarnessShortcut.running && (
               <Button
-                key="open-openclaw-window"
+                key="open-deepseek-harness-window"
                 className="rts-button run"
-                onClick={openOpenclawWindow}
+                onClick={openDeepseekHarnessWindow}
               >
                 <span className="button-text">打开界面</span>
               </Button>
             ),
-            openclawShortcut.running && (
+            deepseekHarnessShortcut.running && (
               <Button
-                key="copy-openclaw-page-link"
-                onClick={copyOpenclawPageLink}
+                key="copy-deepseek-harness-page-link"
+                onClick={copyDeepseekHarnessPageLink}
               >
                 <span className="button-text">复制页面链接</span>
               </Button>
             ),
-            openclawShortcut.running && (
+            deepseekHarnessShortcut.running && (
               <Button
-                key="stop-openclaw-service"
+                key="stop-deepseek-harness-service"
                 className="rts-button uninstall"
                 danger
-                loading={openclawOperating === 'stop'}
-                disabled={openclawOperating === 'run'}
-                onClick={stopOpenclawService}
+                loading={deepseekHarnessOperating === 'stop'}
+                disabled={deepseekHarnessOperating === 'run'}
+                onClick={stopDeepseekHarnessService}
               >
                 <span className="button-text">停止</span>
               </Button>
             ),
-            (openclawShortcut.state === 'installed' ||
-              openclawShortcut.state === 'uninstalling') &&
-              openclawShortcut.running === false && (
+            (deepseekHarnessShortcut.state === 'installed' ||
+              deepseekHarnessShortcut.state === 'uninstalling') &&
+              deepseekHarnessShortcut.running === false && (
                 <Button
-                  key="remove-openclaw-service"
+                  key="remove-deepseek-harness-service"
                   className="rts-button uninstall"
                   danger
-                  loading={openclawShortcut.state === 'uninstalling'}
-                  onClick={removeOpenclawService}
+                  loading={deepseekHarnessShortcut.state === 'uninstalling'}
+                  onClick={removeDeepseekHarnessService}
                 >
                   <span className="button-text">卸载</span>
                 </Button>
               ),
             <Button
-              key="refresh-openclaw-service"
-              loading={openclawShortcut.initing}
-              onClick={openclawShortcut.refresh}
+              key="refresh-deepseek-harness-service"
+              loading={
+                deepseekHarnessShortcut.initing ||
+                deepseekHarnessShortcut.refreshing
+              }
+              onClick={deepseekHarnessShortcut.refresh}
             >
               刷新状态
             </Button>,
           ].filter((item) => item)}
         >
           <List.Item.Meta
-            title="OpenClaw"
-            description={`AI助理 服务状态：${openclawStateText}${
-              openclawShortcut.running ? '（运行中）' : ''
+            title="DeepSeek Harness"
+            description={`DeepSeek 智能体工作台 服务状态：${deepseekHarnessStateText}${
+              deepseekHarnessShortcut.running ? '（运行中）' : ''
             }${
-              openclawShortcut.version
-                ? ` 版本：${openclawShortcut.version}`
+              deepseekHarnessShortcut.port
+                ? `（端口 ${deepseekHarnessShortcut.port}）`
+                : ''
+            }${
+              deepseekHarnessShortcut.version
+                ? ` 版本：${deepseekHarnessShortcut.version}`
                 : ''
             }`}
           />

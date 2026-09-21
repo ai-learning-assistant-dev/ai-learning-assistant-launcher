@@ -91,6 +91,16 @@ import {
   copyOpenclawDashboardUrlHandle,
   OpenclawServiceInfo,
 } from './openclaw-service/type-info';
+import {
+  installDeepseekHarnessServiceHandle,
+  queryDeepseekHarnessServiceHandle,
+  removeDeepseekHarnessServiceHandle,
+  runDeepseekHarnessServiceHandle,
+  stopDeepseekHarnessServiceHandle,
+  openDeepseekHarnessWindowHandle,
+  copyDeepseekHarnessDashboardUrlHandle,
+  DeepseekHarnessServiceInfo,
+} from './deepseek-harness-service/type-info';
 import { openBunDebugHandle } from './bun-debug/type-info';
 
 const electronHandler = {
@@ -284,6 +294,39 @@ const mainHandle = {
   },
   copyOpenclawDashboardUrlHandle: async () => {
     return ipcInvoke<string>(copyOpenclawDashboardUrlHandle);
+  },
+  queryDeepseekHarnessServiceHandle: async () => {
+    return ipcInvoke<DeepseekHarnessServiceInfo>(
+      queryDeepseekHarnessServiceHandle,
+    );
+  },
+  installDeepseekHarnessServiceHandle: async () => {
+    return ipcInvoke<DeepseekHarnessServiceInfo>(
+      installDeepseekHarnessServiceHandle,
+    );
+  },
+  removeDeepseekHarnessServiceHandle: async () => {
+    return ipcInvoke<DeepseekHarnessServiceInfo>(
+      removeDeepseekHarnessServiceHandle,
+    );
+  },
+  runDeepseekHarnessServiceHandle: async () => {
+    return ipcInvoke<DeepseekHarnessServiceInfo>(
+      runDeepseekHarnessServiceHandle,
+    );
+  },
+  stopDeepseekHarnessServiceHandle: async () => {
+    return ipcInvoke<DeepseekHarnessServiceInfo>(
+      stopDeepseekHarnessServiceHandle,
+    );
+  },
+  openDeepseekHarnessWindowHandle: async () => {
+    return ipcInvoke<DeepseekHarnessServiceInfo>(
+      openDeepseekHarnessWindowHandle,
+    );
+  },
+  copyDeepseekHarnessDashboardUrlHandle: async () => {
+    return ipcInvoke<string>(copyDeepseekHarnessDashboardUrlHandle);
   },
   openBunDebugHandle: async () => {
     return ipcInvoke<void>(openBunDebugHandle);
