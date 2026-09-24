@@ -1,11 +1,10 @@
 import { app, BrowserWindow, IpcMain, clipboard, session } from 'electron';
 import { createHash, createHmac } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import path from 'node:path';
 import http from 'node:http';
 import type { ChildProcess } from 'node:child_process';
-import { load, dump } from 'js-yaml';
+import { load } from 'js-yaml';
 import {
   queryDeepseekHarnessServiceHandle,
   installDeepseekHarnessServiceHandle,
@@ -24,7 +23,6 @@ import { ipcHandle } from '../ipc-util';
 import { Exec } from '../exec';
 import { loggerFactory } from '../terminal-log';
 import { getLlmConfig } from '../configs';
-import type { CustomModel } from '../configs/type-info';
 import { spawn } from 'cross-spawn';
 import {
   TAOBAO_NPM_REGISTRY,
@@ -36,14 +34,23 @@ import {
   setNpmRegistryTaobaoGlobal,
   type NodeVersionPolicy,
 } from '../node-toolchain';
+import type { CommandRunner, SyncLogger } from './dsh-config-providers';
+import {
+  createDshSyncLogger,
+  dshCredentialsPath,
+  dshSettingsPath,
+  syncModelsIntoDshHarness,
+} from './dsh-model-sync';
 
 /**
  * DeepSeek Harness（dsh）服务：
  * - dsh 是全局安装的 npm 包（`npm i -g @deepseek-ai/dsh`），所以已安装时直接复用，不重复安装
  * - 界面是 `dsh web`（默认端口 3080），启动时打印带一次性 token 的 URL；机器上已有实例时
  *   直接复用该实例，不再另起一个
- * - 安装时把本项目配置的大模型镜像进 dsh 的 `$DSH_HOME/settings.yaml`（llm-pi-ai 路由）和
- *   `$DSH_HOME/.credentials.yaml`（API key），装完即可在 dsh 的模型选择器里选到
+ * - 安装时把本项目配置的大模型镜像进 dsh 的 `$DSH_HOME/settings.yaml`：
+ *   DeepSeek 官方提供方写 `llm-deepseek`（内置路由 `deepseek-official`），其余模型写 `llm-pi-ai`
+ *   的自定义提供方路由；非空 API key 写进 `$DSH_HOME/.credentials.yaml`（空 / 全空白密钥不写），
+ *   装完即可在 dsh 的模型选择器里选到
  */
 
 const DS_LABEL = 'DEEPSEEK_HARNESS';
@@ -116,20 +123,9 @@ function throwWithLog(message: string, cause?: unknown): never {
 }
 
 // ===== dsh 安装目录与配置文件 =====
-
-/** dsh 的数据目录：$DSH_HOME，未设置时用 ~/.dsh */
-function resolveDshHome(): string {
-  const fromEnv = (process.env.DSH_HOME || '').trim();
-  return fromEnv || path.join(homedir(), '.dsh');
-}
-
-function dshSettingsPath(): string {
-  return path.join(resolveDshHome(), 'settings.yaml');
-}
-
-function dshCredentialsPath(): string {
-  return path.join(resolveDshHome(), '.credentials.yaml');
-}
+//
+// 路径解析（`$DSH_HOME` / settings.yaml / .credentials.yaml）与配置同步都在
+// dsh-model-sync.ts 里，安装流程与模型配置页的「同步 API key」按钮共用同一套。
 
 // ===== 运行状态探测 =====
 
@@ -591,233 +587,56 @@ async function createDshWindow(): Promise<void> {
 }
 
 // ===== 大模型配置同步（settings.yaml / .credentials.yaml） =====
+//
+// - 换算规则（哪些模型写哪条路由、哪些密钥写进凭据）：model-sync-plan.ts
+// - 写入：dsh-config-providers.ts —— 直接用 dsh 自带的
+//   `@deepseek-ai/dsh-settings-file` / `@deepseek-ai/dsh-credentials-local`
+// - 对外入口：dsh-model-sync.ts —— 安装流程与模型配置页的「同步 API key」按钮共用
+//
+// 这里不做任何「自己写 YAML」的兜底：dsh 自带的配置包用不了就只记日志，
+// 让用户在 dsh 的模型页（设置 → 模型）里自己配，避免安装器和 dsh 各写一份格式不同的配置。
 
-/** 把模型名/id 规范成可用的标识：小写、非法字符替换为 `-` */
-function slugify(name: string): string {
-  const slug = (name || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-  return slug || 'model';
-}
+/** 给 dsh 配置包用的日志出口 */
+const syncLogger: SyncLogger = createDshSyncLogger();
 
-/** 模型对应的 dsh 路由名（也是凭据引用名的前缀） */
-function routeKeyOf(model: CustomModel): string {
-  return slugify(model.id || model.name);
-}
+/** 给 dsh 配置包用的命令执行器（只在 PATH 里找不到全局 dsh 时用来问 npm root -g） */
+const runDshCommand: CommandRunner = async (command, args) => {
+  const { stdout } = await commandLine.exec(command, args, {
+    logger: loggerFactory(DS_LABEL),
+  });
+  return stdout ?? '';
+};
 
-/** 模型对应的 dsh 凭据引用名（写入 .credentials.yaml 的 refs 里） */
-function apiKeyRefOf(model: CustomModel): string {
-  return `DSH_${routeKeyOf(model).replace(/-/g, '_').toUpperCase()}_API_KEY`;
-}
-
-/**
- * 取配置文件的顶层节点文本切片。
- * 只做“顶层 key → 原文本块”的切分，不解析 YAML 语义：这样即使用户文件里有
- * flow 风格、注释、多行字符串，也能原样保留未被改动的部分。
- */
-function splitTopLevelSections(text: string): Map<string, string> {
-  const sections = new Map<string, string>();
-  let currentKey: string | null = null;
-  let buffer: string[] = [];
-  const flush = (): void => {
-    if (currentKey !== null) {
-      sections.set(currentKey, buffer.join('\n'));
-    }
-    buffer = [];
-  };
-  for (const line of text.split(/\r?\n/)) {
-    const matched = /^([A-Za-z0-9_.-]+):(.*)$/.exec(line);
-    if (matched) {
-      flush();
-      currentKey = matched[1];
-      buffer = [line];
-      continue;
-    }
-    if (currentKey !== null) {
-      buffer.push(line);
-    }
-  }
-  flush();
-  return sections;
+/** 配置包用不了时的统一提示：不写文件，交给用户在 dsh 界面里配 */
+function logManualConfigHint(reason: string): void {
+  logger.warn(
+    `[${DS_LABEL}] ${reason}；已跳过模型配置同步，不影响 dsh 本身运行。` +
+      `请在 dsh 界面的「设置 → 模型」里手动添加提供方与 API key（或在 ${dshSettingsPath()} 里手写配置）`,
+  );
 }
 
 /**
- * 解析当前 `.credentials.yaml` 里的 refs（key → 值）。
- * 文件结构是固定的 `version` / `records` / `refs` 三个顶层节点，
- * refs 下的条目都是 `  大写引用名: 值` 这种单行形式。
+ * 用本项目的大模型配置初始化 dsh：写模型路由与凭据。
+ * 没有配置模型、或 dsh 配置包不可用时只警告，不阻断安装。
  */
-function parseCredentialRefs(text: string): Record<string, string> {
-  const refs: Record<string, string> = {};
-  const section = splitTopLevelSections(text).get('refs');
-  if (!section) {
-    return refs;
-  }
-  for (const line of section.split(/\r?\n/).slice(1)) {
-    const matched = /^\s+([A-Za-z0-9_]+)\s*:\s*(.*)$/.exec(line);
-    if (matched && matched[2].trim()) {
-      refs[matched[1]] = matched[2].trim();
-    }
-  }
-  return refs;
-}
+async function onboardDeepseekHarness(): Promise<void> {
+  const summary = await syncModelsIntoDshHarness({
+    models: getLlmConfig().models ?? [],
+    run: runDshCommand,
+    logger: syncLogger,
+  });
 
-/**
- * 写入 dsh 的凭据引用（API key）。
- * refs 是 YAML 文档的最后一个顶层节点，所以整块重写这个节点即可，
- * 前面的 version / records（含登录态）原样保留；refs 里已有的引用也不会丢。
- */
-function writeCredentialRefs(refs: Record<string, string>): void {
-  const file = dshCredentialsPath();
-  const existing = existsSync(file) ? readFileSync(file, 'utf-8') : '';
-  const entries = Object.entries(refs).filter(([, value]) => !!value);
-  if (entries.length === 0) {
+  if (summary === null) {
+    logManualConfigHint('未能通过 dsh 自带的配置包写入配置');
     return;
   }
-
-  mkdirSync(path.dirname(file), { recursive: true });
-  const refsBlock = [
-    'refs:',
-    ...entries.map(([key, value]) => `  ${key}: ${value}`),
-  ];
-
-  if (!existing.trim()) {
-    writeFileSync(file, `version: 1\n${refsBlock.join('\n')}\n`, 'utf-8');
-    logger.log(`[${DS_LABEL}] 已创建 ${file} 并写入 ${entries.length} 个凭据`);
+  if (summary.length === 0) {
+    // 具体原因（没有模型 / 全是没有密钥的模型）已由 syncModelsIntoDshHarness 记过日志
     return;
   }
-
-  const lines = existing.split(/\r?\n/);
-  const refsStart = lines.findIndex((line) => /^refs:/.test(line));
-  if (refsStart < 0) {
-    // 没有 refs 节点：直接追加（YAML 顶层节点顺序不影响语义）
-    writeFileSync(
-      file,
-      `${existing.replace(/\s*$/, '')}\n${refsBlock.join('\n')}\n`,
-      'utf-8',
-    );
-    logger.log(`[${DS_LABEL}] 已向 ${file} 追加 ${entries.length} 个凭据`);
-    return;
-  }
-
-  const mergedRefs = { ...parseCredentialRefs(existing), ...refs };
-  const mergedBlock = [
-    'refs:',
-    ...Object.entries(mergedRefs).map(([key, value]) => `  ${key}: ${value}`),
-  ];
-  const output = [...lines.slice(0, refsStart), ...mergedBlock];
-  writeFileSync(file, `${output.join('\n').replace(/\s*$/, '')}\n`, 'utf-8');
   logger.log(
-    `[${DS_LABEL}] 已写入 ${file} 的 ${entries.length} 个凭据引用（保留原有 refs）`,
+    `[${DS_LABEL}] 已通过 dsh 自带的配置包（dsh-settings-file / dsh-credentials-local）同步：${summary.join('；')}`,
   );
-}
-
-/** 本项目配置里可用的（非 embedding）模型 */
-function getMirrorableModels(): CustomModel[] {
-  return getLlmConfig().models.filter(
-    (model) => !model.isEmbeddingModel && !!model.name && !!model.baseUrl,
-  );
-}
-
-/**
- * 把本项目的模型写进 `$DSH_HOME/settings.yaml`：
- * - 每个模型注册成一条 llm-pi-ai 路由（api: openai-completions，走 baseURL）
- * - apiKeyEnv 指向写进 .credentials.yaml 的凭据引用
- * - 没有 agent-default-model 时，默认模型设成第一条路由，装完即可直接对话
- * 文件用 YAML 解析后合并写回，其余节点（comfyui 等）语义不变；同名路由覆盖更新，
- * 不同名的已有路由原样保留。
- */
-function syncDshSettings(models: CustomModel[]): void {
-  const file = dshSettingsPath();
-  if (!existsSync(file)) {
-    mkdirSync(path.dirname(file), { recursive: true });
-    writeFileSync(file, '{}\n', 'utf-8');
-  }
-  const text = readFileSync(file, 'utf-8');
-  let document: Record<string, unknown>;
-  try {
-    const parsed = text.trim() ? load(text) : {};
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      throw new Error('settings.yaml 的顶层不是映射');
-    }
-    document = parsed as Record<string, unknown>;
-  } catch (e) {
-    // 用户手写的配置无法解析：不覆盖、不中断安装，只提示
-    logger.warn(
-      `[${DS_LABEL}] ${file} 不是合法的 YAML，已跳过模型配置同步（不影响 dsh 使用，可在 dsh 设置页里手动配置模型）:`,
-      e,
-    );
-    return;
-  }
-
-  // 保留用户已有的 llm-pi-ai 路由，只增改本项目模型对应的路由
-  const existing = document['llm-pi-ai'] as
-    | { providers?: Record<string, unknown> }
-    | undefined;
-  const providers: Record<string, unknown> = {
-    ...(existing?.providers ?? {}),
-  };
-  for (const model of models) {
-    providers[routeKeyOf(model)] = {
-      api: 'openai-completions',
-      baseURL: model.baseUrl,
-      apiKeyEnv: apiKeyRefOf(model),
-      models: [
-        {
-          id: model.name,
-          name: model.displayName || model.name,
-        },
-      ],
-    };
-  }
-
-  document['llm-pi-ai'] = { ...existing, providers };
-  if (!document['agent-default-model'] && models.length > 0) {
-    document['agent-default-model'] = {
-      provider: routeKeyOf(models[0]),
-      model: models[0].name,
-    };
-  }
-
-  writeFileSync(file, dump(document), 'utf-8');
-  logger.log(
-    `[${DS_LABEL}] 已把 ${models.length} 个模型写入 ${file}（llm-pi-ai 路由）：${models
-      .map((model) => routeKeyOf(model))
-      .join('、')}`,
-  );
-}
-
-/**
- * 用本项目的大模型配置初始化 dsh：先写凭据，再写模型路由。
- * 没有配置模型时只警告，不阻断安装。
- */
-function onboardDeepseekHarness(): void {
-  const models = getMirrorableModels();
-  if (models.length === 0) {
-    logger.warn(
-      `[${DS_LABEL}] 未配置可用的大模型，跳过模型配置同步（可在设置里配置模型后重新安装）`,
-    );
-    return;
-  }
-
-  const refs: Record<string, string> = {};
-  for (const model of models) {
-    // 本地模型（Ollama / LM Studio）通常不需要 key，缺 key 的模型仍然注册路由，
-    // 但不写凭据：dsh 的 pi-ai 路由在拿不到 key 时会报 MISSING_CREDENTIAL，
-    // 这时用户可以在 dsh 设置页里补 key
-    if (model.apiKey) {
-      refs[apiKeyRefOf(model)] = model.apiKey;
-    } else {
-      logger.warn(
-        `[${DS_LABEL}] 模型 ${model.name} 没有配置 API key，已注册路由但未写入凭据`,
-      );
-    }
-  }
-  if (Object.keys(refs).length > 0) {
-    writeCredentialRefs(refs);
-  }
-  syncDshSettings(models);
 }
 
 // ===== 服务生命周期 =====
@@ -1124,7 +943,7 @@ export async function installDeepseekHarnessService(): Promise<DeepseekHarnessSe
 
   // 用本项目的大模型配置初始化 dsh（settings.yaml + .credentials.yaml）
   logger.log(`[${DS_LABEL}] 使用项目大模型配置同步 dsh 的模型配置 ...`);
-  onboardDeepseekHarness();
+  await onboardDeepseekHarness();
 
   // 自动启动 Web 界面并打开窗口
   logger.log(`[${DS_LABEL}] 自动启动 DeepSeek Harness 界面 ...`);
