@@ -1,7 +1,17 @@
 .pdf-convert {
+  /* 纵向 flex 布局，让底部的命令行日志自动占满卡片之后的剩余空间 */
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  box-sizing: border-box;
   padding: 20px;
   max-width: 800px;
   margin: 0 auto;
+
+  > .ant-card {
+    /* 卡片保持自然高度，剩余空间全部留给终端 */
+    flex: 0 0 auto;
+  }
 
   .header {
     display: flex;

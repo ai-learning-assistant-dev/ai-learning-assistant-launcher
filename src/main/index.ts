@@ -17,6 +17,9 @@ import initLauncherUpdate from './launcher-update';
 import initRTSService from './local-service/rts-service';
 import initObsidianVoiceService from './local-service/obsidian-voice-service';
 import initTextbookEditorService from './textbook-editor-service'
+import initOpenclawService from './openclaw-service'
+import initDeepseekHarnessService from './deepseek-harness-service'
+import initBunDebug from './bun-debug'
 import path from 'node:path';
 import { appPath, autoAdaptEncodingForWindows } from './exec';
 import { logDeviceInfo } from './logger/log-device-info';
@@ -89,6 +92,9 @@ initLauncherUpdate(ipcMain);
 initRTSService(ipcMain);
 initObsidianVoiceService(ipcMain);
 initTextbookEditorService(ipcMain);
+initOpenclawService(ipcMain);
+initDeepseekHarnessService(ipcMain);
+initBunDebug(ipcMain);
 updateTemplate();
 
 const createWindow = async () => {

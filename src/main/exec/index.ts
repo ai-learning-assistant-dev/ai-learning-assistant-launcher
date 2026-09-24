@@ -25,6 +25,7 @@ import * as sudo from 'sudo-prompt';
 
 import { app } from 'electron';
 import path from 'path';
+import { homedir } from 'node:os';
 import { isLinux, isMac, isWindows } from './util';
 import iconv from 'iconv-lite';
 
@@ -46,7 +47,10 @@ export const uvPath = path.join(
   'uv',
 );
 
-export const macosExtraPath = `/opt/podman/bin:/usr/local/bin:/opt/homebrew/bin:/opt/local/bin:${bunPath}:${uvPath}`;
+// bun 全局 bin 目录（bun add -g 生成的命令所在位置）
+export const bunGlobalBinDir = path.join(homedir(), '.bun', 'bin');
+
+export const macosExtraPath = `/opt/podman/bin:/usr/local/bin:/opt/homebrew/bin:/opt/local/bin:${bunPath}:${bunGlobalBinDir}:${uvPath}`;
 
 function bufferToString(data: Buffer | string, encoding?: string) {
   if (data) {
@@ -333,7 +337,7 @@ export function getInstallationPath(envPATH?: string): string {
   envPATH ??= process.env.PATH;
 
   if (isWindows()) {
-    return `c:\\Program Files\\RedHat\\Podman;${bunPath};${uvPath};${envPATH}`;
+    return `c:\\Program Files\\RedHat\\Podman;${bunPath};${bunGlobalBinDir};${uvPath};${envPATH}`;
   }
   if (isMac()) {
     if (!envPATH) {

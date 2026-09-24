@@ -81,6 +81,27 @@ import {
   TrainingConfig,
 } from './configs/type-info';
 import { haveNewVersionTextbookEditorServiceHandle, installTextbookEditorServiceHandle, logsTextbookEditorServiceHandle, queryTextbookEditorServiceHandle, removeTextbookEditorServiceHandle, startTextbookEditorServiceHandle, updateTextbookEditorServiceHandle } from './textbook-editor-service/type-info';
+import {
+  installOpenclawServiceHandle,
+  queryOpenclawServiceHandle,
+  removeOpenclawServiceHandle,
+  runOpenclawServiceHandle,
+  stopOpenclawServiceHandle,
+  openOpenclawWindowHandle,
+  copyOpenclawDashboardUrlHandle,
+  OpenclawServiceInfo,
+} from './openclaw-service/type-info';
+import {
+  installDeepseekHarnessServiceHandle,
+  queryDeepseekHarnessServiceHandle,
+  removeDeepseekHarnessServiceHandle,
+  runDeepseekHarnessServiceHandle,
+  stopDeepseekHarnessServiceHandle,
+  openDeepseekHarnessWindowHandle,
+  copyDeepseekHarnessDashboardUrlHandle,
+  DeepseekHarnessServiceInfo,
+} from './deepseek-harness-service/type-info';
+import { openBunDebugHandle } from './bun-debug/type-info';
 
 const electronHandler = {
   // 系统信息
@@ -252,6 +273,63 @@ const mainHandle = {
       latestVersion: string;
       haveNew: boolean;
     }>(haveNewVersionTextbookEditorServiceHandle);
+  },
+  queryOpenclawServiceHandle: async () => {
+    return ipcInvoke<OpenclawServiceInfo>(queryOpenclawServiceHandle);
+  },
+  installOpenclawServiceHandle: async () => {
+    return ipcInvoke<OpenclawServiceInfo>(installOpenclawServiceHandle);
+  },
+  removeOpenclawServiceHandle: async () => {
+    return ipcInvoke<OpenclawServiceInfo>(removeOpenclawServiceHandle);
+  },
+  runOpenclawServiceHandle: async () => {
+    return ipcInvoke<OpenclawServiceInfo>(runOpenclawServiceHandle);
+  },
+  stopOpenclawServiceHandle: async () => {
+    return ipcInvoke<OpenclawServiceInfo>(stopOpenclawServiceHandle);
+  },
+  openOpenclawWindowHandle: async () => {
+    return ipcInvoke<OpenclawServiceInfo>(openOpenclawWindowHandle);
+  },
+  copyOpenclawDashboardUrlHandle: async () => {
+    return ipcInvoke<string>(copyOpenclawDashboardUrlHandle);
+  },
+  queryDeepseekHarnessServiceHandle: async () => {
+    return ipcInvoke<DeepseekHarnessServiceInfo>(
+      queryDeepseekHarnessServiceHandle,
+    );
+  },
+  installDeepseekHarnessServiceHandle: async () => {
+    return ipcInvoke<DeepseekHarnessServiceInfo>(
+      installDeepseekHarnessServiceHandle,
+    );
+  },
+  removeDeepseekHarnessServiceHandle: async () => {
+    return ipcInvoke<DeepseekHarnessServiceInfo>(
+      removeDeepseekHarnessServiceHandle,
+    );
+  },
+  runDeepseekHarnessServiceHandle: async () => {
+    return ipcInvoke<DeepseekHarnessServiceInfo>(
+      runDeepseekHarnessServiceHandle,
+    );
+  },
+  stopDeepseekHarnessServiceHandle: async () => {
+    return ipcInvoke<DeepseekHarnessServiceInfo>(
+      stopDeepseekHarnessServiceHandle,
+    );
+  },
+  openDeepseekHarnessWindowHandle: async () => {
+    return ipcInvoke<DeepseekHarnessServiceInfo>(
+      openDeepseekHarnessWindowHandle,
+    );
+  },
+  copyDeepseekHarnessDashboardUrlHandle: async () => {
+    return ipcInvoke<string>(copyDeepseekHarnessDashboardUrlHandle);
+  },
+  openBunDebugHandle: async () => {
+    return ipcInvoke<void>(openBunDebugHandle);
   },
   // 共建计划相关
   selectJointBuildFolder: async (): Promise<string | null> => {

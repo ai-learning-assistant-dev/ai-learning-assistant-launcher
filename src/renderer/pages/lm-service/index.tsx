@@ -484,11 +484,10 @@ export default function LMService() {
           </List.Item>,
         ]}
       />
+      {/* 高度交给容器自适应：占满列表下方的剩余空间 */}
       <TerminalLogScreen
         id="terminal-log"
-        cols={100}
-        rows={3}
-        style={{ width: 'calc(100% - 20px)' }}
+        style={{ width: 'calc(100% - 20px)', marginTop: '16px' }}
       />
     </div>
   );

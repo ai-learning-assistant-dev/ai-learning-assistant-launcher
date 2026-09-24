@@ -115,6 +115,15 @@ export default function Hello() {
     exportLogs();
   };
 
+  // 打开带 bun 环境变量的 cmd 调试窗口
+  const openBunDebug = async () => {
+    try {
+      await window.mainHandle.openBunDebugHandle();
+    } catch (e) {
+      message.error(e.message);
+    }
+  };
+
   const showQrCodeModal = () => {
     setIsModalVisible(true);
   };
@@ -657,15 +666,19 @@ export default function Hello() {
                       </Button>
                     )}
                     {trainingShortcut.state !== 'not_install' && (
-                      <Button
-                        className="feature-button uninstall"
-                        block
-                        size="large"
-                        onClick={removeTrainingService}
-                        loading={trainingServiceRemoving}
-                      >
-                        卸载
-                      </Button>
+                      <Popconfirm title="确认卸载学科培训服务吗？"
+                        okText="确认"
+                        cancelText="取消"
+                        onConfirm={removeTrainingService}>
+                        <Button
+                          className="feature-button uninstall"
+                          block
+                          size="large"
+                          loading={trainingServiceRemoving}
+                        >
+                          卸载
+                        </Button>
+                      </Popconfirm>
                     )}
                   </div>
                 </div>
@@ -733,6 +746,9 @@ export default function Hello() {
                 </Button>
                 <Button className="get-help-button" onClick={showQrCodeModal}>
                   获取帮助
+                </Button>
+                <Button className="manual-button" onClick={openBunDebug}>
+                  调试bun环境
                 </Button>
               </div>
             </div>
