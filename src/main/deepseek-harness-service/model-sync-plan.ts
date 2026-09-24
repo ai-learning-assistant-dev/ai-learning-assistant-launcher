@@ -6,6 +6,8 @@
  * https://deepseek-harness.github.io/deepseek-harness/guide/providers#添加内置提供方
  * - DeepSeek 官方提供方：走内置路由 `deepseek-official`（由插件 `dsh-llm-deepseek` 注册），
  *   只写 `llm-deepseek` 分节的 `apiKeyEnv` / `baseURL`，模型目录由 dsh 自带
+ * - DeepSeek 联网搜索（`dsh-web-search-deepseek`）：复用同一把 DeepSeek key，
+ *   只写 `web-search-deepseek` 分节的 `apiKeyEnv`；非 DeepSeek 密钥不写搜索配置
  * - 其它提供方（公司网关、自建服务、OpenAI 兼容端点）：走 `dsh-llm-pi-ai` 的自定义提供方，
  *   每条路由写 `api` / `baseURL` / `models`，有密钥时再写 `apiKeyEnv`
  *
@@ -70,6 +72,13 @@ export const DEEPSEEK_OFFICIAL_ROUTE = 'deepseek-official';
 export const DEEPSEEK_API_KEY_REF = 'DSH_DEEPSEEK_API_KEY';
 
 /**
+ * DeepSeek 联网搜索提供方（`@deepseek-ai/dsh-web-search-deepseek`）的 settings 命名空间。
+ * 搜索功能复用同一把 DeepSeek API key（`apiKeyEnv` 指向的凭据引用，默认 `DEEPSEEK_API_KEY`），
+ * 因此只在「有带密钥的 DeepSeek 模型」时一并写入；非 DeepSeek 密钥不会写搜索配置。
+ */
+export const WEB_SEARCH_DEEPSEEK_SETTINGS_NAMESPACE = 'web-search-deepseek';
+
+/**
  * 取真正可用的密钥：去掉首尾空白后为空（空字符串、全空白、undefined）都算「没配密钥」。
  * 密钥里的首尾空白一定是用户误输入（复制粘贴带上的换行/空格），顺手去掉。
  */
@@ -119,6 +128,8 @@ export interface SettingsMergeResult {
  * 把同步计划合并进一份 settings 文档：
  * - `llm-pi-ai.providers`：保留 dsh 里已有的路由，只增改本项目模型对应的路由
  * - `llm-deepseek`：保留已有字段（reasoningEffort 等），只改连接事实
+ * - `web-search-deepseek`：只在有 DeepSeek 密钥时，把搜索提供方的 `apiKeyEnv`
+ *   指向同一把 key（保留已有字段，其余沿用 dsh 默认值）
  * - `agent-default-model`：只有文档里还没有时才设置，且只挑「有密钥」的模型
  *
  * 写文件和写内存文档的两条路径（dsh 自带配置包 / 内置文本写入）共用这里，
@@ -152,6 +163,20 @@ export function mergeModelSyncIntoSettings(
       | undefined;
     sections['llm-deepseek'] = { ...(existing ?? {}), ...plan.deepseek };
     summary.push(`内置 ${DEEPSEEK_OFFICIAL_ROUTE} 路由（llm-deepseek 分节）`);
+
+    // DeepSeek 的联网搜索提供方复用同一把 key：只写 apiKeyEnv，
+    // 端点 / 模型等其余字段沿用 dsh 默认值（官方 anthropic 兼容端点）。
+    // 因为搜索 key 就是 DeepSeek key，所以这里随 deepseek 一起写，非 DeepSeek 密钥不写。
+    const existingSearch = document[WEB_SEARCH_DEEPSEEK_SETTINGS_NAMESPACE] as
+      | Record<string, unknown>
+      | undefined;
+    sections[WEB_SEARCH_DEEPSEEK_SETTINGS_NAMESPACE] = {
+      ...(existingSearch ?? {}),
+      apiKeyEnv: plan.deepseek.apiKeyEnv,
+    };
+    summary.push(
+      `DeepSeek 搜索提供方（${WEB_SEARCH_DEEPSEEK_SETTINGS_NAMESPACE} 分节）`,
+    );
   }
 
   if (!document['agent-default-model'] && plan.defaultModel) {
@@ -173,7 +198,8 @@ export function mergeModelSyncIntoSettings(
  *   模型名记进 {@link ModelSyncPlan.keylessModels} 由调用方提示用户
  * - 密钥非空：写凭据（值是去掉首尾空白的密钥），并生成带 `apiKeyEnv` 的路由
  * - DeepSeek 提供方的模型：写进 `llm-deepseek`（内置路由 `deepseek-official`），
- *   模型目录用 dsh 自带的，不在这里声明 `models`
+ *   模型目录用 dsh 自带的，不在这里声明 `models`；同时把搜索提供方
+ *   `web-search-deepseek` 的 `apiKeyEnv` 指向同一把 key（复用同一凭据，不重复写）
  * - 其它提供方：每条模型一条 `llm-pi-ai` 路由
  * - `agent-default-model` 只从「有密钥」的模型里挑第一条，避免默认模型一开机就缺凭据
  */

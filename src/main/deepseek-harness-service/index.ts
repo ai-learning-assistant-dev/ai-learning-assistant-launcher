@@ -50,7 +50,8 @@ import {
  * - 安装时把本项目配置的大模型镜像进 dsh 的 `$DSH_HOME/settings.yaml`：
  *   DeepSeek 官方提供方写 `llm-deepseek`（内置路由 `deepseek-official`），其余模型写 `llm-pi-ai`
  *   的自定义提供方路由；非空 API key 写进 `$DSH_HOME/.credentials.yaml`（空 / 全空白密钥不写），
- *   装完即可在 dsh 的模型选择器里选到
+ *   装完即可在 dsh 的模型选择器里选到。DeepSeek 密钥同时写进联网搜索提供方
+ *   `web-search-deepseek`（复用同一把 key，非 DeepSeek 密钥不写）
  */
 
 const DS_LABEL = 'DEEPSEEK_HARNESS';

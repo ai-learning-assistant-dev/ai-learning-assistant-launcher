@@ -70,7 +70,8 @@ export function createDshSyncLogger(): SyncLogger {
  * `$DSH_HOME/.credentials.yaml`（API key），全部通过 dsh 自带的配置包完成。
  *
  * 换算规则见 model-sync-plan.ts：密钥为空 / 全空白不写凭据、路由也不声明 `apiKeyEnv`；
- * DeepSeek 提供方走内置路由 `deepseek-official`，其余走 `llm-pi-ai` 自定义提供方。
+ * DeepSeek 提供方走内置路由 `deepseek-official`，其余走 `llm-pi-ai` 自定义提供方；
+ * DeepSeek 密钥同时写进联网搜索提供方 `web-search-deepseek`（非 DeepSeek 密钥不写）。
  *
  * @returns 写入摘要；`[]` 表示没有可同步的模型（原因已记日志）；
  *          `null` 表示 dsh 自带的配置包不可用（调用方应提示用户去 dsh 界面里手动配置）
