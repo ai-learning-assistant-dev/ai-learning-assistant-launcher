@@ -18,6 +18,12 @@ export const openDeepseekHarnessWindowHandle = `${channel}open-window`;
 /** 复制 DeepSeek Harness dashboard 页面链接到剪贴板 */
 export const copyDeepseekHarnessDashboardUrlHandle = `${channel}copy-dashboard-url`;
 
+/** 把 WorkBuddy 的模型配置同步进 DeepSeek Harness（写入前自动备份 dsh 配置） */
+export const syncWorkbuddyModelsToDshHandle = `${channel}sync-workbuddy-models`;
+
+/** 在系统文件管理器里打开 dsh 配置的备份目录 */
+export const openDeepseekHarnessBackupDirHandle = `${channel}open-backup-dir`;
+
 /**
  * DeepSeek Harness Web 界面的候选端口（按探测顺序）。
  * 3080 是 dsh web 的默认端口：机器上已经有 dsh 实例在跑时优先复用它，
@@ -51,4 +57,33 @@ export interface DeepseekHarnessServiceInfo {
   running?: boolean;
   /** Web 界面实际监听端口 */
   port?: number;
+}
+
+/** 一次「从 WorkBuddy 同步模型配置到 dsh」的结果，直接给界面展示 */
+export interface WorkbuddyModelSyncResult {
+  /** 用了几个 WorkBuddy 模型、生成了几条 dsh 路由 */
+  workbuddyModelCount: number;
+  syncedModelCount: number;
+  routeCount: number;
+  /** 写入摘要（每条一句，界面按行展示） */
+  summary: string[];
+  /** 备份信息：同步前把 dsh 配置复制到了哪里 */
+  backup: {
+    /** 备份目录；null 表示 dsh 还没有配置文件，无需备份 */
+    dir: string | null;
+    files: string[];
+    /** true 表示与上一次备份内容相同，复用了已有目录 */
+    reused: boolean;
+  };
+  /** 涉及的文件路径 */
+  paths: {
+    workbuddyModels: string;
+    settings: string;
+    credentials: string;
+    backupRoot: string;
+  };
+  /** 没有同步过来的模型及原因 */
+  notices: Array<{ name: string; reason: string }>;
+  /** 配置冲突等非致命提示 */
+  warnings: string[];
 }

@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { message } from 'antd';
-import { DeepseekHarnessServiceInfo } from '../../../main/deepseek-harness-service/type-info';
+import {
+  DeepseekHarnessServiceInfo,
+  WorkbuddyModelSyncResult,
+} from '../../../main/deepseek-harness-service/type-info';
 
 // 把未知错误转成可展示的文本
 function getErrorMessage(error: unknown): string {
@@ -132,6 +135,38 @@ export function useDeepseekHarnessServiceShortcut() {
     }
   }, [queryServiceInfo, showError]);
 
+  const [syncingWorkbuddyModels, setSyncingWorkbuddyModels] = useState(false);
+
+  /**
+   * 把 WorkBuddy 的模型配置同步进 dsh。
+   * 不改动服务状态，所以不走 runAction（不需要重新查询服务信息）；
+   * 错误交给调用方用弹窗展示（只在这里留一条 console 记录），避免和调用方的提示重复。
+   */
+  const syncWorkbuddyModels =
+    useCallback(async (): Promise<WorkbuddyModelSyncResult> => {
+      setSyncingWorkbuddyModels(true);
+      try {
+        return await window.mainHandle.syncWorkbuddyModelsToDshHandle();
+      } catch (e) {
+        console.error('[DeepSeekHarness] 同步 WorkBuddy 模型配置失败:', e);
+        throw e;
+      } finally {
+        setSyncingWorkbuddyModels(false);
+      }
+    }, []);
+
+  /** 在系统文件管理器里打开备份目录 */
+  const openBackupDir = useCallback(
+    async (dir?: string) => {
+      try {
+        await window.mainHandle.openDeepseekHarnessBackupDirHandle(dir);
+      } catch (e) {
+        showError('打开备份目录', e);
+      }
+    },
+    [showError],
+  );
+
   return {
     initing,
     refreshing,
@@ -146,5 +181,8 @@ export function useDeepseekHarnessServiceShortcut() {
     openWindow,
     copyPageLink,
     refresh,
+    syncingWorkbuddyModels,
+    syncWorkbuddyModels,
+    openBackupDir,
   };
 }

@@ -99,7 +99,10 @@ import {
   stopDeepseekHarnessServiceHandle,
   openDeepseekHarnessWindowHandle,
   copyDeepseekHarnessDashboardUrlHandle,
+  syncWorkbuddyModelsToDshHandle,
+  openDeepseekHarnessBackupDirHandle,
   DeepseekHarnessServiceInfo,
+  WorkbuddyModelSyncResult,
 } from './deepseek-harness-service/type-info';
 import { openBunDebugHandle } from './bun-debug/type-info';
 
@@ -327,6 +330,14 @@ const mainHandle = {
   },
   copyDeepseekHarnessDashboardUrlHandle: async () => {
     return ipcInvoke<string>(copyDeepseekHarnessDashboardUrlHandle);
+  },
+  // 把 WorkBuddy 的模型配置同步进 DeepSeek Harness（写入前自动备份 dsh 配置）
+  syncWorkbuddyModelsToDshHandle: async () => {
+    return ipcInvoke<WorkbuddyModelSyncResult>(syncWorkbuddyModelsToDshHandle);
+  },
+  // 在系统文件管理器里打开 dsh 配置的备份目录
+  openDeepseekHarnessBackupDirHandle: async (dir?: string) => {
+    return ipcInvoke<string>(openDeepseekHarnessBackupDirHandle, dir);
   },
   openBunDebugHandle: async () => {
     return ipcInvoke<void>(openBunDebugHandle);

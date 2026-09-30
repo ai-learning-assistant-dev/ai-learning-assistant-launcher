@@ -1,7 +1,15 @@
-import { app, BrowserWindow, IpcMain, clipboard, session } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  IpcMain,
+  clipboard,
+  session,
+  shell,
+} from 'electron';
 import { createHash, createHmac } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
+import path from 'node:path';
 import http from 'node:http';
 import type { ChildProcess } from 'node:child_process';
 import { load } from 'js-yaml';
@@ -13,11 +21,14 @@ import {
   stopDeepseekHarnessServiceHandle,
   openDeepseekHarnessWindowHandle,
   copyDeepseekHarnessDashboardUrlHandle,
+  syncWorkbuddyModelsToDshHandle,
+  openDeepseekHarnessBackupDirHandle,
   deepseekHarnessDashboardUrl,
   DEEPSEEK_HARNESS_NPM_PACKAGE,
   DEEPSEEK_HARNESS_NODE_RANGE,
   DEEPSEEK_HARNESS_PORTS,
   DeepseekHarnessServiceInfo,
+  WorkbuddyModelSyncResult,
 } from './type-info';
 import { ipcHandle } from '../ipc-util';
 import { Exec } from '../exec';
@@ -37,9 +48,11 @@ import {
 import type { CommandRunner, SyncLogger } from './dsh-config-providers';
 import {
   createDshSyncLogger,
+  dshBackupRoot,
   dshCredentialsPath,
   dshSettingsPath,
   syncModelsIntoDshHarness,
+  syncWorkbuddyModelsIntoDshHarness,
 } from './dsh-model-sync';
 
 /**
@@ -1031,6 +1044,82 @@ export async function stopDeepseekHarnessService(): Promise<DeepseekHarnessServi
   return queryDeepseekHarnessService();
 }
 
+// ===== 从 WorkBuddy 同步模型配置 =====
+
+/**
+ * 把 WorkBuddy 的自定义模型配置（`%USERPROFILE%\.workbuddy\models.json`）同步进 dsh。
+ *
+ * 写入前会把 `settings.yaml` / `.credentials.yaml` 整份备份到 `$DSH_HOME/backups/<时间戳>/`，
+ * 备份结果随返回值一起交给界面展示（用户想回滚时直接拷回这两个文件即可）。
+ *
+ * 失败时抛出可直接展示给用户的错误（读不到 WorkBuddy 配置、没有可同步的模型、
+ * dsh 自带的配置包不可用等）；抛错时还没有写任何东西。
+ */
+export async function syncWorkbuddyModelsToDsh(): Promise<WorkbuddyModelSyncResult> {
+  const outcome = await syncWorkbuddyModelsIntoDshHarness({
+    run: runDshCommand,
+    logger: syncLogger,
+  });
+
+  if (outcome === null) {
+    logManualConfigHint('未能通过 dsh 自带的配置包写入 WorkBuddy 的模型配置');
+    throw new Error(
+      '未能使用 dsh 自带的配置包写入配置（可能尚未安装 dsh）。请在 dsh 界面的「设置 → 模型」里手动添加提供方与 API key',
+    );
+  }
+
+  logger.log(
+    `[${DS_LABEL}] 已把 WorkBuddy 的模型配置同步进 dsh（${outcome.syncedModels} 个模型 / ${
+      outcome.routeCount
+    } 条路由）：${outcome.summary.join('；')}`,
+  );
+
+  const workbuddyModelCount = outcome.syncedModels + outcome.notices.length;
+  return {
+    workbuddyModelCount,
+    syncedModelCount: outcome.syncedModels,
+    routeCount: outcome.routeCount,
+    summary: outcome.summary,
+    backup: {
+      dir: outcome.backup.dir,
+      files: outcome.backup.files,
+      reused: outcome.backup.reused,
+    },
+    paths: outcome.paths,
+    notices: outcome.notices,
+    warnings: outcome.warnings,
+  };
+}
+
+/**
+ * 在系统文件管理器里打开 dsh 配置的备份目录。
+ * 只允许打开 dsh home 下的备份目录，避免这条 IPC 被当成任意路径打开器。
+ */
+export async function openDeepseekHarnessBackupDir(
+  dir?: string,
+): Promise<string> {
+  const root = dshBackupRoot();
+  const target = (dir ?? '').trim() || root;
+
+  const normalizedRoot = path.resolve(root);
+  const normalizedTarget = path.resolve(target);
+  if (
+    normalizedTarget !== normalizedRoot &&
+    !normalizedTarget.startsWith(`${normalizedRoot}${path.sep}`)
+  ) {
+    throw new Error(`只能打开 dsh 配置的备份目录：${root}`);
+  }
+  if (!existsSync(normalizedTarget)) {
+    throw new Error(`备份目录还不存在：${normalizedTarget}`);
+  }
+
+  const failure = await shell.openPath(normalizedTarget);
+  if (failure) {
+    throw new Error(failure);
+  }
+  return normalizedTarget;
+}
+
 export default async function init(ipcMain: IpcMain) {
   // 退出前结束本程序拉起的 dsh web，避免后台残留（端口上的实例也会被一并清掉）
   app.on('before-quit', () => {
@@ -1057,5 +1146,13 @@ export default async function init(ipcMain: IpcMain) {
   );
   ipcHandle(ipcMain, copyDeepseekHarnessDashboardUrlHandle, async (_event) =>
     copyDeepseekHarnessDashboardUrl(),
+  );
+  ipcHandle(ipcMain, syncWorkbuddyModelsToDshHandle, async (_event) =>
+    syncWorkbuddyModelsToDsh(),
+  );
+  ipcHandle(
+    ipcMain,
+    openDeepseekHarnessBackupDirHandle,
+    async (_event, dir?: string) => openDeepseekHarnessBackupDir(dir),
   );
 }

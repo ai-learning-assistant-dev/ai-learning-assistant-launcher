@@ -16,10 +16,89 @@ import { TerminalLogScreen } from '../../containers/terminal-log-screen';
 import { useTextbookEditorServiceShortcut } from '../../containers/use-textbook-editor-service-shortcut';
 import { useOpenclawServiceShortcut } from '../../containers/use-openclaw-service-shortcut';
 import { useDeepseekHarnessServiceShortcut } from '../../containers/use-deepseek-harness-service-shortcut';
+import { WorkbuddyModelSyncResult } from '../../../main/deepseek-harness-service/type-info';
 import { useState } from 'react';
 
 // OpenClaw 管理界面暂不展示：相关代码全部保留，之后需要重新启用时把这里改成 true 即可
 const OPENCLAW_UI_ENABLED = false;
+
+/** 把未知错误转成可展示的文本 */
+function describeError(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  if (typeof error === 'string' && error) {
+    return error;
+  }
+  try {
+    return JSON.stringify(error) || '未知错误';
+  } catch {
+    return String(error);
+  }
+}
+
+/** 从 WorkBuddy 同步模型配置后的结果展示 */
+function WorkbuddySyncResultContent({
+  result,
+  onOpenBackupDir,
+}: {
+  result: WorkbuddyModelSyncResult;
+  onOpenBackupDir: (dir?: string) => void;
+}) {
+  return (
+    <div className="workbuddy-sync-result">
+      <p className="workbuddy-sync-headline">
+        已同步 <strong>{result.syncedModelCount}</strong> 个模型，生成{' '}
+        <strong>{result.routeCount}</strong> 条提供方路由。
+      </p>
+
+      {result.summary.length > 0 && (
+        <ul className="workbuddy-sync-summary">
+          {result.summary.map((line, index) => (
+            // 摘要来自主进程，内容可能重复，用下标做 key
+            // eslint-disable-next-line react/no-array-index-key
+            <li key={`${index}-${line}`}>{line}</li>
+          ))}
+        </ul>
+      )}
+
+      <p className="workbuddy-sync-backup">
+        {result.backup.dir ? (
+          <>
+            {result.backup.reused
+              ? '同步前的 dsh 配置与上次备份一致，沿用已有备份：'
+              : '同步前已备份 dsh 配置到：'}
+            <code>{result.backup.dir}</code>
+            <Button
+              type="link"
+              size="small"
+              onClick={() => onOpenBackupDir(result.backup.dir ?? undefined)}
+            >
+              打开备份目录
+            </Button>
+          </>
+        ) : (
+          <>dsh 还没有配置文件，本次无需备份。</>
+        )}
+      </p>
+
+      {result.notices.length > 0 && (
+        <p className="workbuddy-sync-notices">
+          有 {result.notices.length} 个模型没有同步：
+          {result.notices
+            .map((notice) => `${notice.name}（${notice.reason}）`)
+            .join('、')}
+        </p>
+      )}
+
+      {result.warnings.map((warning) => (
+        <p key={warning} className="workbuddy-sync-notices">
+          {warning}
+        </p>
+      ))}
+    </div>
+  );
+}
 
 export default function NativeAiService() {
   const {
@@ -119,6 +198,66 @@ export default function NativeAiService() {
     } catch (e) {
       message.error(e.message);
     }
+  };
+
+  /** 真正执行同步：结果用弹窗展示（写入摘要 + 备份位置），失败给出可读原因 */
+  const runSyncWorkbuddyModels = async () => {
+    try {
+      const result = await deepseekHarnessShortcut.syncWorkbuddyModels();
+      Modal.success({
+        title: '已从 WorkBuddy 同步模型配置',
+        width: 560,
+        okText: '好',
+        content: (
+          <WorkbuddySyncResultContent
+            result={result}
+            onOpenBackupDir={deepseekHarnessShortcut.openBackupDir}
+          />
+        ),
+      });
+    } catch (e) {
+      Modal.error({
+        title: '同步 WorkBuddy 模型配置失败',
+        width: 520,
+        okText: '好',
+        content: <span>{describeError(e)}</span>,
+      });
+    }
+  };
+
+  /**
+   * 同步前的确认：用一句话讲清楚「从哪里读、往哪里写、会先备份」，
+   * 让用户点之前就知道会发生什么，而不是点完才发现配置被改了。
+   */
+  const confirmSyncWorkbuddyModels = () => {
+    Modal.confirm({
+      title: '从 WorkBuddy 同步模型配置到 DeepSeek Harness？',
+      width: 540,
+      icon: null,
+      okText: '同步',
+      cancelText: '取消',
+      content: (
+        <div className="workbuddy-sync-confirm">
+          <p>
+            将读取 WorkBuddy 里已配置好的自定义模型，转换成 DeepSeek Harness
+            的提供方配置：
+          </p>
+          <ul>
+            <li>
+              <strong>模型元信息配置</strong>：写入 <code>settings.yaml</code>
+            </li>
+            <li>
+              <strong>API Key</strong>：写入 <code>.credentials.yaml</code>
+            </li>
+          </ul>
+          <p className="workbuddy-sync-backup">
+            写入前会自动把这两个文件整份备份到 dsh 的 <code>backups/</code>
+            目录，发生错误时可手动还原；DeepSeek Harness 会热加载新配置，无需重启。
+          </p>
+        </div>
+      ),
+      onOk: () => runSyncWorkbuddyModels(),
+    });
   };
 
   const openclawStateText =
@@ -604,6 +743,17 @@ export default function NativeAiService() {
             >
               刷新状态
             </Button>,
+            deepseekHarnessShortcut.state === 'installed' && (
+              <Button
+                key="sync-workbuddy-models"
+                loading={deepseekHarnessShortcut.syncingWorkbuddyModels}
+                // 只在这里渲染（state 必为 installed），所以只需避开刷新中的状态
+                disabled={deepseekHarnessShortcut.refreshing}
+                onClick={confirmSyncWorkbuddyModels}
+              >
+                <span className="button-text">同步 WorkBuddy 模型</span>
+              </Button>
+            ),
           ].filter((item) => item)}
         >
           <List.Item.Meta
