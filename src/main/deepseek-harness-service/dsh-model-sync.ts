@@ -16,14 +16,10 @@ import {
   planDshModelSync,
   type SyncableModel,
 } from './model-sync-plan';
-import {
-  applyModelSyncViaDshPackages,
-  type CommandRunner,
-  type SyncLogger,
-} from './dsh-config-providers';
+import { applyModelSyncToDshConfig, type SyncLogger } from './dsh-config-providers';
 
-/** 本模块就是「同步进 dsh」的对外入口，这几个类型一并转出，调用方只 import 这里 */
-export type { CommandRunner, SyncLogger } from './dsh-config-providers';
+/** 本模块就是「同步进 dsh」的对外入口，日志类型一并转出，调用方只 import 这里 */
+export type { SyncLogger } from './dsh-config-providers';
 
 const DS_LABEL = 'DEEPSEEK_HARNESS';
 
@@ -35,9 +31,15 @@ export function resolveDshHome(): string {
   return fromEnv || path.join(homedir(), '.dsh');
 }
 
-/** dsh 的用户设置文档（模型路由写在这里） */
-export function dshSettingsPath(): string {
-  return path.join(resolveDshHome(), 'settings.yaml');
+/**
+ * 本启动器只跑 `dsh web`，所以 profile 固定为 `web`（与 dsh 的 profile 模板一致）。
+ * dsh 0.2.0 起模型路由不再写 `settings.yaml`，而是写这个 profile 的用户补丁层。
+ */
+const DSH_PROFILE = 'web';
+
+/** dsh 的 profile 补丁文件（模型路由写在这里） */
+export function dshProfilePatchPath(): string {
+  return path.join(resolveDshHome(), 'profiles', DSH_PROFILE, 'cordis.patch.yml');
 }
 
 /** dsh 的凭据文件（API key 写在这里） */
@@ -66,22 +68,21 @@ export function createDshSyncLogger(): SyncLogger {
 }
 
 /**
- * 把一份大模型配置同步进 dsh：写 `$DSH_HOME/settings.yaml`（模型路由）与
- * `$DSH_HOME/.credentials.yaml`（API key），全部通过 dsh 自带的配置包完成。
+ * 把一份大模型配置同步进 dsh：写 `$DSH_HOME/.credentials.yaml`（API key）与
+ * profile 补丁 `$DSH_HOME/profiles/web/cordis.patch.yml`（模型路由）。
  *
  * 换算规则见 model-sync-plan.ts：密钥为空 / 全空白不写凭据、路由也不声明 `apiKeyEnv`；
  * DeepSeek 提供方走内置路由 `deepseek-official`，其余走 `llm-pi-ai` 自定义提供方；
  * DeepSeek 密钥同时写进联网搜索提供方 `web-search-deepseek`（非 DeepSeek 密钥不写）。
  *
  * @returns 写入摘要；`[]` 表示没有可同步的模型（原因已记日志）；
- *          `null` 表示 dsh 自带的配置包不可用（调用方应提示用户去 dsh 界面里手动配置）
+ *          `null` 表示写入失败（调用方应提示用户去 dsh 界面里手动配置）
  */
 export async function syncModelsIntoDshHarness(options: {
   models: SyncableModel[];
-  run: CommandRunner;
   logger: SyncLogger;
 }): Promise<string[] | null> {
-  const { models: rawModels, run, logger } = options;
+  const { models: rawModels, logger } = options;
 
   // 嵌入模型 / 缺名称或地址的模型不参与 dsh 的 LLM 路由
   const models = rawModels.filter(
@@ -107,11 +108,10 @@ export async function syncModelsIntoDshHarness(options: {
     return [];
   }
 
-  return applyModelSyncViaDshPackages({
+  return applyModelSyncToDshConfig({
     plan,
-    settingsPath: dshSettingsPath(),
+    profilePatchPath: dshProfilePatchPath(),
     credentialsPath: dshCredentialsPath(),
-    run,
     logger,
   });
 }

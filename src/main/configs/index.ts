@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, copyFileSync, existsSync, readdirSync, unlinkSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
-import { appPath, Exec } from '../exec';
+import { appPath } from '../exec';
 import { dialog, IpcMain, shell } from 'electron';
 import {
   ActionName,
@@ -26,7 +26,6 @@ import { initTrainingConfig } from './training-config';
 import {
   createDshSyncLogger,
   syncModelsIntoDshHarness,
-  type CommandRunner,
 } from '../deepseek-harness-service/dsh-model-sync';
 
 // 临时文件操作记录
@@ -66,16 +65,6 @@ export const llmConfigPath = path.join(
 
 // 内存中的大模型配置存储
 let currentLlmConfig: LLMConfig = { ...defaultLlmConfig };
-
-/**
- * 「同步 API key」按钮用的命令执行器：dsh 配置包在 PATH 里找不到全局 dsh 时，
- * 会用它执行 `npm root -g` 兜底定位。
- */
-const dshCommandLine = new Exec();
-const runDshCommand: CommandRunner = async (command, args) => {
-  const { stdout } = await dshCommandLine.exec(command, args);
-  return stdout ?? '';
-};
 
 export default async function init(ipcMain: IpcMain) {
   ipcMain.on(
@@ -570,11 +559,11 @@ async function syncAllCopilotApiKeys(event: any, llmConfig: LLMConfig) {
 /**
  * 把同一份大模型配置同步进 DeepSeek Harness（dsh）。
  *
- * 走 dsh 自带的配置包（`@deepseek-ai/dsh-settings-file` / `dsh-credentials-local`）写
- * `$DSH_HOME/settings.yaml` 与 `.credentials.yaml`，换算规则与安装时完全一致
+ * 直接按 dsh 0.2.0 的新文件布局写 `$DSH_HOME/profiles/web/cordis.patch.yml` 与
+ * `$DSH_HOME/.credentials.yaml`，换算规则与安装时完全一致
  * （空 / 全空白密钥不写凭据、路由也不声明 apiKeyEnv）。
  *
- * 没装 dsh 或配置包不可用时不写任何文件，只提示用户去 dsh 界面里手动配置。
+ * 写入失败时不写任何文件，只提示用户去 dsh 界面里手动配置。
  */
 async function syncAllApiKeysToDeepseekHarness(
   event: any,
@@ -589,7 +578,6 @@ async function syncAllApiKeysToDeepseekHarness(
   try {
     const summary = await syncModelsIntoDshHarness({
       models,
-      run: runDshCommand,
       logger,
     });
 
@@ -597,7 +585,7 @@ async function syncAllApiKeysToDeepseekHarness(
       event.reply(
         channel,
         MESSAGE_TYPE.WARNING,
-        'DeepSeek Harness 同步已跳过：未能使用 dsh 自带的配置包（可能尚未安装 dsh）。请在 dsh 界面的「设置 → 模型」里手动添加提供方与 API key',
+        'DeepSeek Harness 同步已跳过：写入 dsh 配置文件失败。请在 dsh 界面的「设置 → 模型」里手动添加提供方与 API key',
       );
       return;
     }
