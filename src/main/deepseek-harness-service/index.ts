@@ -1,8 +1,21 @@
 import { app, BrowserWindow, IpcMain, clipboard, session } from 'electron';
 import { createHash, createHmac } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import {
+  createWriteStream,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
+import path from 'node:path';
 import http from 'node:http';
+import https from 'node:https';
+import { fileURLToPath } from 'node:url';
+import AdmZip from 'adm-zip';
 import type { ChildProcess } from 'node:child_process';
 import { load } from 'js-yaml';
 import {
@@ -640,6 +653,256 @@ async function onboardDeepseekHarness(): Promise<void> {
   );
 }
 
+// ===== 内置插件预装：dsh-our-free-model（Our Free Model） =====
+//
+// 这个插件不随启动器打包分发，而是在用户主机上「按需下载」后装进 dsh 的 web profile：
+// 从 GitHub 的 tag/release 归档 zip 下载，用内置的 adm-zip 解压，再执行 `dsh plugin add`。
+// 装完无需单独重启：本模块本来就会在它之后才拉起 dsh web，所以插件会被正常加载。
+//
+// 注意：我们用的是纯 `dsh web`（npm 全局包），不是 DSHEAC/EAC 桌面整合包，
+// 所以 README 里「桌面端不要用 link:/junction」的 profile 闸门不适用——
+// `plugin add` 把插件以真实目录装进 profile 即可。
+//
+// 下载地址可配置：默认常量 OUR_FREE_MODEL_PLUGIN_DOWNLOAD_URL，可用环境变量
+// DSH_OUR_FREE_MODEL_PLUGIN_URL 覆盖（开发时可指向本地 zip 文件，免去联网）。
+
+/** 插件在 package.json 里的名字（用于定位插件根目录与判重） */
+const OUR_FREE_MODEL_PLUGIN_NAME = 'dsh-our-free-model';
+
+/**
+ * 插件发布压缩包地址（GitHub tag/release 自动生成的 "Source code (zip)" 归档）。
+ * 该仓库的 Release 只发布了源码归档（没有预编译 zip），但 `dsh plugin add` 装的
+ * 本来就是源码目录，所以直接拉这个归档即可——解压后顶层是 `<repo>-<tag>/`，
+ * 由 findPluginRoot 按 package.json.name 自动定位真正的插件根。
+ * 升级版本时把 tag 改掉；也可用环境变量 DSH_OUR_FREE_MODEL_PLUGIN_URL 覆盖。
+ */
+const OUR_FREE_MODEL_PLUGIN_DOWNLOAD_URL =
+  process.env.DSH_OUR_FREE_MODEL_PLUGIN_URL ||
+  'https://github.com/zouyuxuan122/dsh-our-free-model/archive/refs/tags/v1.3.1.zip';
+
+/** 下载后解压、给 dsh 用的插件目录（落在用户数据目录下，跨启动稳定，便于缓存复用） */
+function resolvePluginInstallDir(): string {
+  return path.join(app.getPath('userData'), OUR_FREE_MODEL_PLUGIN_NAME);
+}
+
+/** 标记文件：记录上次下载来源，来源不变时跳过重复下载 */
+function resolvePluginMarkerFile(): string {
+  return path.join(resolvePluginInstallDir(), '.ofm-source.txt');
+}
+
+/** 跟随重定向地把 URL 下载到本地文件 */
+function downloadFile(url: string, destPath: string): Promise<void> {
+  const agent = url.startsWith('https:') ? https : http;
+  return new Promise<void>((resolve, reject) => {
+    const request = agent.get(
+      url,
+      { headers: { 'User-Agent': 'ai-learning-assistant-launcher' } },
+      (res) => {
+        const status = res.statusCode ?? 0;
+        if ([301, 302, 307, 308].includes(status) && res.headers.location) {
+          res.resume();
+          const location = Array.isArray(res.headers.location)
+            ? res.headers.location[0]
+            : res.headers.location;
+          const next = new URL(location, url).toString();
+          downloadFile(next, destPath).then(resolve, reject);
+          return;
+        }
+        if (status !== 200) {
+          res.resume();
+          reject(new Error(`下载插件压缩包失败：HTTP ${status}`));
+          return;
+        }
+        const file = createWriteStream(destPath);
+        res.pipe(file);
+        file.on('finish', () => file.close(() => resolve()));
+        file.on('error', (err) => file.close(() => reject(err)));
+      },
+    );
+    request.on('error', reject);
+  });
+}
+
+/** 解压 zip 到目标目录（覆盖已有内容） */
+function extractZip(zipPath: string, destDir: string): void {
+  rmSync(destDir, { recursive: true, force: true });
+  mkdirSync(destDir, { recursive: true });
+  new AdmZip(zipPath).extractAllTo(destDir, true);
+}
+
+/**
+ * 在解压目录里找到真正的插件根目录：即包含 package.json 且 name 为
+ * OUR_FREE_MODEL_PLUGIN_NAME 的那一层（GitHub 归档 zip 顶层是 `<repo>-<tag>/`）。
+ */
+function findPluginRoot(extractedDir: string): string | null {
+  const tryDir = (dir: string): string | null => {
+    const pkgPath = path.join(dir, 'package.json');
+    if (existsSync(pkgPath)) {
+      try {
+        const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+        if (pkg && pkg.name === OUR_FREE_MODEL_PLUGIN_NAME) {
+          return dir;
+        }
+      } catch {
+        /* 解析失败当作不是插件根目录 */
+      }
+    }
+    return null;
+  };
+  const direct = tryDir(extractedDir);
+  if (direct) {
+    return direct;
+  }
+  let entries: string[] = [];
+  try {
+    entries = readdirSync(extractedDir);
+  } catch {
+    return null;
+  }
+  for (const entry of entries) {
+    const found = tryDir(path.join(extractedDir, entry));
+    if (found) {
+      return found;
+    }
+  }
+  return null;
+}
+
+/**
+ * 取得插件目录：优先复用已下载且来源未变的缓存；否则下载并解压。
+ * 返回可用于 `dsh plugin add` 的目录；任何失败都抛出，由调用方降级处理。
+ * 若 DSH_OUR_FREE_MODEL_PLUGIN_URL 指向本地文件（或 file://），则直接用它、不联网。
+ */
+async function fetchOurFreeModelPlugin(): Promise<string> {
+  const installDir = resolvePluginInstallDir();
+  const markerFile = resolvePluginMarkerFile();
+  const pkgPath = path.join(installDir, 'package.json');
+
+  // 已有缓存且来源一致 → 直接复用，不联网
+  if (
+    existsSync(pkgPath) &&
+    existsSync(markerFile) &&
+    readFileSync(markerFile, 'utf-8').trim() === OUR_FREE_MODEL_PLUGIN_DOWNLOAD_URL
+  ) {
+    logger.log(
+      `[${DS_LABEL}] 复用已下载缓存的 Our Free Model 插件（${installDir}）`,
+    );
+    return installDir;
+  }
+
+  const sourceUrl = OUR_FREE_MODEL_PLUGIN_DOWNLOAD_URL;
+  const tmpZip = path.join(
+    tmpdir(),
+    `${OUR_FREE_MODEL_PLUGIN_NAME}-${Date.now()}.zip`,
+  );
+  const extractDir = path.join(
+    tmpdir(),
+    `${OUR_FREE_MODEL_PLUGIN_NAME}-extract-${Date.now()}`,
+  );
+
+  // 本地文件（开发用）直接当作 zip；否则联网下载
+  const isLocal =
+    sourceUrl.startsWith('file:') ||
+    (() => {
+      try {
+        return existsSync(sourceUrl);
+      } catch {
+        return false;
+      }
+    })();
+  let zipPath: string;
+  if (isLocal) {
+    zipPath = sourceUrl.startsWith('file:')
+      ? fileURLToPath(sourceUrl)
+      : sourceUrl;
+    logger.log(`[${DS_LABEL}] 使用本地插件压缩包（${zipPath}）`);
+  } else {
+    zipPath = tmpZip;
+    logger.log(
+      `[${DS_LABEL}] 正在下载 Our Free Model 插件（来源：${sourceUrl}）...`,
+    );
+    await downloadFile(sourceUrl, tmpZip);
+  }
+
+  logger.log(`[${DS_LABEL}] 正在解压插件压缩包 ...`);
+  extractZip(zipPath, extractDir);
+  const root = findPluginRoot(extractDir);
+  if (!root) {
+    throw new Error('插件压缩包内未找到 dsh-our-free-model 插件目录');
+  }
+
+  // 把插件根目录内容搬进稳定安装目录（先清后拷），并写来源标记
+  rmSync(installDir, { recursive: true, force: true });
+  mkdirSync(installDir, { recursive: true });
+  cpSync(root, installDir, { recursive: true });
+  writeFileSync(markerFile, OUR_FREE_MODEL_PLUGIN_DOWNLOAD_URL);
+
+  // 清理临时文件（本地 zip 不动）
+  try {
+    if (zipPath === tmpZip) {
+      rmSync(tmpZip, { force: true });
+    }
+    rmSync(extractDir, { recursive: true, force: true });
+  } catch {
+    /* 临时文件清理失败不影响安装 */
+  }
+
+  logger.log(`[${DS_LABEL}] Our Free Model 插件已就绪（${installDir}）`);
+  return installDir;
+}
+
+/** 查询 dsh 的 web profile 是否已经装了 Our Free Model 插件（幂等判断） */
+async function isOurFreeModelInstalled(): Promise<boolean> {
+  try {
+    const { stdout } = await commandLine.exec(
+      'dsh',
+      ['--profile', 'web', '--dump-config'],
+      { logger: loggerFactory(DS_LABEL) },
+    );
+    // 正常结果里应只出现一个 `id: our-free-model`；只要出现就认为已装
+    return /our-free-model/.test(stdout || '');
+  } catch {
+    // dump-config 失败（profile 尚不存在 / dsh 版本不支持）都视作未安装，交给下面的 add 兜底
+    return false;
+  }
+}
+
+/**
+ * 把 Our Free Model 插件装进 dsh 的 web profile：先取插件目录（下载/复用缓存），
+ * 再 `dsh plugin add`。整段非致命：装不上只告警、不阻断 dsh 本体安装与启动。
+ * 返回 true 表示本次确实新增/重装了插件（用于调用方决定是否需要重启 dsh web）。
+ */
+async function installOurFreeModelPlugin(): Promise<boolean> {
+  if (await isOurFreeModelInstalled()) {
+    logger.log(`[${DS_LABEL}] Our Free Model 插件已安装，跳过预装`);
+    return false;
+  }
+  let pluginDir: string;
+  try {
+    pluginDir = await fetchOurFreeModelPlugin();
+  } catch (e) {
+    logger.warn(`[${DS_LABEL}] 获取 Our Free Model 插件失败（跳过预装）:`, e);
+    return false;
+  }
+  // `dsh plugin add` 通常需要 pnpm；装不上只告警、不阻断（pnpm 只影响插件管理）
+  await ensurePnpmReady();
+  logger.log(
+    `[${DS_LABEL}] 正在为 dsh 预装 Our Free Model 插件（来源：${pluginDir}）...`,
+  );
+  try {
+    await commandLine.exec(
+      'dsh',
+      ['plugin', '--profile', 'web', 'add', pluginDir],
+      { logger: loggerFactory(DS_LABEL) },
+    );
+  } catch (e) {
+    logger.warn(`[${DS_LABEL}] dsh plugin add 失败（跳过预装）:`, e);
+    return false;
+  }
+  logger.log(`[${DS_LABEL}] Our Free Model 插件预装完成`);
+  return true;
+}
+
 // ===== 服务生命周期 =====
 
 /**
@@ -946,6 +1209,21 @@ export async function installDeepseekHarnessService(): Promise<DeepseekHarnessSe
   logger.log(`[${DS_LABEL}] 使用项目大模型配置同步 dsh 的模型配置 ...`);
   await onboardDeepseekHarness();
 
+  // 预装内置的 Our Free Model 插件，让 dsh 启动后默认就带这个插件。
+  // 非致命：装不上只告警，不影响 dsh 本体与界面启动。
+  let pluginChanged = false;
+  try {
+    pluginChanged = await installOurFreeModelPlugin();
+  } catch (e) {
+    logger.warn(`[${DS_LABEL}] 预装 Our Free Model 插件失败（不影响 dsh 本体）:`, e);
+  }
+  // 若本次刚装/升级了插件，且 dsh web 实例已在运行，先停掉再以全新实例启动，
+  // 否则正在跑的旧实例不会加载新插件。
+  if (pluginChanged && (await detectRunningPort()) !== null) {
+    logger.log(`[${DS_LABEL}] 插件有更新，重启 dsh web 以加载新插件 ...`);
+    await killDshProcess();
+  }
+
   // 自动启动 Web 界面并打开窗口
   logger.log(`[${DS_LABEL}] 自动启动 DeepSeek Harness 界面 ...`);
   await ensureRunning();
@@ -990,6 +1268,15 @@ export async function removeDeepseekHarnessService(): Promise<DeepseekHarnessSer
 }
 
 export async function runDeepseekHarnessService(): Promise<DeepseekHarnessServiceInfo> {
+  // 启动前确保内置插件已装（首次或升级时自动补装）；非致命，装不上不影响启动。
+  // 这一步让「dsh 早就在本机装好的老用户」在点击运行 / 启动 DSH 时也能自动获得该插件，
+  // 而无需卸载重装——因为界面在 dsh 已装好后就不再显示「安装」按钮。
+  // 注：运行按钮只在 dsh 未运行时出现，所以下面的 ensureRunning 会拉起全新实例并加载插件。
+  try {
+    await installOurFreeModelPlugin();
+  } catch (e) {
+    logger.warn(`[${DS_LABEL}] 预装 Our Free Model 插件失败（不影响启动）:`, e);
+  }
   await ensureRunning();
   await createDshWindow();
   return queryDeepseekHarnessService();
