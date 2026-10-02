@@ -326,7 +326,7 @@ export default async function init(ipcMain: IpcMain) {
 }
 
 // 添加保存大模型配置的函数
-function saveLlmConfig(config: LLMConfig) {
+export function saveLlmConfig(config: LLMConfig) {
   try {
     writeFileSync(llmConfigPath, JSON.stringify(config, null, 2), {
       encoding: 'utf8',

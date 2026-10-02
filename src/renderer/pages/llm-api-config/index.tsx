@@ -3,6 +3,7 @@ import { Button, Form, Input, Select, List, Switch, Card, message, Modal, Space,
 import { Link } from 'react-router-dom';
 import useConfigs from '../../containers/use-configs';
 import { LLMConfig, CustomModel } from '../../../main/configs/type-info';  
+import ZenFreeProviderConfig from './ZenFreeProviderConfig';
 import './index.scss';
 
 const { Option } = Select;
@@ -453,6 +454,9 @@ const LLMConfig: React.FC = () => {
             )}
           />
         )}
+
+        {/* 免密免费模型（Zen free lane）：独立 provider 类型，业务逻辑全部在组件内 */}
+        <ZenFreeProviderConfig />
       </Card>
     </div>
   );

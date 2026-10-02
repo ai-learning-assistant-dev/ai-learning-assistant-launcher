@@ -19,6 +19,7 @@ import initObsidianVoiceService from './local-service/obsidian-voice-service';
 import initTextbookEditorService from './textbook-editor-service'
 import initOpenclawService from './openclaw-service'
 import initDeepseekHarnessService from './deepseek-harness-service'
+import initLlmFree from './llm-free'
 import initBunDebug from './bun-debug'
 import path from 'node:path';
 import { appPath, autoAdaptEncodingForWindows } from './exec';
@@ -94,6 +95,7 @@ initObsidianVoiceService(ipcMain);
 initTextbookEditorService(ipcMain);
 initOpenclawService(ipcMain);
 initDeepseekHarnessService(ipcMain);
+initLlmFree(ipcMain);
 initBunDebug(ipcMain);
 updateTemplate();
 

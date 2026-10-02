@@ -4,6 +4,7 @@ import {
   ContainerCreateMountOption,
   ContainerCreateNetNSOption,
 } from '../podman-desktop/libpod-dockerode';
+import type { FreeProviderConfig } from '../llm-free/type-info';
 
 export type ServiceName = 'obsidianApp' | 'obsidianVault' | 'container' | 'TTS' | 'PDF' | 'LLM' | 'copilot';
 export type ActionName = 'query' | 'update' | 'selectVoiceFile' | 'initVoiceFileList' | 'deleteVoiceFile' | 'get' | 'set' | 'testConnection' | 'syncAllApiKeys';
@@ -82,6 +83,8 @@ export interface CustomModel {
 
 export interface LLMConfig {
   models: CustomModel[];
+  /** 免密免费模型（Zen free lane）配置块，由 llm-free 模块管理 */
+  freeProvider?: FreeProviderConfig;
 }
 
 export const queryNativeTrainingConfigHandle = `${channel}queryNativeTrainingConfig`;
