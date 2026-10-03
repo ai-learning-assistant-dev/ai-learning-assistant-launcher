@@ -56,7 +56,7 @@ export interface DeepseekHarnessServiceInfo {
   /** Web 界面是否正在运行（本模块拉起的或机器上已有的实例） */
   running?: boolean;
   /** Web 界面实际监听端口 */
-  port?: number;
+  port?: number | null;
 }
 
 /** 一次「从 WorkBuddy 同步模型配置到 dsh」的结果，直接给界面展示 */
@@ -78,7 +78,7 @@ export interface WorkbuddyModelSyncResult {
   /** 涉及的文件路径 */
   paths: {
     workbuddyModels: string;
-    settings: string;
+    profilePatch: string;
     credentials: string;
     backupRoot: string;
   };

@@ -1047,7 +1047,6 @@ export async function stopDeepseekHarnessService(): Promise<DeepseekHarnessServi
  */
 export async function syncWorkbuddyModelsToDsh(): Promise<WorkbuddyModelSyncResult> {
   const outcome = await syncWorkbuddyModelsIntoDshHarness({
-    run: runDshCommand,
     logger: syncLogger,
   });
 
