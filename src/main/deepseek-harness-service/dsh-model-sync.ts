@@ -25,16 +25,11 @@ import {
   backupDshConfigFiles,
   type DshConfigBackupResult,
 } from './dsh-config-backup';
-import {
-  applyModelSyncViaDshPackages,
-  type CommandRunner,
-  type SyncLogger,
-} from './dsh-config-providers';
 
 /** 本模块就是「同步进 dsh」的对外入口，这几个类型一并转出，调用方只 import 这里 */
-export type { CommandRunner, SyncLogger } from './dsh-config-providers';
 export type { DshConfigBackupResult } from './dsh-config-backup';
 export { resolveWorkbuddyModelsPath } from './workbuddy-model-sync';
+import { applyModelSyncToDshConfig, type SyncLogger } from './dsh-config-providers';
 
 const DS_LABEL = 'DEEPSEEK_HARNESS';
 
@@ -46,9 +41,15 @@ export function resolveDshHome(): string {
   return fromEnv || path.join(homedir(), '.dsh');
 }
 
-/** dsh 的用户设置文档（模型路由写在这里） */
-export function dshSettingsPath(): string {
-  return path.join(resolveDshHome(), 'settings.yaml');
+/**
+ * 本启动器只跑 `dsh web`，所以 profile 固定为 `web`（与 dsh 的 profile 模板一致）。
+ * dsh 0.2.0 起模型路由不再写 `settings.yaml`，而是写这个 profile 的用户补丁层。
+ */
+const DSH_PROFILE = 'web';
+
+/** dsh 的 profile 补丁文件（模型路由写在这里） */
+export function dshProfilePatchPath(): string {
+  return path.join(resolveDshHome(), 'profiles', DSH_PROFILE, 'cordis.patch.yml');
 }
 
 /** dsh 的凭据文件（API key 写在这里） */
@@ -85,22 +86,21 @@ export function createDshSyncLogger(): SyncLogger {
 }
 
 /**
- * 把一份大模型配置同步进 dsh：写 `$DSH_HOME/settings.yaml`（模型路由）与
- * `$DSH_HOME/.credentials.yaml`（API key），全部通过 dsh 自带的配置包完成。
+ * 把一份大模型配置同步进 dsh：写 `$DSH_HOME/.credentials.yaml`（API key）与
+ * profile 补丁 `$DSH_HOME/profiles/web/cordis.patch.yml`（模型路由）。
  *
  * 换算规则见 model-sync-plan.ts：密钥为空 / 全空白不写凭据、路由也不声明 `apiKeyEnv`；
  * DeepSeek 提供方走内置路由 `deepseek-official`，其余走 `llm-pi-ai` 自定义提供方；
  * DeepSeek 密钥同时写进联网搜索提供方 `web-search-deepseek`（非 DeepSeek 密钥不写）。
  *
  * @returns 写入摘要；`[]` 表示没有可同步的模型（原因已记日志）；
- *          `null` 表示 dsh 自带的配置包不可用（调用方应提示用户去 dsh 界面里手动配置）
+ *          `null` 表示写入失败（调用方应提示用户去 dsh 界面里手动配置）
  */
 export async function syncModelsIntoDshHarness(options: {
   models: SyncableModel[];
-  run: CommandRunner;
   logger: SyncLogger;
 }): Promise<string[] | null> {
-  const { models: rawModels, run, logger } = options;
+  const { models: rawModels, logger } = options;
 
   // 嵌入模型 / 缺名称或地址的模型不参与 dsh 的 LLM 路由
   const models = rawModels.filter(
@@ -126,11 +126,10 @@ export async function syncModelsIntoDshHarness(options: {
     return [];
   }
 
-  return applyModelSyncViaDshPackages({
+  return applyModelSyncToDshConfig({
     plan,
-    settingsPath: dshSettingsPath(),
+    profilePatchPath: dshProfilePatchPath(),
     credentialsPath: dshCredentialsPath(),
-    run,
     logger,
   });
 }
@@ -147,7 +146,7 @@ export interface WorkbuddyModelSyncOutcome {
   /** 涉及的文件路径，便于界面展示 */
   paths: {
     workbuddyModels: string;
-    settings: string;
+    profilePatch: string;
     credentials: string;
     backupRoot: string;
   };
@@ -170,12 +169,11 @@ export interface WorkbuddyModelSyncOutcome {
  * @throws 读不到 / 读不懂 WorkBuddy 配置、或没有任何可同步的模型时抛出可直接展示给用户的错误
  */
 export async function syncWorkbuddyModelsIntoDshHarness(options: {
-  run: CommandRunner;
   logger: SyncLogger;
   /** 覆盖 WorkBuddy 配置路径（默认 `%USERPROFILE%\.workbuddy\models.json`） */
   workbuddyModelsPath?: string;
 }): Promise<WorkbuddyModelSyncOutcome | null> {
-  const { run, logger } = options;
+  const { logger } = options;
   const workbuddyModelsPath =
     options.workbuddyModelsPath ?? resolveWorkbuddyModelsPath();
 
@@ -205,10 +203,10 @@ export async function syncWorkbuddyModelsIntoDshHarness(options: {
   }
 
   // 2) 备份：写入前把 dsh 的配置整份复制到 $DSH_HOME/backups/<时间戳>/
-  const settingsPath = dshSettingsPath();
+  const profilePatchPath = dshProfilePatchPath();
   const credentialsPath = dshCredentialsPath();
   const backup = backupDshConfigFiles({
-    files: [settingsPath, credentialsPath],
+    files: [profilePatchPath, credentialsPath],
     backupRoot: dshBackupRoot(),
     label: WORKBUDDY_SYNC_LABEL,
   });
@@ -220,16 +218,15 @@ export async function syncWorkbuddyModelsIntoDshHarness(options: {
     );
   } else {
     logger.log(
-      `[${DS_LABEL}] dsh 还没有配置文件，本次无需备份（${settingsPath}）`,
+      `[${DS_LABEL}] dsh 还没有配置文件，本次无需备份（${profilePatchPath}）`,
     );
   }
 
   // 3) 写入：交给 dsh 自带的配置包，写入失败不会动用户的文件
-  const summary = await applyModelSyncViaDshPackages({
+  const summary = await applyModelSyncToDshConfig({
     plan,
-    settingsPath,
-    credentialsPath,
-    run,
+    profilePatchPath: dshProfilePatchPath(),
+    credentialsPath: dshCredentialsPath(),
     logger,
   });
   if (summary === null) {
@@ -243,7 +240,7 @@ export async function syncWorkbuddyModelsIntoDshHarness(options: {
     backup,
     paths: {
       workbuddyModels: workbuddyModelsPath,
-      settings: settingsPath,
+      profilePatch: profilePatchPath,
       credentials: credentialsPath,
       backupRoot: dshBackupRoot(),
     },

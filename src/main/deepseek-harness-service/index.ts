@@ -45,12 +45,12 @@ import {
   setNpmRegistryTaobaoGlobal,
   type NodeVersionPolicy,
 } from '../node-toolchain';
-import type { CommandRunner, SyncLogger } from './dsh-config-providers';
+import type { SyncLogger } from './dsh-config-providers';
 import {
   createDshSyncLogger,
   dshBackupRoot,
   dshCredentialsPath,
-  dshSettingsPath,
+  dshProfilePatchPath,
   syncModelsIntoDshHarness,
   syncWorkbuddyModelsIntoDshHarness,
 } from './dsh-model-sync';
@@ -60,7 +60,7 @@ import {
  * - dsh 是全局安装的 npm 包（`npm i -g @deepseek-ai/dsh`），所以已安装时直接复用，不重复安装
  * - 界面是 `dsh web`（默认端口 3080），启动时打印带一次性 token 的 URL；机器上已有实例时
  *   直接复用该实例，不再另起一个
- * - 安装时把本项目配置的大模型镜像进 dsh 的 `$DSH_HOME/settings.yaml`：
+ * - 安装时把本项目配置的大模型镜像进 dsh 的 profile 补丁（`$DSH_HOME/profiles/web/cordis.patch.yml`）：
  *   DeepSeek 官方提供方写 `llm-deepseek`（内置路由 `deepseek-official`），其余模型写 `llm-pi-ai`
  *   的自定义提供方路由；非空 API key 写进 `$DSH_HOME/.credentials.yaml`（空 / 全空白密钥不写），
  *   装完即可在 dsh 的模型选择器里选到。DeepSeek 密钥同时写进联网搜索提供方
@@ -138,7 +138,7 @@ function throwWithLog(message: string, cause?: unknown): never {
 
 // ===== dsh 安装目录与配置文件 =====
 //
-// 路径解析（`$DSH_HOME` / settings.yaml / .credentials.yaml）与配置同步都在
+// 路径解析（`$DSH_HOME` / profiles/web/cordis.patch.yml / .credentials.yaml）与配置同步都在
 // dsh-model-sync.ts 里，安装流程与模型配置页的「同步 API key」按钮共用同一套。
 
 // ===== 运行状态探测 =====
@@ -600,48 +600,38 @@ async function createDshWindow(): Promise<void> {
   });
 }
 
-// ===== 大模型配置同步（settings.yaml / .credentials.yaml） =====
+// ===== 大模型配置同步（cordis.patch.yml / .credentials.yaml） =====
 //
 // - 换算规则（哪些模型写哪条路由、哪些密钥写进凭据）：model-sync-plan.ts
-// - 写入：dsh-config-providers.ts —— 直接用 dsh 自带的
-//   `@deepseek-ai/dsh-settings-file` / `@deepseek-ai/dsh-credentials-local`
+// - 写入：dsh-config-providers.ts —— 直接按 dsh 0.2.0 的新文件布局写
+//   `$DSH_HOME/profiles/web/cordis.patch.yml` 与 `$DSH_HOME/.credentials.yaml`
 // - 对外入口：dsh-model-sync.ts —— 安装流程与模型配置页的「同步 API key」按钮共用
 //
-// 这里不做任何「自己写 YAML」的兜底：dsh 自带的配置包用不了就只记日志，
-// 让用户在 dsh 的模型页（设置 → 模型）里自己配，避免安装器和 dsh 各写一份格式不同的配置。
+// 写入失败只记日志，不阻断安装：让用户在 dsh 的模型页（设置 → 模型）里自己配。
 
-/** 给 dsh 配置包用的日志出口 */
+/** 给配置写入用的日志出口 */
 const syncLogger: SyncLogger = createDshSyncLogger();
 
-/** 给 dsh 配置包用的命令执行器（只在 PATH 里找不到全局 dsh 时用来问 npm root -g） */
-const runDshCommand: CommandRunner = async (command, args) => {
-  const { stdout } = await commandLine.exec(command, args, {
-    logger: loggerFactory(DS_LABEL),
-  });
-  return stdout ?? '';
-};
-
-/** 配置包用不了时的统一提示：不写文件，交给用户在 dsh 界面里配 */
+/** 写文件失败时的统一提示：不阻断安装，交给用户在 dsh 界面里配 */
 function logManualConfigHint(reason: string): void {
   logger.warn(
     `[${DS_LABEL}] ${reason}；已跳过模型配置同步，不影响 dsh 本身运行。` +
-      `请在 dsh 界面的「设置 → 模型」里手动添加提供方与 API key（或在 ${dshSettingsPath()} 里手写配置）`,
+      `请在 dsh 界面的「设置 → 模型」里手动添加提供方与 API key（或在 ${dshProfilePatchPath()} 里手写配置）`,
   );
 }
 
 /**
  * 用本项目的大模型配置初始化 dsh：写模型路由与凭据。
- * 没有配置模型、或 dsh 配置包不可用时只警告，不阻断安装。
+ * 没有配置模型、或写入失败时只警告，不阻断安装。
  */
 async function onboardDeepseekHarness(): Promise<void> {
   const summary = await syncModelsIntoDshHarness({
     models: getLlmConfig().models ?? [],
-    run: runDshCommand,
     logger: syncLogger,
   });
 
   if (summary === null) {
-    logManualConfigHint('未能通过 dsh 自带的配置包写入配置');
+    logManualConfigHint('写入 dsh 配置文件失败');
     return;
   }
   if (summary.length === 0) {
@@ -649,7 +639,7 @@ async function onboardDeepseekHarness(): Promise<void> {
     return;
   }
   logger.log(
-    `[${DS_LABEL}] 已通过 dsh 自带的配置包（dsh-settings-file / dsh-credentials-local）同步：${summary.join('；')}`,
+    `[${DS_LABEL}] 已写入 dsh 配置（.credentials.yaml / cordis.patch.yml）：${summary.join('；')}`,
   );
 }
 
@@ -955,7 +945,7 @@ export async function installDeepseekHarnessService(): Promise<DeepseekHarnessSe
     logger.log(`[${DS_LABEL}] dsh 安装完成：v${version}`);
   }
 
-  // 用本项目的大模型配置初始化 dsh（settings.yaml + .credentials.yaml）
+  // 用本项目的大模型配置初始化 dsh（cordis.patch.yml + .credentials.yaml）
   logger.log(`[${DS_LABEL}] 使用项目大模型配置同步 dsh 的模型配置 ...`);
   await onboardDeepseekHarness();
 
