@@ -131,3 +131,6 @@ external-resources/local-ai-service/rts-service/rtc-backend/
 
 .npm-cache
 .tmp-*
+
+# AI Tools 
+.workbuddy

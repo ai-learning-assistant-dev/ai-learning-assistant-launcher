@@ -27,17 +27,33 @@ export interface SyncableModel {
   isEmbeddingModel?: boolean;
 }
 
+/** settings.yaml 里 llm-pi-ai.providers.<route>.models 的一项（dsh 的模型条目字段子集） */
+export interface PiAiModelEntry {
+  /** 发给提供方的模型 id（也是选择器里的请求 id） */
+  id: string;
+  /** 选择器显示名；省略时 dsh 用 id */
+  name?: string;
+  /** 上下文窗口（本项目配置里的 maxInputTokens） */
+  contextWindow?: number;
+  /** 最大输出 token（本项目配置里的 maxOutputTokens） */
+  maxTokens?: number;
+  /** 模型接受的模态；声明 image 才会启用图片能力 */
+  input?: Array<'text' | 'image'>;
+}
+
 /** settings.yaml 里 llm-pi-ai.providers.<route> 的值 */
 export interface PiAiProviderConfig {
   api: 'openai-completions';
   baseURL: string;
   /**
-   * 凭据引用：只有配置了非空 API key 的模型才会生成路由，所以这里一定会有值。
+   * 凭据引用：按本项目的约定，只有配置了非空 API key 的模型才会生成路由，所以这里通常有值。
    * 写下一个解析不到值的引用会让 dsh 的每次请求都以 MISSING_CREDENTIAL 失败
    * （见 https://deepseek-harness.github.io/deepseek-harness/guide/providers 的排错一节）。
    */
-  apiKeyEnv: string;
-  models: Array<{ id: string; name: string }>;
+  apiKeyEnv?: string;
+  /** 选择器界面显示的提供方名；省略时 dsh 用路由名 */
+  displayName?: string;
+  models: PiAiModelEntry[];
 }
 
 /** settings.yaml 里 llm-deepseek 分节（DeepSeek 内置提供方 deepseek-official 的连接事实） */
@@ -106,9 +122,17 @@ export function routeKeyOf(model: SyncableModel): string {
   return slugify(model.id || model.name);
 }
 
+/**
+ * 由 dsh 路由名推导凭据引用名（写入 .credentials.yaml 的 refs 里）。
+ * 统一带 `DSH_` 前缀，避免覆盖用户在 dsh 模型页里自己保存的那把 key。
+ */
+export function apiKeyRefOfRoute(route: string): string {
+  return `DSH_${route.replace(/-/g, '_').toUpperCase()}_API_KEY`;
+}
+
 /** 模型对应的 dsh 凭据引用名（写入 .credentials.yaml 的 refs 里） */
 export function apiKeyRefOf(model: SyncableModel): string {
-  return `DSH_${routeKeyOf(model).replace(/-/g, '_').toUpperCase()}_API_KEY`;
+  return apiKeyRefOfRoute(routeKeyOf(model));
 }
 
 /** plan 里是否有任何要写进 settings.yaml 的内容（没有就完全不动用户的文件） */

@@ -1,4 +1,11 @@
-import { app, BrowserWindow, IpcMain, clipboard, session } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  IpcMain,
+  clipboard,
+  session,
+  shell,
+} from 'electron';
 import { createHash, createHmac } from 'node:crypto';
 import {
   createWriteStream,
@@ -26,11 +33,14 @@ import {
   stopDeepseekHarnessServiceHandle,
   openDeepseekHarnessWindowHandle,
   copyDeepseekHarnessDashboardUrlHandle,
+  syncWorkbuddyModelsToDshHandle,
+  openDeepseekHarnessBackupDirHandle,
   deepseekHarnessDashboardUrl,
   DEEPSEEK_HARNESS_NPM_PACKAGE,
   DEEPSEEK_HARNESS_NODE_RANGE,
   DEEPSEEK_HARNESS_PORTS,
   DeepseekHarnessServiceInfo,
+  WorkbuddyModelSyncResult,
 } from './type-info';
 import { ipcHandle } from '../ipc-util';
 import { Exec } from '../exec';
@@ -47,12 +57,14 @@ import {
   setNpmRegistryTaobaoGlobal,
   type NodeVersionPolicy,
 } from '../node-toolchain';
-import type { CommandRunner, SyncLogger } from './dsh-config-providers';
+import type { SyncLogger } from './dsh-config-providers';
 import {
   createDshSyncLogger,
+  dshBackupRoot,
   dshCredentialsPath,
-  dshSettingsPath,
+  dshProfilePatchPath,
   syncModelsIntoDshHarness,
+  syncWorkbuddyModelsIntoDshHarness,
 } from './dsh-model-sync';
 
 /**
@@ -60,7 +72,7 @@ import {
  * - dsh 是全局安装的 npm 包（`npm i -g @deepseek-ai/dsh`），所以已安装时直接复用，不重复安装
  * - 界面是 `dsh web`（默认端口 3080），启动时打印带一次性 token 的 URL；机器上已有实例时
  *   直接复用该实例，不再另起一个
- * - 安装时把本项目配置的大模型镜像进 dsh 的 `$DSH_HOME/settings.yaml`：
+ * - 安装时把本项目配置的大模型镜像进 dsh 的 profile 补丁（`$DSH_HOME/profiles/web/cordis.patch.yml`）：
  *   DeepSeek 官方提供方写 `llm-deepseek`（内置路由 `deepseek-official`），其余模型写 `llm-pi-ai`
  *   的自定义提供方路由；非空 API key 写进 `$DSH_HOME/.credentials.yaml`（空 / 全空白密钥不写），
  *   装完即可在 dsh 的模型选择器里选到。DeepSeek 密钥同时写进联网搜索提供方
@@ -138,7 +150,7 @@ function throwWithLog(message: string, cause?: unknown): never {
 
 // ===== dsh 安装目录与配置文件 =====
 //
-// 路径解析（`$DSH_HOME` / settings.yaml / .credentials.yaml）与配置同步都在
+// 路径解析（`$DSH_HOME` / profiles/web/cordis.patch.yml / .credentials.yaml）与配置同步都在
 // dsh-model-sync.ts 里，安装流程与模型配置页的「同步 API key」按钮共用同一套。
 
 // ===== 运行状态探测 =====
@@ -600,48 +612,38 @@ async function createDshWindow(): Promise<void> {
   });
 }
 
-// ===== 大模型配置同步（settings.yaml / .credentials.yaml） =====
+// ===== 大模型配置同步（cordis.patch.yml / .credentials.yaml） =====
 //
 // - 换算规则（哪些模型写哪条路由、哪些密钥写进凭据）：model-sync-plan.ts
-// - 写入：dsh-config-providers.ts —— 直接用 dsh 自带的
-//   `@deepseek-ai/dsh-settings-file` / `@deepseek-ai/dsh-credentials-local`
+// - 写入：dsh-config-providers.ts —— 直接按 dsh 0.2.0 的新文件布局写
+//   `$DSH_HOME/profiles/web/cordis.patch.yml` 与 `$DSH_HOME/.credentials.yaml`
 // - 对外入口：dsh-model-sync.ts —— 安装流程与模型配置页的「同步 API key」按钮共用
 //
-// 这里不做任何「自己写 YAML」的兜底：dsh 自带的配置包用不了就只记日志，
-// 让用户在 dsh 的模型页（设置 → 模型）里自己配，避免安装器和 dsh 各写一份格式不同的配置。
+// 写入失败只记日志，不阻断安装：让用户在 dsh 的模型页（设置 → 模型）里自己配。
 
-/** 给 dsh 配置包用的日志出口 */
+/** 给配置写入用的日志出口 */
 const syncLogger: SyncLogger = createDshSyncLogger();
 
-/** 给 dsh 配置包用的命令执行器（只在 PATH 里找不到全局 dsh 时用来问 npm root -g） */
-const runDshCommand: CommandRunner = async (command, args) => {
-  const { stdout } = await commandLine.exec(command, args, {
-    logger: loggerFactory(DS_LABEL),
-  });
-  return stdout ?? '';
-};
-
-/** 配置包用不了时的统一提示：不写文件，交给用户在 dsh 界面里配 */
+/** 写文件失败时的统一提示：不阻断安装，交给用户在 dsh 界面里配 */
 function logManualConfigHint(reason: string): void {
   logger.warn(
     `[${DS_LABEL}] ${reason}；已跳过模型配置同步，不影响 dsh 本身运行。` +
-      `请在 dsh 界面的「设置 → 模型」里手动添加提供方与 API key（或在 ${dshSettingsPath()} 里手写配置）`,
+      `请在 dsh 界面的「设置 → 模型」里手动添加提供方与 API key（或在 ${dshProfilePatchPath()} 里手写配置）`,
   );
 }
 
 /**
  * 用本项目的大模型配置初始化 dsh：写模型路由与凭据。
- * 没有配置模型、或 dsh 配置包不可用时只警告，不阻断安装。
+ * 没有配置模型、或写入失败时只警告，不阻断安装。
  */
 async function onboardDeepseekHarness(): Promise<void> {
   const summary = await syncModelsIntoDshHarness({
     models: getLlmConfig().models ?? [],
-    run: runDshCommand,
     logger: syncLogger,
   });
 
   if (summary === null) {
-    logManualConfigHint('未能通过 dsh 自带的配置包写入配置');
+    logManualConfigHint('写入 dsh 配置文件失败');
     return;
   }
   if (summary.length === 0) {
@@ -649,36 +651,68 @@ async function onboardDeepseekHarness(): Promise<void> {
     return;
   }
   logger.log(
-    `[${DS_LABEL}] 已通过 dsh 自带的配置包（dsh-settings-file / dsh-credentials-local）同步：${summary.join('；')}`,
+    `[${DS_LABEL}] 已写入 dsh 配置（.credentials.yaml / cordis.patch.yml）：${summary.join('；')}`,
   );
 }
 
 // ===== 内置插件预装：dsh-our-free-model（Our Free Model） =====
 //
 // 这个插件不随启动器打包分发，而是在用户主机上「按需下载」后装进 dsh 的 web profile：
-// 从 GitHub 的 tag/release 归档 zip 下载，用内置的 adm-zip 解压，再执行 `dsh plugin add`。
+// 用内置的 adm-zip 解压归档 zip，再执行 `dsh plugin add`。
 // 装完无需单独重启：本模块本来就会在它之后才拉起 dsh web，所以插件会被正常加载。
 //
 // 注意：我们用的是纯 `dsh web`（npm 全局包），不是 DSHEAC/EAC 桌面整合包，
 // 所以 README 里「桌面端不要用 link:/junction」的 profile 闸门不适用——
 // `plugin add` 把插件以真实目录装进 profile 即可。
 //
-// 下载地址可配置：默认常量 OUR_FREE_MODEL_PLUGIN_DOWNLOAD_URL，可用环境变量
-// DSH_OUR_FREE_MODEL_PLUGIN_URL 覆盖（开发时可指向本地 zip 文件，免去联网）。
+// 下载地址可配置：候选列表 OUR_FREE_MODEL_PLUGIN_DOWNLOAD_URLS（国内代理优先、
+// GitHub 直连兜底），也可用环境变量 DSH_OUR_FREE_MODEL_PLUGIN_URL 覆盖
+//（开发时可指向本地 zip 文件，免去联网；也可用来自建源）。
 
 /** 插件在 package.json 里的名字（用于定位插件根目录与判重） */
 const OUR_FREE_MODEL_PLUGIN_NAME = 'dsh-our-free-model';
 
+/** 插件版本 tag（升级时只改这里一处） */
+const OUR_FREE_MODEL_PLUGIN_TAG = 'v1.3.1';
+
+/** 插件的 GitHub 归档地址 */
+const OUR_FREE_MODEL_GITHUB_ARCHIVE_URL =
+  `https://github.com/zouyuxuan122/dsh-our-free-model/archive/refs/tags/${OUR_FREE_MODEL_PLUGIN_TAG}.zip`;
+
 /**
- * 插件发布压缩包地址（GitHub tag/release 自动生成的 "Source code (zip)" 归档）。
+ * 插件发布压缩包地址候选列表，按优先级依次尝试，命中即止。
+ *
  * 该仓库的 Release 只发布了源码归档（没有预编译 zip），但 `dsh plugin add` 装的
  * 本来就是源码目录，所以直接拉这个归档即可——解压后顶层是 `<repo>-<tag>/`，
  * 由 findPluginRoot 按 package.json.name 自动定位真正的插件根。
- * 升级版本时把 tag 改掉；也可用环境变量 DSH_OUR_FREE_MODEL_PLUGIN_URL 覆盖。
+ *
+ * 为什么不用单一 URL：国内直连 GitHub 经常连不上，插件预装会静默失败（只告警）。
+ * 所以把国内可用的 GitHub 代理放在前面，GitHub 直连留作末位兜底
+ * （网络通畅时第一个代理通常几秒内就通了，不会额外等待）。
+ * 这里沿用项目里 Obsidian 的多源回退范式（见 pages/obsidian-app 的 OBSIDIAN_DOWNLOAD_URLS）。
+ *
+ * 升级版本时只改上面那个 tag；也可用环境变量 DSH_OUR_FREE_MODEL_PLUGIN_URL
+ * 覆盖（开发时可指向本地 zip 文件，免去联网；也可用来自建源）。
  */
-const OUR_FREE_MODEL_PLUGIN_DOWNLOAD_URL =
-  process.env.DSH_OUR_FREE_MODEL_PLUGIN_URL ||
-  'https://github.com/zouyuxuan122/dsh-our-free-model/archive/refs/tags/v1.3.1.zip';
+const OUR_FREE_MODEL_PLUGIN_DOWNLOAD_URLS: string[] = [
+  // 环境变量优先：既是开发免联网的入口，也是自建源的接入点
+  ...(process.env.DSH_OUR_FREE_MODEL_PLUGIN_URL
+    ? [process.env.DSH_OUR_FREE_MODEL_PLUGIN_URL]
+    : []),
+  ...[
+    'https://gh-proxy.org/',
+    'https://ghfast.top/',
+    'https://ghproxy.net/',
+  ].map((proxy) => proxy + OUR_FREE_MODEL_GITHUB_ARCHIVE_URL),
+  OUR_FREE_MODEL_GITHUB_ARCHIVE_URL,
+];
+
+/**
+ * 缓存标记用的来源标识。
+ * 刻意用 tag 而不是具体 URL：换代理源不该让用户重新下载同一个版本。
+ */
+const OUR_FREE_MODEL_PLUGIN_SOURCE_ID = process.env
+  .DSH_OUR_FREE_MODEL_PLUGIN_URL || OUR_FREE_MODEL_PLUGIN_TAG;
 
 /** 下载后解压、给 dsh 用的插件目录（落在用户数据目录下，跨启动稳定，便于缓存复用） */
 function resolvePluginInstallDir(): string {
@@ -690,8 +724,15 @@ function resolvePluginMarkerFile(): string {
   return path.join(resolvePluginInstallDir(), '.ofm-source.txt');
 }
 
-/** 跟随重定向地把 URL 下载到本地文件 */
-function downloadFile(url: string, destPath: string): Promise<void> {
+/**
+ * 跟随重定向地把 URL 下载到本地文件。
+ * 带超时：代理源连上但不返回时会一直挂着，必须超时才能换下一个源。
+ */
+function downloadFile(
+  url: string,
+  destPath: string,
+  timeoutMs = 30000,
+): Promise<void> {
   const agent = url.startsWith('https:') ? https : http;
   return new Promise<void>((resolve, reject) => {
     const request = agent.get(
@@ -705,7 +746,7 @@ function downloadFile(url: string, destPath: string): Promise<void> {
             ? res.headers.location[0]
             : res.headers.location;
           const next = new URL(location, url).toString();
-          downloadFile(next, destPath).then(resolve, reject);
+          downloadFile(next, destPath, timeoutMs).then(resolve, reject);
           return;
         }
         if (status !== 200) {
@@ -720,6 +761,10 @@ function downloadFile(url: string, destPath: string): Promise<void> {
       },
     );
     request.on('error', reject);
+    request.setTimeout(timeoutMs, () => {
+      request.destroy();
+      reject(new Error(`下载插件压缩包超时（${timeoutMs / 1000} 秒）`));
+    });
   });
 }
 
@@ -768,21 +813,59 @@ function findPluginRoot(extractedDir: string): string | null {
   return null;
 }
 
+/** 判断候选地址是否指向本地文件（开发用 / 自建源指向本地磁盘） */
+function isLocalZipSource(url: string): boolean {
+  if (url.startsWith('file:')) {
+    return true;
+  }
+  try {
+    return existsSync(url);
+  } catch {
+    return false;
+  }
+}
+
 /**
- * 取得插件目录：优先复用已下载且来源未变的缓存；否则下载并解压。
+ * 依次尝试候选地址，把第一个成功的下载到 destPath。
+ * 任何一个源失败（网络不通 / HTTP 非 200 / 超时）就换下一个源，
+ * 全部失败时抛出最后一个错误，由调用方降级处理。
+ */
+async function downloadFileFromCandidates(
+  urls: string[],
+  destPath: string,
+): Promise<string> {
+  let lastError: unknown = null;
+  for (const url of urls) {
+    try {
+      logger.log(`[${DS_LABEL}] 尝试从该源下载插件：${url}`);
+      await downloadFile(url, destPath);
+      return url;
+    } catch (e) {
+      lastError = e;
+      logger.warn(`[${DS_LABEL}] 该源不可用，换下一个：${e}`);
+    }
+  }
+  throw new Error(
+    `所有下载源均失败（${urls.length} 个）：${lastError ?? '未知原因'}`,
+  );
+}
+
+/**
+ * 取得插件目录：优先复用已下载且版本一致的缓存；否则下载并解压。
  * 返回可用于 `dsh plugin add` 的目录；任何失败都抛出，由调用方降级处理。
- * 若 DSH_OUR_FREE_MODEL_PLUGIN_URL 指向本地文件（或 file://），则直接用它、不联网。
+ * 若候选地址里有本地文件（或 file://），则直接用它、不联网。
  */
 async function fetchOurFreeModelPlugin(): Promise<string> {
   const installDir = resolvePluginInstallDir();
   const markerFile = resolvePluginMarkerFile();
   const pkgPath = path.join(installDir, 'package.json');
 
-  // 已有缓存且来源一致 → 直接复用，不联网
+  // 已有缓存且版本一致 → 直接复用，不联网
   if (
     existsSync(pkgPath) &&
     existsSync(markerFile) &&
-    readFileSync(markerFile, 'utf-8').trim() === OUR_FREE_MODEL_PLUGIN_DOWNLOAD_URL
+    readFileSync(markerFile, 'utf-8').trim() ===
+      OUR_FREE_MODEL_PLUGIN_SOURCE_ID
   ) {
     logger.log(
       `[${DS_LABEL}] 复用已下载缓存的 Our Free Model 插件（${installDir}）`,
@@ -790,7 +873,14 @@ async function fetchOurFreeModelPlugin(): Promise<string> {
     return installDir;
   }
 
-  const sourceUrl = OUR_FREE_MODEL_PLUGIN_DOWNLOAD_URL;
+  // 本地地址（开发用）排在最前：命中就直接用，完全不联网
+  const localSources = OUR_FREE_MODEL_PLUGIN_DOWNLOAD_URLS.filter(
+    isLocalZipSource,
+  );
+  const remoteSources = OUR_FREE_MODEL_PLUGIN_DOWNLOAD_URLS.filter(
+    (url) => !isLocalZipSource(url),
+  );
+
   const tmpZip = path.join(
     tmpdir(),
     `${OUR_FREE_MODEL_PLUGIN_NAME}-${Date.now()}.zip`,
@@ -800,28 +890,20 @@ async function fetchOurFreeModelPlugin(): Promise<string> {
     `${OUR_FREE_MODEL_PLUGIN_NAME}-extract-${Date.now()}`,
   );
 
-  // 本地文件（开发用）直接当作 zip；否则联网下载
-  const isLocal =
-    sourceUrl.startsWith('file:') ||
-    (() => {
-      try {
-        return existsSync(sourceUrl);
-      } catch {
-        return false;
-      }
-    })();
   let zipPath: string;
-  if (isLocal) {
-    zipPath = sourceUrl.startsWith('file:')
-      ? fileURLToPath(sourceUrl)
-      : sourceUrl;
+  let usedUrl: string;
+  if (localSources.length > 0) {
+    zipPath = localSources[0].startsWith('file:')
+      ? fileURLToPath(localSources[0])
+      : localSources[0];
+    usedUrl = localSources[0];
     logger.log(`[${DS_LABEL}] 使用本地插件压缩包（${zipPath}）`);
   } else {
     zipPath = tmpZip;
     logger.log(
-      `[${DS_LABEL}] 正在下载 Our Free Model 插件（来源：${sourceUrl}）...`,
+      `[${DS_LABEL}] 正在下载 Our Free Model 插件（共 ${remoteSources.length} 个候选源）...`,
     );
-    await downloadFile(sourceUrl, tmpZip);
+    usedUrl = await downloadFileFromCandidates(remoteSources, tmpZip);
   }
 
   logger.log(`[${DS_LABEL}] 正在解压插件压缩包 ...`);
@@ -835,7 +917,9 @@ async function fetchOurFreeModelPlugin(): Promise<string> {
   rmSync(installDir, { recursive: true, force: true });
   mkdirSync(installDir, { recursive: true });
   cpSync(root, installDir, { recursive: true });
-  writeFileSync(markerFile, OUR_FREE_MODEL_PLUGIN_DOWNLOAD_URL);
+  // 标记用版本标识而非本次实际用的 URL：换源不应导致同一版本被重新下载
+  writeFileSync(markerFile, OUR_FREE_MODEL_PLUGIN_SOURCE_ID);
+  logger.log(`[${DS_LABEL}] 插件来源：${usedUrl}`);
 
   // 清理临时文件（本地 zip 不动）
   try {
@@ -1205,7 +1289,7 @@ export async function installDeepseekHarnessService(): Promise<DeepseekHarnessSe
     logger.log(`[${DS_LABEL}] dsh 安装完成：v${version}`);
   }
 
-  // 用本项目的大模型配置初始化 dsh（settings.yaml + .credentials.yaml）
+  // 用本项目的大模型配置初始化 dsh（cordis.patch.yml + .credentials.yaml）
   logger.log(`[${DS_LABEL}] 使用项目大模型配置同步 dsh 的模型配置 ...`);
   await onboardDeepseekHarness();
 
@@ -1318,6 +1402,81 @@ export async function stopDeepseekHarnessService(): Promise<DeepseekHarnessServi
   return queryDeepseekHarnessService();
 }
 
+// ===== 从 WorkBuddy 同步模型配置 =====
+
+/**
+ * 把 WorkBuddy 的自定义模型配置（`%USERPROFILE%\.workbuddy\models.json`）同步进 dsh。
+ *
+ * 写入前会把 `settings.yaml` / `.credentials.yaml` 整份备份到 `$DSH_HOME/backups/<时间戳>/`，
+ * 备份结果随返回值一起交给界面展示（用户想回滚时直接拷回这两个文件即可）。
+ *
+ * 失败时抛出可直接展示给用户的错误（读不到 WorkBuddy 配置、没有可同步的模型、
+ * dsh 自带的配置包不可用等）；抛错时还没有写任何东西。
+ */
+export async function syncWorkbuddyModelsToDsh(): Promise<WorkbuddyModelSyncResult> {
+  const outcome = await syncWorkbuddyModelsIntoDshHarness({
+    logger: syncLogger,
+  });
+
+  if (outcome === null) {
+    logManualConfigHint('未能通过 dsh 自带的配置包写入 WorkBuddy 的模型配置');
+    throw new Error(
+      '未能使用 dsh 自带的配置包写入配置（可能尚未安装 dsh）。请在 dsh 界面的「设置 → 模型」里手动添加提供方与 API key',
+    );
+  }
+
+  logger.log(
+    `[${DS_LABEL}] 已把 WorkBuddy 的模型配置同步进 dsh（${outcome.syncedModels} 个模型 / ${
+      outcome.routeCount
+    } 条路由）：${outcome.summary.join('；')}`,
+  );
+
+  const workbuddyModelCount = outcome.syncedModels + outcome.notices.length;
+  return {
+    workbuddyModelCount,
+    syncedModelCount: outcome.syncedModels,
+    routeCount: outcome.routeCount,
+    summary: outcome.summary,
+    backup: {
+      dir: outcome.backup.dir,
+      files: outcome.backup.files,
+      reused: outcome.backup.reused,
+    },
+    paths: outcome.paths,
+    notices: outcome.notices,
+    warnings: outcome.warnings,
+  };
+}
+
+/**
+ * 在系统文件管理器里打开 dsh 配置的备份目录。
+ * 只允许打开 dsh home 下的备份目录，避免这条 IPC 被当成任意路径打开器。
+ */
+export async function openDeepseekHarnessBackupDir(
+  dir?: string,
+): Promise<string> {
+  const root = dshBackupRoot();
+  const target = (dir ?? '').trim() || root;
+
+  const normalizedRoot = path.resolve(root);
+  const normalizedTarget = path.resolve(target);
+  if (
+    normalizedTarget !== normalizedRoot &&
+    !normalizedTarget.startsWith(`${normalizedRoot}${path.sep}`)
+  ) {
+    throw new Error(`只能打开 dsh 配置的备份目录：${root}`);
+  }
+  if (!existsSync(normalizedTarget)) {
+    throw new Error(`备份目录还不存在：${normalizedTarget}`);
+  }
+
+  const failure = await shell.openPath(normalizedTarget);
+  if (failure) {
+    throw new Error(failure);
+  }
+  return normalizedTarget;
+}
+
 export default async function init(ipcMain: IpcMain) {
   // 退出前结束本程序拉起的 dsh web，避免后台残留（端口上的实例也会被一并清掉）
   app.on('before-quit', () => {
@@ -1344,5 +1503,13 @@ export default async function init(ipcMain: IpcMain) {
   );
   ipcHandle(ipcMain, copyDeepseekHarnessDashboardUrlHandle, async (_event) =>
     copyDeepseekHarnessDashboardUrl(),
+  );
+  ipcHandle(ipcMain, syncWorkbuddyModelsToDshHandle, async (_event) =>
+    syncWorkbuddyModelsToDsh(),
+  );
+  ipcHandle(
+    ipcMain,
+    openDeepseekHarnessBackupDirHandle,
+    async (_event, dir?: string) => openDeepseekHarnessBackupDir(dir),
   );
 }

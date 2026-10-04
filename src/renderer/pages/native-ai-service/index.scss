@@ -317,3 +317,52 @@
     }
   }
 }
+
+/* 「从 WorkBuddy 同步模型配置」的确认弹窗与结果弹窗 */
+.workbuddy-sync-confirm,
+.workbuddy-sync-result {
+  p {
+    margin: 0 0 8px;
+    line-height: 20px;
+  }
+
+  ul {
+    margin: 0 0 8px;
+    padding-left: 20px;
+
+    li {
+      line-height: 20px;
+      margin-bottom: 4px;
+    }
+  }
+
+  code {
+    padding: 0 4px;
+    border-radius: 3px;
+    background-color: rgba(128, 128, 128, 0.15);
+    font-size: 12px;
+    word-break: break-all;
+  }
+
+  .workbuddy-sync-backup {
+    margin-bottom: 0;
+    color: rgba(128, 128, 128, 0.95);
+    font-size: 12px;
+    line-height: 18px;
+  }
+
+  .workbuddy-sync-headline {
+    font-size: 14px;
+  }
+
+  .workbuddy-sync-summary {
+    margin-bottom: 8px;
+  }
+
+  .workbuddy-sync-notices {
+    margin-bottom: 6px;
+    color: #faad14;
+    font-size: 12px;
+    line-height: 18px;
+  }
+}
