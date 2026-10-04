@@ -44,6 +44,10 @@ export class FreeModelAdapter {
    * @param {(record: object) => void} dependencies.recordUsage
    * @param {(record: object) => void} [dependencies.recordTurn]
    * @param {(message: string) => void} [dependencies.warn]
+   * @param {(modelId: string) => void} [dependencies.onRegionBlocked] - called when the
+   *   gateway names a model as unrouteable from this egress; the host uses it to
+   *   schedule a re-probe, since availability follows the network path and can
+   *   change without the user touching anything (a VPN toggled, for instance)
    */
   constructor(dependencies) {
     this.deps = dependencies

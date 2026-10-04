@@ -28,9 +28,11 @@ import { mintRequestId, sessionForConversation, setUpstreamBase } from './engine
 import { toToolDefs } from './engine/messages.js'
 import { JsonStore, resolveDataDir } from './store.js'
 import type {
+  CatalogEntry,
   FreeProviderConfig,
   FreeProviderStatus,
   FreeModelSummary,
+  ProbeResult,
 } from './type-info'
 import { DEFAULT_FREE_PROVIDER_CONFIG } from './type-info'
 import { getLlmConfig, saveLlmConfig } from '../configs/index'
@@ -315,7 +317,7 @@ class LlmFreeService {
     return this.catalog
   }
 
-  private async runProbeRound(): Promise<Record<string, { state: string }>> {
+  private async runProbeRound(): Promise<Record<string, ProbeResult>> {
     // 并发保持为 1：本通道按会话计配额，突发会触发 429，导致大量模型被误判为 unknown。
     const results = await probeCatalog(
       this.catalog as any,
@@ -339,7 +341,7 @@ class LlmFreeService {
     )
     this.availability.update({ at: Date.now(), egress: this.egress } as any)
     this.availability.flush()
-    const verdicts = Object.values(results) as Array<{ state: string }>
+    const verdicts = Object.values(results) as ProbeResult[]
     if (verdicts.length > 0 && verdicts.every((row) => row.state === STATE.unavailable)) {
       log.warn(`gateway refused all ${verdicts.length} models this round (${verdicts[0].detail ?? 'no detail'}); keeping them advertised`)
     }
@@ -468,7 +470,13 @@ class LlmFreeService {
     return outcome
   }
 
-  private publicModelRows(): Array<Record<string, unknown>> {
+  /**
+   * 转发代理 GET /v1/models 暴露的行。
+   *
+   * 只有 `id` 是承重字段：`created` / `owned_by` 是 OpenAI 列表格式要求补齐的占位值，
+   * 本通道不承诺它们有语义。下游工具只按 id 取模型。
+   */
+  private publicModelRows(): Array<{ id: string; object: string; created: number; owned_by: string; context_window?: number }> {
     const membership = new Set(this.state().membership[ROUTE_MAIN] ?? [])
     if (this.config.exposeRegionModels !== false) {
       for (const id of this.state().membership[ROUTE_REGION] ?? []) membership.add(id)
@@ -481,11 +489,11 @@ class LlmFreeService {
         return true
       })
       .map((entry) => ({
-        id: entry.id,
+        id: entry.id as string,
         object: 'model',
         created: Math.floor(Date.now() / 1000),
         owned_by: 'our-free-model',
-        ...(entry.contextWindow === undefined ? {} : { context_window: entry.contextWindow }),
+        ...(entry.contextWindow === undefined ? {} : { context_window: entry.contextWindow as number }),
       }))
   }
 

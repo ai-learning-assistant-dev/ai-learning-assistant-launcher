@@ -24,7 +24,15 @@ const ECHO_SOURCES = [
   { url: 'https://ipapi.co/json/', pick: payload => payload?.ip, extra: payload => payload?.country_code },
 ]
 
-/** Verdicts the probe can return, and how each maps to picker membership. */
+/**
+ * Verdicts the probe can return, and how each maps to picker membership.
+ *
+ * This is the complete, closed set: every verdict a caller will ever see comes
+ * from here, so `@typedef {typeof STATE[keyof typeof STATE]} ProbeState` below
+ * keeps a verdict field from widening to `string` at the call site.
+ *
+ * @type {{available: 'available', regionBlocked: 'region-blocked', unavailable: 'unavailable', throttled: 'throttled', unknown: 'unknown'}}
+ */
 export const STATE = {
   available: 'available',
   regionBlocked: 'region-blocked',
@@ -32,6 +40,11 @@ export const STATE = {
   throttled: 'throttled',
   unknown: 'unknown',
 }
+
+/**
+ * @typedef {'available' | 'region-blocked' | 'unavailable' | 'throttled' | 'unknown'} ProbeState
+ * @typedef {{state: ProbeState, detail?: string, latencyMs: number, ttftMs?: number}} ProbeVerdict
+ */
 
 const PING_PROMPT = 'ping'
 
@@ -43,7 +56,7 @@ const PING_PROMPT = 'ping'
  * @param {string} [options.attributionUserAgent]
  * @param {AbortSignal} [options.signal]
  * @param {number} [options.timeoutMs]
- * @returns {Promise<{state:string, detail?:string, latencyMs:number, ttftMs?:number}>}
+ * @returns {Promise<ProbeVerdict>}
  */
 export async function probeModel(model, { attributionUserAgent, signal, timeoutMs = 45000 } = {}) {
   const started = Date.now()
@@ -151,6 +164,10 @@ function stateOf(error) {
 /**
  * Resolve the public address the gateway will see, plus its country when an echo
  * discloses one. Fail-open: an absent answer simply means "no egress signal".
+ *
+ * @param {{signal?: AbortSignal, timeoutMs?: number}} [options]
+ * @returns {Promise<{ip: string, country?: string} | undefined>} undefined when every
+ *   echo source failed — the caller treats that as "unknown egress", not an error
  */
 export async function detectEgress({ signal, timeoutMs = 8000 } = {}) {
   for (const source of ECHO_SOURCES) {
@@ -180,6 +197,16 @@ export async function detectEgress({ signal, timeoutMs = 8000 } = {}) {
  * Concurrency stays low on purpose: this lane accounts quota per session and
  * answers 429 with growing retry-after, so a wide burst would throttle the very
  * user whose availability we are establishing.
+ *
+ * @param {Array<{id: string}>} models - catalog entries to probe
+ * @param {{attributionUserAgent?: string, signal?: AbortSignal, timeoutMs?: number}} [options]
+ * @param {(id: string, result: ProbeVerdict) => void} [onResult] -
+ *   called as each verdict lands, so a caller can persist progress instead of
+ *   waiting for the whole round; this is what keeps the UI responsive on a slow
+ *   egress
+ * @param {number} [concurrency] - parallel probes, capped to the model count
+ * @returns {Promise<Record<string, ProbeVerdict>>}
+ *   every model's verdict, keyed by model id
  */
 export async function probeCatalog(models, options = {}, onResult = () => {}, concurrency = 2) {
   const results = {}

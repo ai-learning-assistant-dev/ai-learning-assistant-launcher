@@ -70,9 +70,11 @@ function openAiError(res, status, type, message) {
  * @param {() => {host: string, port: number, enabled: boolean, key: string}} options.config
  * @param {(request: object, onChunk: (chunk: object) => void) => Promise<object>} options.complete -
  *   runs one completion through the adapter and reports chunks as they arrive
- * @param {() => Array<{id: string, created: number, owned_by: string}>} options.modelRows
+ * @param {() => Array<{id: string, created?: number, owned_by?: string}>} options.modelRows -
+ *   rows served by GET /v1/models; only `id` is load-bearing, the rest are echoed
+ *   through so a caller can carry richer metadata without changing this seam
  * @param {(message: string) => void} [options.log]
- * @returns {Promise<{server: http.Server, port: number, close: () => Promise<void>}>}
+ * @returns {Promise<{server: http.Server, port: number, host: string, close: () => Promise<void>}>}
  */
 export async function startForwardServer({ config, complete, modelRows, log = () => {} }) {
   const server = http.createServer((req, res) => {

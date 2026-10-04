@@ -8,6 +8,9 @@
 
 export const channel = 'llm-free'
 
+/** 本模块在终端日志里的标识，需注册进 AllService 才能被 loggerFactory 接受。 */
+export type ServiceName = 'LLM-FREE'
+
 /** 读取当前配置（FreeProviderConfig） */
 export const llmFreeQueryConfigHandle = `${channel}/query-config`
 /** 保存配置补丁（Partial<FreeProviderConfig>） */
@@ -29,6 +32,47 @@ export const llmFreeModelsHandle = `${channel}/models`
 
 export type EffortLevel = 'light' | 'balanced' | 'deep'
 export type FingerprintMode = 'auto' | 'minimal'
+
+/**
+ * 目录条目的路由线（对应 engine/catalog.js 的 `wire`）。
+ * chat = OpenAI Chat Completions；responses = OpenAI Responses；messages = Anthropic Messages。
+ */
+export type WireStyle = 'chat' | 'responses' | 'messages'
+
+/**
+ * 单个模型的可用性判定（对应 engine/probe.js 的 `STATE`）。
+ * - available：网关接受
+ * - region-blocked：网关点名「此出口不可路由该模型」
+ * - unavailable：网关明确拒绝该模型（可从列表中移除）
+ * - throttled / unknown：与模型本身无关，下一轮可能变化
+ */
+export type ProbeState = 'available' | 'region-blocked' | 'unavailable' | 'throttled' | 'unknown'
+
+/** 目录条目：由上游 listing 与本地能力表合并而成（engine/catalog.js buildCatalog）。 */
+export interface CatalogEntry {
+  /** 去掉 `-free` 等后缀后的基名，同时作为 membership 的键 */
+  id: string
+  /** 展示名，绝不让原始 id 直接进入界面 */
+  name: string
+  wire: WireStyle
+  vision: boolean
+  reasoning: boolean
+  contextWindow: number
+  maxOutput: number
+  canDisableThinking: boolean
+  /** 该模型的地区可用性是否依赖出口 IP */
+  regionSensitive: boolean
+}
+
+/** 单次探测的结果（engine/probe.js probeModel 的返回）。 */
+export interface ProbeResult {
+  state: ProbeState
+  /** 失败时的可读原因，成功时不带此字段 */
+  detail?: string
+  latencyMs: number
+  /** 首个增量到达耗时，仅流式成功时可得 */
+  ttftMs?: number
+}
 
 /** 免密免费模型配置块（独立存储，不污染已有的 LLMConfig） */
 export interface FreeProviderConfig {
@@ -55,14 +99,21 @@ export interface FreeProviderConfig {
     /** 已签发的访问密钥（空则首次启动时生成并持久化） */
     key: string
   }
+  /**
+   * 上次 catalog 合并成功的时间戳。
+   *
+   * 运行时字段但随 config 一起持久化：冷启动时先于网络恢复展示上次的目录，
+   * 落盘后即可跨重启保留。刷新失败时保持原值不变。
+   */
+  catalogSyncedAt?: number
 }
 
 /** 单个模型在目录中的摘要（状态点/白名单编辑器用） */
 export interface FreeModelSummary {
   id: string
   name: string
-  /** 路由状态：usable / region-blocked / unknown / unavailable */
-  state: string
+  /** 路由状态，取值同 ProbeState */
+  state: ProbeState
   /** 是否vision模型 */
   vision: boolean
   /** 是否reasoning模型 */
@@ -103,4 +154,5 @@ export const DEFAULT_FREE_PROVIDER_CONFIG: FreeProviderConfig = {
     port: 18765,
     key: '',
   },
+  catalogSyncedAt: 0,
 }

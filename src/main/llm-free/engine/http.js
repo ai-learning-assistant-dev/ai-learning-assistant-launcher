@@ -402,7 +402,17 @@ function emit(line, onData) {
   }
 }
 
-/** Fetch a small JSON document from the gateway with the fingerprint headers. */
+/**
+ * Fetch a small JSON document from the gateway with the fingerprint headers.
+ *
+ * @param {string} path - gateway-absolute path, e.g. `/zen/v1/models`
+ * @param {{session?: string, requestId?: string, attributionUserAgent?: string,
+ *   signal?: AbortSignal, timeoutMs?: number}} [options] - every field optional:
+ *   the header helpers already substitute empty strings, and the timeout is
+ *   enforced by an internal AbortController, so a caller with nothing to pass
+ *   may call `getJson(path)` alone
+ * @returns {Promise<any>} the parsed body, or an UpstreamError on a refused request
+ */
 export async function getJson(path, { session, requestId, attributionUserAgent, signal, timeoutMs = 15000 } = {}) {
   const headers = gatewayHeaders({ session: truncateSession(session ?? ''), requestId: requestId ?? '', stream: false, accept: 'application/json' })
   headers['user-agent'] = userAgentWith(attributionUserAgent)

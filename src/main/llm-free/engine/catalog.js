@@ -93,7 +93,10 @@ export function displayModelName(modelId) {
  * Merge the upstream listing with the local capability table.
  *
  * @param {string[]} ids - raw upstream model ids
- * @returns {Array<object>} catalog entries in listing order
+ * @returns {Array<{id: string, name: string, wire: string, vision: boolean,
+ *   reasoning: boolean, contextWindow: number, maxOutput: number,
+ *   canDisableThinking: boolean, regionSensitive: boolean}>} catalog entries in
+ *   listing order, deduplicated by base id
  */
 export function buildCatalog(ids) {
   const seen = new Set()
@@ -124,7 +127,14 @@ function number(value) {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.trunc(value) : undefined
 }
 
-/** Parse the gateway's `{"data":[{"id":…}]}` listing. */
+/**
+ * Parse the gateway's `{"data":[{"id":…}]}` listing.
+ *
+ * @param {any} payload - the decoded JSON body
+ * @returns {string[]} the ids that survived, in listing order. Accepts a bare
+ *   array or a `{models: [...]}` envelope as well, since the shape has varied
+ *   across gateway versions.
+ */
 export function parseListing(payload) {
   const rows = Array.isArray(payload?.data) ? payload.data : Array.isArray(payload?.models) ? payload.models : Array.isArray(payload) ? payload : []
   return rows.map(row => (typeof row === 'string' ? row : row?.id)).filter(id => typeof id === 'string' && id !== '')
