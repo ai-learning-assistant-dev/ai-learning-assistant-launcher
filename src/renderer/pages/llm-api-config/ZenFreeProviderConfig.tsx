@@ -54,6 +54,7 @@ const ZenFreeProviderConfig: React.FC = () => {
   const [config, setConfig] = useState<FreeProviderConfig | null>(null);
   const [status, setStatus] = useState<FreeProviderStatus | null>(null);
   const [loading, setLoading] = useState(false);
+  // Loading Flag，这是一个修饰交互状态的加载动画是否表现的开关。
   const [busy, setBusy] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -95,32 +96,6 @@ const ZenFreeProviderConfig: React.FC = () => {
     },
     [refresh],
   );
-
-  const start = useCallback(async () => {
-    setBusy(true);
-    try {
-      await window.mainHandle.llmFreeStart();
-      message.success('免密免费模型转发代理已启动');
-      await refresh();
-    } catch (e) {
-      message.error(`启动失败: ${(e as Error).message}`);
-    } finally {
-      setBusy(false);
-    }
-  }, [refresh]);
-
-  const stop = useCallback(async () => {
-    setBusy(true);
-    try {
-      await window.mainHandle.llmFreeStop();
-      message.success('免密免费模型转发代理已停止');
-      await refresh();
-    } catch (e) {
-      message.error(`停止失败: ${(e as Error).message}`);
-    } finally {
-      setBusy(false);
-    }
-  }, [refresh]);
 
   const refreshCatalog = useCallback(async () => {
     setBusy(true);
@@ -199,7 +174,7 @@ const ZenFreeProviderConfig: React.FC = () => {
       }
     >
       <Form layout="vertical" size="small">
-        <Form.Item label="启用免密免费模型（拉起本地转发代理）">
+        <Form.Item label="启用模型本地转发代理">
           <Switch
             checked={config.enabled}
             loading={busy}
@@ -356,11 +331,6 @@ const ZenFreeProviderConfig: React.FC = () => {
       </Card>
 
       <Space wrap>
-        {running ? (
-          <Button onClick={stop} loading={busy}>停止</Button>
-        ) : (
-          <Button type="primary" onClick={start} loading={busy}>启动</Button>
-        )}
         <Button onClick={refreshCatalog} loading={busy}>刷新模型目录</Button>
         <Button onClick={probe} loading={busy}>探测可用性</Button>
         <Tooltip title="轮换转发代理密钥（下游工具需同步更新）">

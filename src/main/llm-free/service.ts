@@ -1,17 +1,14 @@
 /**
- * 免密免费模型（Zen free lane）编排层（Host half，已从 DSH 插件去 Cordis 化）。
+ * 免密免费模型（Zen free lane）编排
  *
- * 本文件对应 DSH 插件 `index.js` 的「宿主半部」，但去掉了所有 DSH 专属设施：
- * - 没有 cordis `ctx` / 注册中心 / 可配置 provider 注册；
- * - 没有公告 feed / 自更新 / 热重载（启动器只做配置管理，运维功能已全部砍掉）；
- * - 没有用量/遥测统计（`recordUsage` / `recordTurn` 置空操作）；
- * - `attributionUserAgent` 固定为常量，不再读 `adapter/kernel.js`；
+ * 配置持久化、日志器
+ * 注册`complete` / `modelRows` / `forwardKey` 
+ * 
  * - 配置来自 `LLMConfig.freeProvider` 块（由 configs 持久化），运行时状态（探测结果 /
  *   catalog 缓存）落在 `app.getPath('userData')/llm-free` 下的 JsonStore。
  *
- * 真正的模型调用发生在别处：本进程只跑一个本地 OpenAI 兼容转发代理
- * （`/v1/chat/completions` + `/v1/responses`），下游工具把 baseUrl 指向
- * `http://127.0.0.1:<port>/v1` 即可使用。
+ * 进程提供本地 OpenAI 兼容转发代理（`/v1/chat/completions` + `/v1/responses`）
+ * 下游工具 baseUrl 指向`http://127.0.0.1:<port>/v1` 使用。
  *
  * @module src/main/llm-free/service.ts
  */
@@ -22,11 +19,12 @@ import { app } from 'electron'
 import { FreeModelAdapter, ROUTE_MAIN, ROUTE_REGION } from './engine/adapter.js'
 import { buildCatalog, parseListing } from './engine/catalog.js'
 import { STATE, detectEgress, probeCatalog } from './engine/probe.js'
-import { generateKey, startForwardServer } from './engine/forward.js'
+import { generateKey } from './engine/forward.js'
 import { CODE, UpstreamError, getJson } from './engine/http.js'
 import { mintRequestId, sessionForConversation, setUpstreamBase } from './engine/upstream.js'
 import { toToolDefs } from './engine/messages.js'
 import { JsonStore, resolveDataDir } from './store.js'
+import { ForwardManager } from './forward-manager'
 import type {
   CatalogEntry,
   FreeProviderConfig,
@@ -49,22 +47,13 @@ const FALLBACK_IDS = [
   'muse-spark-1.3-contributor-free', 'muse-spark-1.2-contributor-free',
 ]
 
-/** 转发代理运行实例（startForwardServer 的返回值）。 */
-interface ForwardHandle {
-  server: unknown
-  port: number
-  host: string
-  close: () => Promise<void>
-}
-
+/** 探测可用性快照（持久化在 availability.json）。 */
 type AvailabilitySnapshot = {
   version: number
   at: number
   egress: { ip: string; country?: string } | null
   results: Record<string, { state: string; detail?: string; ttftMs?: number; latencyMs: number; at: number }>
 }
-
-// ── 纯函数（移植自 DSH index.js）──────────────────────────────────────────────
 
 /** 按可用性把目录切成「可用（主路由）/ 区域受限（副路由）」两组。 */
 function computeMembership(
@@ -196,30 +185,18 @@ function foldForwardOutcome(
   }
 }
 
-/** 只允许转发代理绑定回环地址，避免把本机免费额度开给整个子网。 */
-function isLoopbackHost(value: string): boolean {
-  const LOOPBACK_NAMES = new Set(['127.0.0.1', '[::1]', '::1', 'localhost'])
-  const raw = String(value ?? '').trim()
-  if (raw === '') return false
-  let url: URL
-  try {
-    url = new URL(raw.includes('://') ? raw : `http://${raw}`)
-  } catch {
-    return false
-  }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') return false
-  return LOOPBACK_NAMES.has(url.hostname.toLowerCase())
-}
+/** 只允许转发代理绑定回环地址，避免把本机免费额度开给整个子网（实现见 forward-manager.ts）。 */
 
 // ── 编排类 ───────────────────────────────────────────────────────────────────
 
 class LlmFreeService {
   private catalog: Array<Record<string, unknown>> = []
   private egress: { ip: string; country?: string } | null = null
-  private forward: ForwardHandle | null = null
-  private forwardError = ''
   private disposed = false
   private attributionUserAgent = 'deepseek-harness'
+
+  /** 转发代理运行时状态机（纯逻辑，见 forward-manager.ts）。 */
+  private forwardManager: ForwardManager
 
   private config: FreeProviderConfig
   private availability: JsonStore
@@ -254,6 +231,13 @@ class LlmFreeService {
       recordTurn: () => {},
       warn: (message: string) => log.warn(message),
       onRegionBlocked: () => this.scheduleReprobe(),
+    })
+
+    this.forwardManager = new ForwardManager({
+      complete: (request, onChunk) => this.runForwarded(request, onChunk),
+      modelRows: () => this.publicModelRows(),
+      forwardKey: () => this.forwardKey(),
+      log: (message) => log.warn(message),
     })
   }
 
@@ -395,44 +379,16 @@ class LlmFreeService {
     return minted
   }
 
-  async syncForward(): Promise<void> {
-    const desired = this.config.forward
-    // 注意：enabled 是 FreeProviderConfig 顶层开关，不在 forward 子块里。
-    const wanted = this.config.enabled === true
-    if (this.forward !== null && wanted
-      && this.forward.host === (desired.host || '127.0.0.1')
-      && this.forward.port === desired.port) return
-    if (this.forward === null && !wanted) return
-    if (this.forward !== null) {
-      const closing = this.forward
-      this.forward = null
-      await closing.close().catch(() => {})
-    }
-    if (!wanted) {
-      this.forwardError = ''
-      return
-    }
-    if (!isLoopbackHost(desired.host || '127.0.0.1')) {
-      this.forwardError = 'the forward listener binds a loopback address only'
-      log.warn(`forward listener not started (${this.forwardError})`)
-      return
-    }
-    try {
-      this.forward = await startForwardServer({
-        config: () => {
-          const current = this.config.forward
-          return { host: current.host || '127.0.0.1', port: current.port ?? 0, enabled: this.config.enabled === true, key: this.forwardKey() }
-        },
-        complete: (request, onChunk) => this.runForwarded(request, onChunk),
-        modelRows: () => this.publicModelRows(),
-        log: (message) => log.warn(`forward: ${message}`),
-      })
-      this.forwardError = ''
-      this.config = { ...this.config, forward: { ...this.config.forward, port: this.forward.port, host: this.forward.host } }
+  /** 委托给 forwardManager  */
+  private async syncForward(): Promise<void> {
+    const bound = await this.forwardManager.syncForward({
+      enabled: this.config.enabled === true,
+      host: this.config.forward?.host,
+      port: this.config.forward?.port,
+    })
+    if (bound && bound.running && bound.host !== undefined && bound.port !== undefined) {
+      this.config = { ...this.config, forward: { ...this.config.forward, port: bound.port, host: bound.host } }
       this.persistConfig()
-    } catch (error) {
-      this.forwardError = String((error as Error)?.message ?? error)
-      log.warn(`forward listener could not start (${this.forwardError})`)
     }
   }
 
@@ -511,12 +467,7 @@ class LlmFreeService {
   async stop(): Promise<void> {
     if (this.refreshTimer !== null) { clearInterval(this.refreshTimer); this.refreshTimer = null }
     if (this.reprobeTimer !== undefined) { clearTimeout(this.reprobeTimer); this.reprobeTimer = undefined }
-    if (this.forward !== null) {
-      const closing = this.forward
-      this.forward = null
-      await closing.close().catch(() => {})
-    }
-    this.forwardError = ''
+    await this.forwardManager.stop()
   }
 
   dispose(): void {
@@ -575,6 +526,7 @@ class LlmFreeService {
 
   getStatus(): FreeProviderStatus {
     const config = this.config
+    const forward = this.forwardManager.getStatusFragment()
     const availability = this.availability.get() as any
     const membership = this.state().membership
     const usable = new Set(membership[ROUTE_MAIN] ?? [])
@@ -602,13 +554,13 @@ class LlmFreeService {
       })
     return {
       enabled: config.enabled,
-      running: this.forward !== null,
-      port: this.forward?.port ?? config.forward.port,
+      running: forward.running,
+      port: forward.port ?? config.forward.port,
       key: config.forward.key,
       egress: this.egress,
       models,
       catalogSyncedAt: config.catalogSyncedAt ?? 0,
-      ...(this.forwardError ? { error: this.forwardError } : {}),
+      ...(forward.error ? { error: forward.error } : {}),
     }
   }
 }
