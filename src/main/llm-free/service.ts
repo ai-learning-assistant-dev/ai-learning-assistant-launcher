@@ -47,6 +47,56 @@ const FALLBACK_IDS = [
   'muse-spark-1.3-contributor-free', 'muse-spark-1.2-contributor-free',
 ]
 
+/**
+ * 判定 → 写盘时的排序权重，越小越靠前。
+ *
+ * 下游应用常取「第一个带 token 的模型」当默认模型（如 openclaw-service 取
+ * `find(m => !m.isEmbeddingModel)`），而目录顺序是网关 listing 的顺序、与可用性无关。
+ * 所以写盘前按这个权重排一遍，让第一个免费模型就是探通的那个。
+ *
+ * 其余档位只区分「有多可能真的能用」：限流换个窗口可能就好；超时/传输失败是没有
+ * 结论；区域受限是这个出口明确不可路由。全部同档时排序稳定，保持目录原序。
+ */
+const VERDICT_RANK: Record<string, number> = {
+  [STATE.available]: 0,
+  [STATE.throttled]: 1,
+  [STATE.unknown]: 2,
+  [STATE.regionBlocked]: 3,
+}
+
+/** 没有判定记录的模型按 `unknown` 处理。 */
+function verdictRank(state: string): number {
+  return VERDICT_RANK[state] ?? VERDICT_RANK[STATE.unknown]
+}
+
+/**
+ * 本通道列出、但没法当对话模型用的模型族——按前缀匹配。
+ *
+ * `jev` 是 System One 决策模型：`POST /zen/v1/systemone`，进去一个 state 加结构化
+ * 问题，出来 `noul` / `choice` / `score` 结构化判定——没有散文、没有工具调用、
+ * 也不支持 stream，`endpointFor` 里没有它对应的线。对它的 chat 请求得不到回答：
+ * 连续四次尝试拿到 HTTP 500（外加一次传输失败），而同一次运行里真正的对话模型
+ * 回了 "OK"。
+ *
+ * 按**族前缀**匹配而不是精确 id，这样版本号变了（`jev-1.14-free`）分类不会失效。
+ * 前缀故意宽松——`jev` 这个 token 够独特，过度匹配是更便宜的错；漏匹配则会把一个
+ * 服务不了的条目重新摆到用户面前。
+ *
+ * 它搭在「嵌入模型」这个标记上，因为模型记录只有这一个替代位：`isEmbeddingModel`
+ * 是一个与下游工具共享的布尔值，加第三种取值对它们毫无意义。起作用的是后果——
+ * 那些工具会跳过它，而不是把它当对话模型端出来。
+ *
+ * 网关不公开模型类型（`/zen/v1/models` 只是一串裸 id），所以这张表是手工维护的，
+ * 与 `engine/upstream.js` 的 `RESPONSES_MODELS` 同一个模式。放在这里而不是 engine 里：
+ * engine 是外部代码的拷贝，改动会在下次同步时丢掉。
+ */
+const NOT_CHAT_MODELS = [/^jev/]
+
+/** 这个 id 是不是本通道任何 chat 请求都到不了的模型。 */
+function isNotChatModel(id: string): boolean {
+  return NOT_CHAT_MODELS.some((pattern) => pattern.test(id))
+}
+
 /** 探测可用性快照（持久化在 availability.json）。 */
 type AvailabilitySnapshot = {
   version: number
@@ -496,6 +546,12 @@ class LlmFreeService {
         await Promise.all([this.watchEgress(), this.refreshAvailability()])
       } catch {
         // 探测失败不是启动失败：状态画像留在上一轮的结果上，周期刷新会再试一次。
+      } finally {
+        // 探测有了结论，重写一次配置文件——写盘顺序是按判定排的，下游取「第一个带
+        // token 的模型」时才拿得到探通的那个。冷启动首次没有任何缓存、所有模型都是
+        // unknown，全靠这一次才排得出顺序；否则要等 30 分钟后的周期刷新。
+        // 这是整轮跑完写一次，不是轮内增量写盘。
+        this.syncFreeModelsIntoLlmConfig()
       }
     })()
   }
@@ -598,6 +654,8 @@ class LlmFreeService {
           id,
           name: entry.name as string,
           state: verdict,
+          // 分类表在启动器这一层（见 NOT_CHAT_MODELS），engine 里没有这个字段。
+          isEmbeddingModel: isNotChatModel(id),
           vision: entry.vision === true,
           reasoning: entry.reasoning !== false,
           contextWindow: (entry.contextWindow as number) ?? 131072,
@@ -632,16 +690,20 @@ class LlmFreeService {
       const key = this.config.forward?.key
       if (!key) return
       const port = status.port
-      const freeModels: CustomModel[] = status.models.map((m) => ({
-        id: m.id,
-        name: m.id,
-        provider: 'openai',
-        baseUrl: `http://127.0.0.1:${port}/v1`,
-        apiKey: key,
-        displayName: m.name,
-        isFreeModel: true,
-        isEmbeddingModel: false,
-      }))
+      // 按判定排序：下游取「第一个带 token 的模型」时，拿到的应该是探通的那个。
+      // 排序是稳定的，同档模型保持目录原序；判定全不可用时相对顺序本就无所谓。
+      const freeModels: CustomModel[] = [...status.models]
+        .sort((a, b) => verdictRank(a.state) - verdictRank(b.state))
+        .map((m) => ({
+          id: m.id,
+          name: m.id,
+          provider: 'openai',
+          baseUrl: `http://127.0.0.1:${port}/v1`,
+          apiKey: key,
+          displayName: m.name,
+          isFreeModel: true,
+          isEmbeddingModel: m.isEmbeddingModel,
+        }))
       upsertFreeModelsInLlmConfig(freeModels)
       log.log(`已同步 ${freeModels.length} 个免费模型到 llm-config.json`)
     } catch (error) {

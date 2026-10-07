@@ -114,6 +114,12 @@ export interface FreeModelSummary {
   name: string
   /** 路由状态，取值同 ProbeState */
   state: ProbeState
+  /**
+   * 是否嵌入模型。与 `CustomModel.isEmbeddingModel` 同名同义，写进 llm-config.json
+   * 时直接透传。分类表在 engine/catalog.js 的 `NOT_CHAT_MODELS`——本通道没有任何
+   * 真正的嵌入模型，这个标记实际表达的是「不是对话模型，别当对话模型用」。
+   */
+  isEmbeddingModel: boolean
   /** 是否vision模型 */
   vision: boolean
   /** 是否reasoning模型 */

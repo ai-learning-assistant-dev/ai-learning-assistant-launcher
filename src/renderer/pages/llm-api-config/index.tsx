@@ -10,16 +10,6 @@ import './index.scss';
 const { Option } = Select;
 const { Text } = Typography;
 
-// Zen 免费模型的「嵌入模型 / 对话模型」分类字典：按模型名称匹配。
-// 未命中（字典中未明确说明）则不打该标签。
-// TODO: 如果Zen 提供了Model的类型那么应该自动获取它的类型而不是手工预先填写
-const ZEN_MODEL_ROLE: Record<string, 'embed' | 'chat'> = {
-  'jev-1.13-free': 'chat',
-};
-const zenModelRole = (m: FreeModelSummary): 'embed' | 'chat' | null =>
-  ZEN_MODEL_ROLE[m.id] ?? null;
-
-
 // 提供商信息配置（参考constant.ts中的ProviderInfo）
 const PROVIDER_INFO = {
   openai: {
@@ -465,12 +455,14 @@ const LLMConfig: React.FC = () => {
 
           const renderFree = (m: FreeModelSummary) => {
             const meta = STATE_META[m.state] ?? STATE_META.unknown;
-            const role = zenModelRole(m);
-            const roleTag = role ? (
-              <Tag style={{ marginLeft: 8 }} color={role === 'embed' ? 'blue' : 'green'}>
-                {role === 'embed' ? '嵌入模型' : '对话模型'}
+            // 与下方用户手工模型那一支同一套判据。本通道没有真正的嵌入模型，
+            // 这个标记表达的是「不是对话模型，别当对话模型用」——jev-1.13-free
+            // 是 System One 决策模型，端点在 /zen/v1/systemone。
+            const roleTag = (
+              <Tag style={{ marginLeft: 8 }} color={m.isEmbeddingModel ? 'blue' : 'green'}>
+                {m.isEmbeddingModel ? '嵌入模型' : '对话模型'}
               </Tag>
-            ) : null;
+            );
             // 本地转发代理地址：下游工具把 baseUrl 指向 http://127.0.0.1:<port>/v1
             const fwdPort = zenFree.status?.port ?? zenFree.config?.forward.port;
             const apiBase = fwdPort ? `http://127.0.0.1:${fwdPort}/v1` : '（代理未启用/未运行）';
