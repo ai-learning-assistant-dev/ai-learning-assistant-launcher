@@ -74,7 +74,7 @@ export interface ProbeResult {
   ttftMs?: number
 }
 
-/** 免密免费模型配置块（独立存储，不污染已有的 LLMConfig） */
+/** 第三方模型服务面板配置块 */
 export interface FreeProviderConfig {
   /** 总开关：开启即拉起本地转发代理 */
   enabled: boolean

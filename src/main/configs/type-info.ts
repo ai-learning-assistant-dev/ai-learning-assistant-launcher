@@ -80,16 +80,17 @@ export interface CustomModel {
   isEmbeddingModel?: boolean;
   capabilities?: string[];
   /**
-   * 由 llm-free（Zen 免费模型本地代理）自动注入并维护的标记。
-   * 用于把「免费模型」与「用户手工模型」区分开：UI 不应把它当成用户模型展示/编辑，
-   * LLM 配置保存时也不应把这类条目冲掉，关闭免费代理时需要整体清除。
+   * 由 llm-free 维护的标记。
+   * 用于把「免费模型」与「用户手工模型」区分开：
+   * 1. True时这样的条目不会有编辑和删除Button
+   * 2. 关闭免费代理时这些写入条目需要也被去除，因为本地代理服务已经不可用
    */
   isFreeModel?: boolean;
 }
 
 export interface LLMConfig {
   models: CustomModel[];
-  /** 免密免费模型（Zen free lane）配置块，由 llm-free 模块管理 */
+  /** 第三方提供模型配置块，由 llm-free 模块管理 */
   freeProvider?: FreeProviderConfig;
 }
 

@@ -29,7 +29,6 @@ import {
   type CommandRunner,
 } from '../deepseek-harness-service/dsh-model-sync';
 import type { SyncableModel } from '../deepseek-harness-service/model-sync-plan';
-import type { FreeModelSummary } from '../llm-free/type-info';
 
 // 临时文件操作记录
 interface FileOperation {
@@ -66,7 +65,7 @@ export const llmConfigPath = path.join(
   'llm-config.json',
 );
 
-// 内存中的大模型配置存储
+// 加载大模型配置存储
 let currentLlmConfig: LLMConfig = { ...defaultLlmConfig };
 
 /**
@@ -324,15 +323,11 @@ export default async function init(ipcMain: IpcMain) {
         } else if (action === 'syncAllApiKeys') {
           // 新增处理批量同步所有API key的逻辑
           if (serviceName === 'copilot') {
-            const { llmConfig, freeModels, freeForward } = extraData as {
-              llmConfig?: LLMConfig;
-              freeModels?: FreeModelSummary[];
-              freeForward?: { port: number; key: string };
-            };
+            const { llmConfig } = extraData as { llmConfig?: LLMConfig };
+            // Sync Obsidian Copilot Model API Config
             await syncAllCopilotApiKeys(event, llmConfig);
-            // 同一份大模型配置顺带同步进 DeepSeek Harness（dsh）；
-            // 免密免费模型不在 llmConfig.models 里，需单独带上其目录与本地代理配置。
-            await syncAllApiKeysToDeepseekHarness(event, llmConfig, freeModels, freeForward);
+            // Sync DSH Model API Config
+            await syncAllApiKeysToDeepseekHarness(event, llmConfig);
           }
         }
       }
@@ -341,7 +336,7 @@ export default async function init(ipcMain: IpcMain) {
   await initTrainingConfig(ipcMain);
 }
 
-// 添加保存大模型配置的函数
+// 模型配置持久化写入本地文件
 export function saveLlmConfig(config: LLMConfig) {
   try {
     writeFileSync(llmConfigPath, JSON.stringify(config, null, 2), {
@@ -379,9 +374,9 @@ export function upsertFreeModelsInLlmConfig(freeModels: CustomModel[]): void {
     };
     currentLlmConfig = merged;
     saveLlmConfig(merged);
-    console.log(`已将 ${freeModels.length} 个免费模型写入 llm-config.json`);
+    console.log(`${freeModels.length} 个第三方模型写入 llm-config.json`);
   } catch (error) {
-    console.error('写入免费模型到 llm-config.json 失败:', error);
+    console.error('写入第三方模型到 llm-config.json 失败:', error);
   }
 }
 
@@ -649,33 +644,9 @@ async function syncAllCopilotApiKeys(event: any, llmConfig: LLMConfig) {
  */
 async function syncAllApiKeysToDeepseekHarness(
   event: any,
-  llmConfig?: LLMConfig,
-  freeModels?: FreeModelSummary[],
-  freeForward?: { port: number; key: string },
+  llmConfig?: LLMConfig
 ) {
-  const userModels = llmConfig?.models ?? currentLlmConfig.models ?? [];
-
-  // 免密免费模型不在 llmConfig.models 里：把它映射成 OpenAI 兼容路由并入同步集合，
-  // 让 dsh 也能直接走本地代理（127.0.0.1:<port>/v1）。代理密钥非空，因此不会被
-  // planDshModelSync 当成 keyless 模型整条跳过。上游已明确不可用的模型（unavailable）
-  // 不在本机代理暴露范围内，不同步。
-  const freeSyncedModels: SyncableModel[] = [];
-  if (freeForward && freeModels && freeModels.length > 0) {
-    const baseUrl = `http://127.0.0.1:${freeForward.port}/v1`;
-    for (const m of freeModels) {
-      if (m.state === 'unavailable') continue;
-      freeSyncedModels.push({
-        id: m.id,
-        name: m.id,
-        provider: 'openai',
-        baseUrl,
-        apiKey: freeForward.key,
-        displayName: m.name,
-      });
-    }
-  }
-
-  const models = [...userModels, ...freeSyncedModels];
+  const models: SyncableModel[] = llmConfig?.models ?? currentLlmConfig.models ?? [];
   if (models.length === 0) {
     return;
   }

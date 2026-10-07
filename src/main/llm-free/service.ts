@@ -579,7 +579,7 @@ class LlmFreeService {
    * - 仅当转发代理 enabled 且正在运行（`running`）时才写，避免写入一个端口未就绪的不可用配置；
    * - 只写探测结果为 `available` 的模型（即网关确实接受的「可用模型」），避免把
    *   region-blocked / throttled / unknown 之类的模型写进去误导训练后端选到不可达模型；
-   * - 每条以 `isFreeModel: true` + `free:<id>` 标记，便于关闭时整体清除、也不与用户手工模型冲突；
+   * - 每条以 `isFreeModel: true` 标记，便于关闭时整体清除、也便于同步时按「用户手工 /第三方」区分；
    * - `apiKey` 用转发代理密钥（非空），这样训练后端能把它当作「有密钥可用」的模型选中。
    */
   private syncFreeModelsIntoLlmConfig(): void {
@@ -593,7 +593,7 @@ class LlmFreeService {
       const freeModels: CustomModel[] = status.models
         .filter((m) => m.state === 'available')
         .map((m) => ({
-          id: `free:${m.id}`,
+          id: m.id,
           name: m.id,
           provider: 'openai',
           baseUrl: `http://127.0.0.1:${port}/v1`,

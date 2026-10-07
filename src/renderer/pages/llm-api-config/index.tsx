@@ -277,9 +277,10 @@ const LLMConfig: React.FC = () => {
     });
   };
 
-  // 新增处理批量同步所有API key的函数
+  // 将模型列表的模型项同步到DSH、Obsidian Copilot的配置中
   const handleSyncAllApiKeys = () => {
-    // 确保有配置可以同步：用户手工模型 或 Zen 免费模型 任一存在即可
+    // 边界检查
+    // 至少存在一种模型配置来源，1. 用户手动配置 2. 免费第三方模型服务
     const hasUserModels = (llmConfig?.models?.length ?? 0) > 0;
     const hasFreeModels = (zenFree.status?.models?.length ?? 0) > 0;
     if (!hasUserModels && !hasFreeModels) {
@@ -287,30 +288,7 @@ const LLMConfig: React.FC = () => {
       return;
     }
 
-    // 免费模型免密，不在 llmConfig.models 里；同步进 dsh 时单独带上它的模型目录
-    // 与本地代理配置（baseUrl + 代理密钥），让下游直接走 127.0.0.1 代理。
-    const freeForward =
-      zenFree.config?.enabled ? zenFree.config.forward : undefined;
-    const freeModelsPayload = freeForward
-      ? (zenFree.status?.models ?? [])
-      : [];
-
-    // 发送批量同步请求
-    // 注意：llmConfig.models 里可能已被 llm-free 注入免费模型（isFreeModel 标记），
-    // 这里只把「用户手工模型」传出去；免费模型单独走 freeModelsPayload，避免 dsh/copilot 重复同步。
-    const userOnlyLlmConfig: LLMConfig = {
-      ...llmConfig,
-      models: (llmConfig?.models ?? []).filter(
-        (m) => !(m as CustomModel & { isFreeModel?: boolean }).isFreeModel,
-      ),
-    };
-    action('syncAllApiKeys', 'copilot', {
-      llmConfig: userOnlyLlmConfig,
-      freeModels: freeModelsPayload,
-      freeForward: freeForward
-        ? { port: freeForward.port, key: freeForward.key }
-        : undefined,
-    });
+    action('syncAllApiKeys', 'copilot', { llmConfig });
   };
 
   // 添加模型表单组件
