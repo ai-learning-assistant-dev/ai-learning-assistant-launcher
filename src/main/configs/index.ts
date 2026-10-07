@@ -28,6 +28,8 @@ import {
   syncModelsIntoDshHarness,
   type CommandRunner,
 } from '../deepseek-harness-service/dsh-model-sync';
+import type { SyncableModel } from '../deepseek-harness-service/model-sync-plan';
+import type { FreeModelSummary } from '../llm-free/type-info';
 
 // 临时文件操作记录
 interface FileOperation {
@@ -313,10 +315,15 @@ export default async function init(ipcMain: IpcMain) {
         } else if (action === 'syncAllApiKeys') {
           // 新增处理批量同步所有API key的逻辑
           if (serviceName === 'copilot') {
-            const { llmConfig } = extraData;
+            const { llmConfig, freeModels, freeForward } = extraData as {
+              llmConfig?: LLMConfig;
+              freeModels?: FreeModelSummary[];
+              freeForward?: { port: number; key: string };
+            };
             await syncAllCopilotApiKeys(event, llmConfig);
-            // 同一份大模型配置顺带同步进 DeepSeek Harness（dsh）
-            await syncAllApiKeysToDeepseekHarness(event, llmConfig);
+            // 同一份大模型配置顺带同步进 DeepSeek Harness（dsh）；
+            // 免密免费模型不在 llmConfig.models 里，需单独带上其目录与本地代理配置。
+            await syncAllApiKeysToDeepseekHarness(event, llmConfig, freeModels, freeForward);
           }
         }
       }
@@ -578,9 +585,33 @@ async function syncAllCopilotApiKeys(event: any, llmConfig: LLMConfig) {
  */
 async function syncAllApiKeysToDeepseekHarness(
   event: any,
-  llmConfig?: LLMConfig
+  llmConfig?: LLMConfig,
+  freeModels?: FreeModelSummary[],
+  freeForward?: { port: number; key: string },
 ) {
-  const models = llmConfig?.models ?? currentLlmConfig.models ?? [];
+  const userModels = llmConfig?.models ?? currentLlmConfig.models ?? [];
+
+  // 免密免费模型不在 llmConfig.models 里：把它映射成 OpenAI 兼容路由并入同步集合，
+  // 让 dsh 也能直接走本地代理（127.0.0.1:<port>/v1）。代理密钥非空，因此不会被
+  // planDshModelSync 当成 keyless 模型整条跳过。上游已明确不可用的模型（unavailable）
+  // 不在本机代理暴露范围内，不同步。
+  const freeSyncedModels: SyncableModel[] = [];
+  if (freeForward && freeModels && freeModels.length > 0) {
+    const baseUrl = `http://127.0.0.1:${freeForward.port}/v1`;
+    for (const m of freeModels) {
+      if (m.state === 'unavailable') continue;
+      freeSyncedModels.push({
+        id: m.id,
+        name: m.id,
+        provider: 'openai',
+        baseUrl,
+        apiKey: freeForward.key,
+        displayName: m.name,
+      });
+    }
+  }
+
+  const models = [...userModels, ...freeSyncedModels];
   if (models.length === 0) {
     return;
   }

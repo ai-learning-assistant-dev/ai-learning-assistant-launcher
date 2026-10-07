@@ -12,7 +12,6 @@ import {
   Tag,
   InputNumber,
   Tooltip,
-  List,
 } from 'antd';
 import type {
   FreeProviderConfig,
@@ -21,9 +20,11 @@ import type {
 
 const { Text } = Typography;
 
-/** 探测状态 → 中文标签 + 颜色（键名必须与引擎 probe.js 的 STATE 取值完全一致：
- *  'available' / 'region-blocked' / 'unavailable' / 'throttled' / 'unknown'） */
-const STATE_META: Record<string, { label: string; color: string }> = {
+/** 探测状态，导出供上方模型列表复用，统一免费模型的可用状态表达。
+ * 键名应该与 probe.js 的 STATE 取值一致：
+ *  'available' / 'region-blocked' / 'unavailable' / 'throttled' / 'unknown'）。
+ **/
+export const STATE_META: Record<string, { label: string; color: string }> = {
   available: { label: '可用', color: 'success' },
   throttled: { label: '可用（限流）', color: 'success' },
   // 探测未得出结论的模型，按 DSH 设计仍保留在转发代理中（实际可用），故归为绿色。
@@ -35,26 +36,37 @@ const STATE_META: Record<string, { label: string; color: string }> = {
 const EFFORT_OPTIONS = [
   { value: 'light', label: 'Light（轻量）' },
   { value: 'balanced', label: 'Balanced（均衡）' },
-  { value: 'deep', label: 'Deep（深度推理）' },
+  { value: 'deep', label: 'Deep（深度）' },
 ];
 
 const FINGERPRINT_OPTIONS = [
-  { value: 'auto', label: 'Auto（完整四人组 + 兜底）' },
-  { value: 'minimal', label: 'Minimal（仅填已声明名）' },
+  { value: 'auto', label: 'Auto' },
+  { value: 'minimal', label: 'Minimal' },
 ];
 
 /**
- * 免密免费模型（Zen free lane）配置面板。
+ * 免密免费模型（Zen free lane）配置面板状态与行为声明。
  *
- * 启动器只管理配置并提供一个本地 OpenAI 兼容转发代理；真正的模型调用发生在别处
- * （dsh / Obsidian / LM Studio / 下游工具）。本面板不承载原 DSH 插件的看板 / 公告 /
- * 自更新 / 热重载——那些运维功能已被砍掉，仅保留「状态点 + 转发密钥」这类最小可见信息。
  */
-const ZenFreeProviderConfig: React.FC = () => {
+export interface ZenFreeProviderController {
+  config: FreeProviderConfig | null;
+  status: FreeProviderStatus | null;
+  loading: boolean;
+  // Loading Flag，这是一个修饰交互状态的加载动画是否表现的开关。
+  busy: boolean;
+  /** 配置本地 setter（供面板内输入框做即时乐观更新，无需每次按键都落盘） */
+  setConfig: React.Dispatch<React.SetStateAction<FreeProviderConfig | null>>;
+  refresh: () => void;
+  patch: (p: Partial<FreeProviderConfig>) => void;
+  refreshCatalog: () => void;
+  probe: () => void;
+  regenerateKey: () => void;
+}
+
+export function useZenFreeProvider(): ZenFreeProviderController {
   const [config, setConfig] = useState<FreeProviderConfig | null>(null);
   const [status, setStatus] = useState<FreeProviderStatus | null>(null);
   const [loading, setLoading] = useState(false);
-  // Loading Flag，这是一个修饰交互状态的加载动画是否表现的开关。
   const [busy, setBusy] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -81,13 +93,13 @@ const ZenFreeProviderConfig: React.FC = () => {
     async (p: Partial<FreeProviderConfig>) => {
       setBusy(true);
       try {
-      const next = await window.mainHandle.llmFreeSetConfig(p);
-      setConfig(next);
-      await refresh();
-      // 启停是异步的（转发代理 + catalog/probe 在主进程后台跑），稍后再刷一次拿到最终状态。
-      if ('enabled' in p) {
-        setTimeout(() => void refresh(), 1500);
-      }
+        const next = await window.mainHandle.llmFreeSetConfig(p);
+        setConfig(next);
+        await refresh();
+        // 启停是异步的（转发代理 + catalog/probe 在主进程后台跑），稍后再刷一次拿到最终状态。
+        if ('enabled' in p) {
+          setTimeout(() => void refresh(), 1500);
+        }
       } catch (e) {
         message.error(`保存免密免费模型配置失败: ${(e as Error).message}`);
       } finally {
@@ -137,9 +149,26 @@ const ZenFreeProviderConfig: React.FC = () => {
     }
   }, [refresh]);
 
+  return { config, status, loading, busy, setConfig, refresh, patch, refreshCatalog, probe, regenerateKey };
+}
+
+/**
+ * 免密免费模型（Zen free lane）配置面板。
+ *
+ * - 管理配置并提供一个本地 OpenAI 兼容转发代理；「状态点 + 转发密钥」。
+ * - `embedded` 为 true 时（被放进弹窗）不渲染外层 Card 标题，避免与弹窗标题重复。
+ */
+interface ZenFreeProviderConfigProps {
+  controller: ZenFreeProviderController;
+  embedded?: boolean;
+}
+
+const ZenFreeProviderConfig: React.FC<ZenFreeProviderConfigProps> = ({ controller, embedded = false }) => {
+  const { config, status, loading, busy, setConfig, refresh, patch, refreshCatalog, probe, regenerateKey } = controller;
+
   if (!config) {
     return (
-      <Card title="免密免费模型（Zen free lane）" size="small" loading={loading} style={{ marginBottom: 16 }}>
+      <Card title="免密免费模型（Zen free lane）" size="small" loading={loading}>
         <div />
       </Card>
     );
@@ -150,29 +179,8 @@ const ZenFreeProviderConfig: React.FC = () => {
   const baseUrl = `http://${config.forward.host}:${status?.port || config.forward.port}/v1`;
   const models = status?.models ?? [];
 
-  return (
-    <Card
-      title="免密免费模型（Zen free lane）"
-      size="small"
-      style={{ marginBottom: 16 }}
-      extra={
-        <Space size={4}>
-          <span
-            style={{
-              display: 'inline-block',
-              width: 10,
-              height: 10,
-              borderRadius: '50%',
-              background: dotColor,
-              marginRight: 6,
-            }}
-          />
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            {!config.enabled ? '未启用' : running ? `运行中 · ${status?.port ?? config.forward.port}` : '已启用但未运行'}
-          </Text>
-        </Space>
-      }
-    >
+  const body = (
+    <>
       <Form layout="vertical" size="small">
         <Form.Item label="启用模型本地转发代理">
           <Switch
@@ -278,58 +286,6 @@ const ZenFreeProviderConfig: React.FC = () => {
         </Space>
       </Card>
 
-      <Card
-        type="inner"
-        size="small"
-        title={`可用模型列表（${models.length}）`}
-        style={{ marginBottom: 12 }}
-        extra={
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            状态由「探测可用性」刷新
-          </Text>
-        }
-      >
-        {models.length === 0 ? (
-          <Text type="secondary">
-            暂无模型：请点击下方「刷新模型目录」从 Zen 网关拉取（需网络可达）。
-          </Text>
-        ) : (
-          <List
-            size="small"
-            dataSource={models}
-            style={{ maxHeight: 320, overflow: 'auto' }}
-            renderItem={(m) => {
-              const meta = STATE_META[m.state] ?? STATE_META.unknown;
-              return (
-                <List.Item
-                  actions={[
-                    <Tag key="state" color={meta.color}>{meta.label}</Tag>,
-                  ]}
-                >
-                  <List.Item.Meta
-                    title={
-                      <span>
-                        {m.name}
-                        <Text type="secondary" code style={{ marginLeft: 8, fontSize: 12 }}>
-                          {m.id}
-                        </Text>
-                      </span>
-                    }
-                    description={
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        上下文 {(m.contextWindow / 1024).toFixed(0)}K · 输出上限 {(m.maxOutput / 1024).toFixed(0)}K
-                        {m.vision ? ' · 视觉' : ''}
-                        {m.reasoning ? ' · 推理' : ''}
-                      </Text>
-                    }
-                  />
-                </List.Item>
-              );
-            }}
-          />
-        )}
-      </Card>
-
       <Space wrap>
         <Button onClick={refreshCatalog} loading={busy}>刷新模型目录</Button>
         <Button onClick={probe} loading={busy}>探测可用性</Button>
@@ -338,6 +294,37 @@ const ZenFreeProviderConfig: React.FC = () => {
         </Tooltip>
         <Button onClick={refresh} loading={loading}>刷新状态</Button>
       </Space>
+    </>
+  );
+
+  if (embedded) {
+    return body;
+  }
+
+  return (
+    <Card
+      title="Zen 公开免费模型本地代理配置"
+      size="small"
+      style={{ marginBottom: 16 }}
+      extra={
+        <Space size={4}>
+          <span
+            style={{
+              display: 'inline-block',
+              width: 10,
+              height: 10,
+              borderRadius: '50%',
+              background: dotColor,
+              marginRight: 6,
+            }}
+          />
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {!config.enabled ? '未启用' : running ? `运行中 · ${status?.port ?? config.forward.port}` : '已启用但未运行'}
+          </Text>
+        </Space>
+      }
+    >
+      {body}
     </Card>
   );
 };

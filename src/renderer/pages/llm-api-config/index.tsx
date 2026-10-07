@@ -1,13 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { Button, Form, Input, Select, List, Switch, Card, message, Modal, Space, Typography, Popconfirm, Tag } from 'antd';
+import { Button, Form, Input, Select, List, Switch, Card, message, Modal, Space, Typography, Popconfirm, Tag, Tooltip } from 'antd';
 import { Link } from 'react-router-dom';
 import useConfigs from '../../containers/use-configs';
-import { LLMConfig, CustomModel } from '../../../main/configs/type-info';  
-import ZenFreeProviderConfig from './ZenFreeProviderConfig';
+import { LLMConfig, CustomModel } from '../../../main/configs/type-info';
+import type { FreeModelSummary } from '../../../main/llm-free/type-info';
+import ZenFreeProviderConfig, { useZenFreeProvider, STATE_META } from './ZenFreeProviderConfig';
 import './index.scss';
 
 const { Option } = Select;
 const { Text } = Typography;
+
+// Zen 免费模型的「嵌入模型 / 对话模型」分类字典：按模型名称匹配。
+// 未命中（字典中未明确说明）则不打该标签。
+// TODO: 如果Zen 提供了Model的类型那么应该自动获取它的类型而不是手工预先填写
+const ZEN_MODEL_ROLE: Record<string, 'embed' | 'chat'> = {
+  'jev-1.13-free': 'chat',
+};
+const zenModelRole = (m: FreeModelSummary): 'embed' | 'chat' | null =>
+  ZEN_MODEL_ROLE[m.id] ?? null;
 
 
 // 提供商信息配置（参考constant.ts中的ProviderInfo）
@@ -118,6 +128,10 @@ const LLMConfig: React.FC = () => {
   // 添加本地状态控制测试结果显示
   const [showTestResult, setShowTestResult] = useState(false);
   const [localTestingResult, setLocalTestingResult] = useState<{success: boolean, message: string} | null>(null);
+
+  // 免密免费模型（Zen free lane）：数据/动作集合，与主列表、弹窗配置面板共享同一份状态
+  const zenFree = useZenFreeProvider();
+  const [showZenConfig, setShowZenConfig] = useState(false);
 
   useEffect(() => {
     if (llmConfig) {
@@ -263,14 +277,30 @@ const LLMConfig: React.FC = () => {
 
   // 新增处理批量同步所有API key的函数
   const handleSyncAllApiKeys = () => {
-    // 确保有配置可以同步
-    if (!llmConfig || !llmConfig.models || llmConfig.models.length === 0) {
+    // 确保有配置可以同步：用户手工模型 或 Zen 免费模型 任一存在即可
+    const hasUserModels = (llmConfig?.models?.length ?? 0) > 0;
+    const hasFreeModels = (zenFree.status?.models?.length ?? 0) > 0;
+    if (!hasUserModels && !hasFreeModels) {
       message.warning('请先配置至少一个大语言模型');
       return;
     }
-    
+
+    // 免费模型免密，不在 llmConfig.models 里；同步进 dsh 时单独带上它的模型目录
+    // 与本地代理配置（baseUrl + 代理密钥），让下游直接走 127.0.0.1 代理。
+    const freeForward =
+      zenFree.config?.enabled ? zenFree.config.forward : undefined;
+    const freeModelsPayload = freeForward
+      ? (zenFree.status?.models ?? [])
+      : [];
+
     // 发送批量同步请求
-    action('syncAllApiKeys', 'copilot', { llmConfig });
+    action('syncAllApiKeys', 'copilot', {
+      llmConfig,
+      freeModels: freeModelsPayload,
+      freeForward: freeForward
+        ? { port: freeForward.port, key: freeForward.key }
+        : undefined,
+    });
   };
 
   // 添加模型表单组件
@@ -396,67 +426,180 @@ const LLMConfig: React.FC = () => {
           >
             同步API key（Obsidian copilot / DeepSeek Harness）
           </Button>
+          {/* 免密免费模型（Zen free lane）：以弹窗形式展开配置面板，默认不打断主列表浏览 */}
+          <Button
+            style={{ marginLeft: 16 }}
+            onClick={() => setShowZenConfig(true)}
+            icon={!zenFree.config ? undefined : (
+              <span
+                style={{
+                  display: 'inline-block',
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background: !zenFree.config.enabled
+                    ? '#8c8c8c'
+                    : zenFree.status?.running
+                      ? '#52c41a'
+                      : '#f5222d',
+                }}
+              />
+            )}
+          >
+            Zen 公开免费模型本地代理配置
+          </Button>
         </div>
 
         {/* 显示添加/编辑表单 */}
         {showAddForm && ModelForm}
 
-        {models.length === 0 && !showAddForm ? (
-          <div style={{ textAlign: 'center', padding: '40px' }}>
-            <Text type="secondary">暂无配置的模型，请点击"添加模型"按钮添加</Text>
-          </div>
-        ) : (
-          <List
-            dataSource={models}
-            renderItem={model => (
-              <List.Item
-                actions={[
-                  <Button 
-                    onClick={() => handleEditModel(model)}
-                    size="small"
-                  >
-                    编辑
-                  </Button>,
-                  <Popconfirm
-                    title="确认删除模型"
-                    description={`确定要删除模型 "${model.displayName || model.name}" 吗？`}
-                    onConfirm={() => handleDeleteModel(model.id || '')}
-                    okText="确认"
-                    cancelText="取消"
-                  >
-                    <Button 
-                      danger
-                      size="small"
-                    >
-                      删除
-                    </Button>
-                  </Popconfirm>
-                ]}
-              >
+        {(() => {
+          // 合并：用户手工添加的模型 + Zen 免费模型，统一复用同一个列表表达。
+          // 免费模型为只读展示（仅显示可用状态），不可编辑/删除，由插件自动维护。
+          const freeModels = zenFree.status?.models ?? [];
+          const modelRows: Array<
+            | { kind: 'user'; model: CustomModel }
+            | { kind: 'free'; model: FreeModelSummary }
+          > = [
+            ...models.map((m) => ({ kind: 'user' as const, model: m })),
+            ...freeModels.map((m) => ({ kind: 'free' as const, model: m })),
+          ];
+
+          if (modelRows.length === 0 && !showAddForm) {
+            return (
+              <div style={{ textAlign: 'center', padding: '40px' }}>
+                <Text type="secondary">
+                  暂无配置的模型，请点击"添加模型"按钮添加；启用「Zen 公开免费模型本地代理配置」后，免费模型也会显示在此列表中。
+                </Text>
+              </div>
+            );
+          }
+
+          const renderFree = (m: FreeModelSummary) => {
+            const meta = STATE_META[m.state] ?? STATE_META.unknown;
+            const role = zenModelRole(m);
+            const roleTag = role ? (
+              <Tag style={{ marginLeft: 8 }} color={role === 'embed' ? 'blue' : 'green'}>
+                {role === 'embed' ? '嵌入模型' : '对话模型'}
+              </Tag>
+            ) : null;
+            // 本地转发代理地址：下游工具把 baseUrl 指向 http://127.0.0.1:<port>/v1
+            const fwdPort = zenFree.status?.port ?? zenFree.config?.forward.port;
+            const apiBase = fwdPort ? `http://127.0.0.1:${fwdPort}/v1` : '（代理未启用/未运行）';
+            return (
+              <List.Item actions={[<Tag key="state" color={meta.color}>{meta.label}</Tag>]}>
                 <List.Item.Meta
                   title={
                     <span>
-                      显示名称：{model.displayName || model.name}
-                      <Tag style={{ marginLeft: 8 }} color={model.isEmbeddingModel ? 'blue' : 'green'}>
-                        {model.isEmbeddingModel ? '嵌入模型' : '对话模型'}
-                      </Tag>
+                      显示名称：{m.name}
+                      <Tooltip title="由插件自动添加并配置，不可编辑或删除；可用状态随「Zen 公开免费模型本地代理配置」中的刷新而变化">
+                        <Tag color="purple" style={{ marginLeft: 8 }}>Zen 免费</Tag>
+                      </Tooltip>
+                      {roleTag}
                     </span>
                   }
                   description={
                     <div>
-                      <div>提供商: {model.provider}</div>
-                      <div>模型: {model.name}</div>
-                      {model.baseUrl && <div>API地址: {model.baseUrl}</div>}
+                      <div>提供商: Zen 免费</div>
+                      <div>模型ID: {m.id}</div>
+                      <div>API地址: {apiBase}</div>
+                      <div style={{ marginTop: 2 }}>
+                        上下文 {(m.contextWindow / 1024).toFixed(0)}K · 输出上限 {(m.maxOutput / 1024).toFixed(0)}K
+                        {m.vision ? ' · 视觉' : ''}
+                        {m.reasoning ? ' · 推理' : ''}
+                      </div>
                     </div>
                   }
                 />
               </List.Item>
-            )}
-          />
-        )}
+            );
+          };
 
-        {/* 免密免费模型（Zen free lane）：独立 provider 类型，业务逻辑全部在组件内 */}
-        <ZenFreeProviderConfig />
+          return (
+            <List
+              dataSource={modelRows}
+              renderItem={(row) =>
+                row.kind === 'user' ? (
+                  <List.Item
+                    actions={[
+                      <Button key="edit" onClick={() => handleEditModel(row.model)} size="small">编辑</Button>,
+                      <Popconfirm
+                        key="del"
+                        title="确认删除模型"
+                        description={`确定要删除模型 "${row.model.displayName || row.model.name}" 吗？`}
+                        onConfirm={() => handleDeleteModel(row.model.id || '')}
+                        okText="确认"
+                        cancelText="取消"
+                      >
+                        <Button danger size="small">删除</Button>
+                      </Popconfirm>,
+                    ]}
+                  >
+                    <List.Item.Meta
+                      title={
+                        <span>
+                          显示名称：{row.model.displayName || row.model.name}
+                          <Tag style={{ marginLeft: 8 }} color={row.model.isEmbeddingModel ? 'blue' : 'green'}>
+                            {row.model.isEmbeddingModel ? '嵌入模型' : '对话模型'}
+                          </Tag>
+                        </span>
+                      }
+                      description={
+                        <div>
+                          <div>提供商: {row.model.provider}</div>
+                          <div>模型ID: {row.model.name}</div>
+                          {row.model.baseUrl && <div>API地址: {row.model.baseUrl}</div>}
+                        </div>
+                      }
+                    />
+                  </List.Item>
+                ) : (
+                  renderFree(row.model)
+                )
+              }
+            />
+          );
+        })()}
+
+        {/* 免密免费模型（Zen free lane）：配置面板以弹窗形式展开，不打断主列表浏览 */}
+        <Modal
+          title={
+            <Space size={6}>
+              <span
+                style={{
+                  display: 'inline-block',
+                  width: 10,
+                  height: 10,
+                  borderRadius: '50%',
+                  background: !zenFree.config
+                    ? '#8c8c8c'
+                    : !zenFree.config.enabled
+                      ? '#8c8c8c'
+                      : zenFree.status?.running
+                        ? '#52c41a'
+                        : '#f5222d',
+                }}
+              />
+              <span>Zen 公开免费模型本地代理配置</span>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {!zenFree.config
+                  ? '加载中'
+                  : !zenFree.config.enabled
+                    ? '未启用'
+                    : zenFree.status?.running
+                      ? `运行中 · ${zenFree.status?.port ?? zenFree.config.forward.port}`
+                      : '已启用但未运行'}
+              </Text>
+            </Space>
+          }
+          open={showZenConfig}
+          onCancel={() => setShowZenConfig(false)}
+          footer={null}
+          width={760}
+          styles={{ body: { maxHeight: '72vh', overflowY: 'auto' } }}
+        >
+          <ZenFreeProviderConfig controller={zenFree} embedded />
+        </Modal>
       </Card>
     </div>
   );
