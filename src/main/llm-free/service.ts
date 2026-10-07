@@ -33,8 +33,8 @@ import type {
   ProbeResult,
 } from './type-info'
 import { DEFAULT_FREE_PROVIDER_CONFIG } from './type-info'
-import { getLlmConfig, saveLlmConfig } from '../configs/index'
-import type { LLMConfig } from '../configs/type-info'
+import { getLlmConfig, saveLlmConfig, upsertFreeModelsInLlmConfig, removeFreeModelsFromLlmConfig } from '../configs/index'
+import type { LLMConfig, CustomModel } from '../configs/type-info'
 import { loggerFactory } from '../terminal-log'
 
 const LOG_LABEL = 'LLM-FREE'
@@ -461,6 +461,7 @@ class LlmFreeService {
     await this.syncForward()
     await this.refreshCatalog({ probe: true })
     await this.watchEgress().catch(() => {})
+    this.syncFreeModelsIntoLlmConfig()
     this.scheduleRefresh()
   }
 
@@ -468,6 +469,8 @@ class LlmFreeService {
     if (this.refreshTimer !== null) { clearInterval(this.refreshTimer); this.refreshTimer = null }
     if (this.reprobeTimer !== undefined) { clearTimeout(this.reprobeTimer); this.reprobeTimer = undefined }
     await this.forwardManager.stop()
+    // 转发代理已停：把 llm-config.json 里的免费模型清掉，避免下游用到不可达的端口
+    removeFreeModelsFromLlmConfig()
   }
 
   dispose(): void {
@@ -480,7 +483,9 @@ class LlmFreeService {
   private scheduleRefresh(): void {
     if (this.refreshTimer !== null) return
     this.refreshTimer = setInterval(() => {
-      void this.refreshCatalog({ probe: true }).catch(() => {})
+      void this.refreshCatalog({ probe: true })
+        .then(() => this.syncFreeModelsIntoLlmConfig())
+        .catch(() => {})
       void this.watchEgress().catch(() => {})
     }, 5 * 60 * 1000)
     this.refreshTimer.unref?.()
@@ -499,6 +504,8 @@ class LlmFreeService {
     this.persistConfig()
     void this.syncForward()
     if (this.config.enabled && !prevEnabled) void this.start()
+    // 由开启切到关闭：转发代理随之停止，顺手把 llm-config.json 里的免费模型清掉
+    if (!this.config.enabled && prevEnabled) removeFreeModelsFromLlmConfig()
     return this.getConfig()
   }
 
@@ -512,11 +519,13 @@ class LlmFreeService {
 
   async probe(): Promise<Record<string, unknown>> {
     await this.refreshAvailability()
+    if (this.config.enabled) this.syncFreeModelsIntoLlmConfig()
     return (this.availability.get() as any).results
   }
 
   async refreshCatalogNow(): Promise<{ entries: Array<Record<string, unknown>>; membership: Record<string, string[]> }> {
     const catalog = await this.refreshCatalog({ probe: true })
+    if (this.config.enabled) this.syncFreeModelsIntoLlmConfig()
     return { entries: catalog, membership: this.state().membership }
   }
 
@@ -561,6 +570,42 @@ class LlmFreeService {
       models,
       catalogSyncedAt: config.catalogSyncedAt ?? 0,
       ...(forward.error ? { error: forward.error } : {}),
+    }
+  }
+
+  /**
+   *  可用免费模型写入 llm-config.json。
+   *
+   * - 仅当转发代理 enabled 且正在运行（`running`）时才写，避免写入一个端口未就绪的不可用配置；
+   * - 只写探测结果为 `available` 的模型（即网关确实接受的「可用模型」），避免把
+   *   region-blocked / throttled / unknown 之类的模型写进去误导训练后端选到不可达模型；
+   * - 每条以 `isFreeModel: true` + `free:<id>` 标记，便于关闭时整体清除、也不与用户手工模型冲突；
+   * - `apiKey` 用转发代理密钥（非空），这样训练后端能把它当作「有密钥可用」的模型选中。
+   */
+  private syncFreeModelsIntoLlmConfig(): void {
+    try {
+      if (this.config.enabled !== true) return
+      const status = this.getStatus()
+      if (!status.running) return
+      const key = this.config.forward?.key
+      if (!key) return
+      const port = status.port
+      const freeModels: CustomModel[] = status.models
+        .filter((m) => m.state === 'available')
+        .map((m) => ({
+          id: `free:${m.id}`,
+          name: m.id,
+          provider: 'openai',
+          baseUrl: `http://127.0.0.1:${port}/v1`,
+          apiKey: key,
+          displayName: m.name,
+          isFreeModel: true,
+          isEmbeddingModel: false,
+        }))
+      upsertFreeModelsInLlmConfig(freeModels)
+      log.log(`已同步 ${freeModels.length} 个可用免费模型到 llm-config.json`)
+    } catch (error) {
+      log.warn(`同步免费模型到 llm-config.json 失败：${(error as Error)?.message ?? error}`)
     }
   }
 }

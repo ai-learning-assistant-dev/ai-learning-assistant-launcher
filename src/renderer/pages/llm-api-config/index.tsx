@@ -135,7 +135,9 @@ const LLMConfig: React.FC = () => {
 
   useEffect(() => {
     if (llmConfig) {
-      setModels(llmConfig.models || []);
+      // 过滤掉 llm-free 自动注入的免费模型：它们在下方「Zen 免费」分类里单独展示，
+      // 不应作为「用户手工模型」出现在可编辑/可删除列表里，避免重复展示与误删。
+      setModels((llmConfig.models || []).filter((m) => !(m as CustomModel & { isFreeModel?: boolean }).isFreeModel));
     }
   }, [llmConfig]);
 
@@ -294,8 +296,16 @@ const LLMConfig: React.FC = () => {
       : [];
 
     // 发送批量同步请求
+    // 注意：llmConfig.models 里可能已被 llm-free 注入免费模型（isFreeModel 标记），
+    // 这里只把「用户手工模型」传出去；免费模型单独走 freeModelsPayload，避免 dsh/copilot 重复同步。
+    const userOnlyLlmConfig: LLMConfig = {
+      ...llmConfig,
+      models: (llmConfig?.models ?? []).filter(
+        (m) => !(m as CustomModel & { isFreeModel?: boolean }).isFreeModel,
+      ),
+    };
     action('syncAllApiKeys', 'copilot', {
-      llmConfig,
+      llmConfig: userOnlyLlmConfig,
       freeModels: freeModelsPayload,
       freeForward: freeForward
         ? { port: freeForward.port, key: freeForward.key }

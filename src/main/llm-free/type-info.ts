@@ -141,7 +141,7 @@ export interface FreeProviderStatus {
 }
 
 export const DEFAULT_FREE_PROVIDER_CONFIG: FreeProviderConfig = {
-  enabled: false,
+  enabled: true,
   upstream: 'https://opencode.ai',
   defaultEffort: 'balanced',
   fingerprintMode: 'auto',
