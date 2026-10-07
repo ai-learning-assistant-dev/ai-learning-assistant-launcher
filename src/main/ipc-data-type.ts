@@ -22,6 +22,7 @@ export type Channels =
   | 'textbook-editor-service'
   | 'openclaw-service'
   | 'deepseek-harness-service'
+  | 'llm-free'
   | 'bun-debug';
 
 export enum MESSAGE_TYPE {
@@ -80,6 +81,7 @@ import {
   ServiceName as ServiceNameUrl,
 } from './external-url/type-info';
 import { NativeServiceName } from './native-script/type-info';
+import { ServiceName as ServiceNameLlmFree } from './llm-free/type-info';
 
 export type AllAction =
   | ActionNamePodman
@@ -104,7 +106,8 @@ export type AllService =
   | ServiceNameWorkspace
   | LogServiceName
   | ServiceNameUrl
-  | NativeServiceName;
+  | NativeServiceName
+  | ServiceNameLlmFree;
 
 export class MessageData<
   A extends AllAction = AllAction,

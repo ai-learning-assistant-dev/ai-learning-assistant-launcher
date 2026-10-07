@@ -4,6 +4,7 @@ import {
   ContainerCreateMountOption,
   ContainerCreateNetNSOption,
 } from '../podman-desktop/libpod-dockerode';
+import type { FreeProviderConfig } from '../llm-free/type-info';
 
 export type ServiceName = 'obsidianApp' | 'obsidianVault' | 'container' | 'TTS' | 'PDF' | 'LLM' | 'copilot';
 export type ActionName = 'query' | 'update' | 'selectVoiceFile' | 'initVoiceFileList' | 'deleteVoiceFile' | 'get' | 'set' | 'testConnection' | 'syncAllApiKeys';
@@ -78,10 +79,19 @@ export interface CustomModel {
   displayName?: string;
   isEmbeddingModel?: boolean;
   capabilities?: string[];
+  /**
+   * 由 llm-free 维护的标记。
+   * 用于把「免费模型」与「用户手工模型」区分开：
+   * 1. True时这样的条目不会有编辑和删除Button
+   * 2. 关闭免费代理时这些写入条目需要也被去除，因为本地代理服务已经不可用
+   */
+  isFreeModel?: boolean;
 }
 
 export interface LLMConfig {
   models: CustomModel[];
+  /** 第三方提供模型配置块，由 llm-free 模块管理 */
+  freeProvider?: FreeProviderConfig;
 }
 
 export const queryNativeTrainingConfigHandle = `${channel}queryNativeTrainingConfig`;

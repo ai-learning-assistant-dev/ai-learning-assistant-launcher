@@ -11,7 +11,8 @@
     "make-mini": "cross-env NODE_ENV=production MAKE_MINI=true electron-forge make --target @electron-forge/maker-zip",
     "publish": "cross-env NODE_ENV=production electron-forge publish",
     "lint": "eslint --ext .ts,.tsx .",
-    "lint:fix": "eslint --fix --ext .ts,.tsx ."
+    "lint:fix": "eslint --fix --ext .ts,.tsx .",
+    "test": "ts-node src/main/llm-free/__tests__/eaddr-in-use-race.test.ts"
   },
   "keywords": [],
   "author": {

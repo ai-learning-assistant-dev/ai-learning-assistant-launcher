@@ -105,6 +105,21 @@ import {
   WorkbuddyModelSyncResult,
 } from './deepseek-harness-service/type-info';
 import { openBunDebugHandle } from './bun-debug/type-info';
+import {
+  llmFreeQueryConfigHandle,
+  llmFreeSetConfigHandle,
+  llmFreeStartHandle,
+  llmFreeStopHandle,
+  llmFreeStatusHandle,
+  llmFreeRegenerateKeyHandle,
+  llmFreeProbeHandle,
+  llmFreeCatalogHandle,
+  llmFreeModelsHandle,
+} from './llm-free/type-info';
+import type {
+  FreeProviderConfig,
+  FreeProviderStatus,
+} from './llm-free/type-info';
 
 const electronHandler = {
   // 系统信息
@@ -341,6 +356,39 @@ const mainHandle = {
   },
   openBunDebugHandle: async () => {
     return ipcInvoke<void>(openBunDebugHandle);
+  },
+  // ── 免密免费模型（Zen free lane）──
+  llmFreeQueryConfig: async (): Promise<FreeProviderConfig> => {
+    return ipcInvoke<FreeProviderConfig>(llmFreeQueryConfigHandle);
+  },
+  llmFreeSetConfig: async (
+    patch: Partial<FreeProviderConfig>,
+  ): Promise<FreeProviderConfig> => {
+    return ipcInvoke<FreeProviderConfig>(llmFreeSetConfigHandle, patch);
+  },
+  llmFreeStart: async (): Promise<void> => {
+    return ipcInvoke<void>(llmFreeStartHandle);
+  },
+  llmFreeStop: async (): Promise<void> => {
+    return ipcInvoke<void>(llmFreeStopHandle);
+  },
+  llmFreeStatus: async (): Promise<FreeProviderStatus> => {
+    return ipcInvoke<FreeProviderStatus>(llmFreeStatusHandle);
+  },
+  llmFreeRegenerateKey: async (): Promise<string> => {
+    return ipcInvoke<string>(llmFreeRegenerateKeyHandle);
+  },
+  llmFreeProbe: async (): Promise<Record<string, unknown>> => {
+    return ipcInvoke<Record<string, unknown>>(llmFreeProbeHandle);
+  },
+  llmFreeCatalog: async (): Promise<{
+    entries: Array<Record<string, unknown>>;
+    membership: Record<string, string[]>;
+  }> => {
+    return ipcInvoke(llmFreeCatalogHandle);
+  },
+  llmFreeModels: async (): Promise<Array<Record<string, unknown>>> => {
+    return ipcInvoke<Array<Record<string, unknown>>>(llmFreeModelsHandle);
   },
   // 共建计划相关
   selectJointBuildFolder: async (): Promise<string | null> => {
