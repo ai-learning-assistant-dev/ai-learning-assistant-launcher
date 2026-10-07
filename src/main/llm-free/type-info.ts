@@ -136,6 +136,11 @@ export interface FreeProviderStatus {
   models: FreeModelSummary[]
   /** 上次 catalog 合并时间戳 */
   catalogSyncedAt: number
+  /**
+   * `start()` 是否正在进行的状态。
+   * UI 用它显示等待提示，并在从 true 变为 false 时提示「已完成」。
+   */
+  startingUp: boolean
   /** 最近一次错误（若有） */
   error?: string
 }

@@ -204,6 +204,8 @@ class LlmFreeService {
   private adapter: FreeModelAdapter
 
   private probeRound: Promise<unknown> | null = null
+  /** start() 是否正在进行（catalog 拉取 + 探测 + 写盘），供 UI 提示与完成通知用 */
+  private startingUp = false
   private refreshTimer: ReturnType<typeof setInterval> | null = null
   private reprobeTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -455,14 +457,26 @@ class LlmFreeService {
 
   // ── 生命周期 ───────────────────────────────────────────────────────────────
 
+  /**
+   * 拉起转发代理并把可用模型写入 llm-config.json。
+   *
+   * 探测按上游配额限制只能逐个进行（见 probe.js），一轮十几个模型约需十几秒。
+   * 期间 llm-config.json 还是上一轮的内容，学科培训与「同步 API key」读不到新模型。
+   * `startingUp` 让 UI 能把这段等待显式说出来，并在真正结束时通知它。
+   */
   async start(): Promise<void> {
     if (this.disposed) return
-    setUpstreamBase(this.config.upstream)
-    await this.syncForward()
-    await this.refreshCatalog({ probe: true })
-    await this.watchEgress().catch(() => {})
-    this.syncFreeModelsIntoLlmConfig()
-    this.scheduleRefresh()
+    this.startingUp = true
+    try {
+      setUpstreamBase(this.config.upstream)
+      await this.syncForward()
+      await this.refreshCatalog({ probe: true })
+      await this.watchEgress().catch(() => {})
+      this.syncFreeModelsIntoLlmConfig()
+      this.scheduleRefresh()
+    } finally {
+      this.startingUp = false
+    }
   }
 
   async stop(): Promise<void> {
@@ -569,6 +583,8 @@ class LlmFreeService {
       egress: this.egress,
       models,
       catalogSyncedAt: config.catalogSyncedAt ?? 0,
+      // start() 进行中：UI 据此显示等待提示，并在转为false 时弹「已完成」通知。
+      startingUp: this.startingUp,
       ...(forward.error ? { error: forward.error } : {}),
     }
   }
@@ -577,10 +593,7 @@ class LlmFreeService {
    *  可用免费模型写入 llm-config.json。
    *
    * - 仅当转发代理 enabled 且正在运行（`running`）时才写，避免写入一个端口未就绪的不可用配置；
-   * - 只写探测结果为 `available` 的模型（即网关确实接受的「可用模型」），避免把
-   *   region-blocked / throttled / unknown 之类的模型写进去误导训练后端选到不可达模型；
-   * - 每条以 `isFreeModel: true` 标记，便于关闭时整体清除、也便于同步时按「用户手工 /第三方」区分；
-   * - `apiKey` 用转发代理密钥（非空），这样训练后端能把它当作「有密钥可用」的模型选中。
+   * - 每条以 `isFreeModel: true` 标记，便于关闭时整体清除、也便于同步时按「用户手工 / 第三方」区分；
    */
   private syncFreeModelsIntoLlmConfig(): void {
     try {
@@ -590,20 +603,18 @@ class LlmFreeService {
       const key = this.config.forward?.key
       if (!key) return
       const port = status.port
-      const freeModels: CustomModel[] = status.models
-        .filter((m) => m.state === 'available')
-        .map((m) => ({
-          id: m.id,
-          name: m.id,
-          provider: 'openai',
-          baseUrl: `http://127.0.0.1:${port}/v1`,
-          apiKey: key,
-          displayName: m.name,
-          isFreeModel: true,
-          isEmbeddingModel: false,
-        }))
+      const freeModels: CustomModel[] = status.models.map((m) => ({
+        id: m.id,
+        name: m.id,
+        provider: 'openai',
+        baseUrl: `http://127.0.0.1:${port}/v1`,
+        apiKey: key,
+        displayName: m.name,
+        isFreeModel: true,
+        isEmbeddingModel: false,
+      }))
       upsertFreeModelsInLlmConfig(freeModels)
-      log.log(`已同步 ${freeModels.length} 个可用免费模型到 llm-config.json`)
+      log.log(`已同步 ${freeModels.length} 个免费模型到 llm-config.json`)
     } catch (error) {
       log.warn(`同步免费模型到 llm-config.json 失败：${(error as Error)?.message ?? error}`)
     }

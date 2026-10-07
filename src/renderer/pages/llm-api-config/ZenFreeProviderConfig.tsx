@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Button,
   Form,
@@ -68,6 +68,9 @@ export function useZenFreeProvider(): ZenFreeProviderController {
   const [status, setStatus] = useState<FreeProviderStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
+  const noticeRef = useRef<(() => void) | null>(null);
+  /** 探测完成是否完成的状态：置为非 0 即启动一次轮询，归零表示不再监视。 */
+  const [watchStart, setWatchStart] = useState(0);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -92,6 +95,18 @@ export function useZenFreeProvider(): ZenFreeProviderController {
   const patch = useCallback(
     async (p: Partial<FreeProviderConfig>) => {
       setBusy(true);
+      const startingProxy = p.enabled === true;
+      const notice = startingProxy
+        ? message.info(
+            '正在启动转发代理并探测模型可用性，请稍候。',
+            0,
+          )
+        : null;
+      // 交给轮询在探测真正结束时关闭，失败路径下面会直接关掉。
+      if (startingProxy) {
+        noticeRef.current = notice;
+        setWatchStart((n) => n + 1);
+      }
       try {
         const next = await window.mainHandle.llmFreeSetConfig(p);
         setConfig(next);
@@ -102,12 +117,44 @@ export function useZenFreeProvider(): ZenFreeProviderController {
         }
       } catch (e) {
         message.error(`保存免密免费模型配置失败: ${(e as Error).message}`);
+        notice?.();
+        noticeRef.current = null;
+        setWatchStart(0);
       } finally {
         setBusy(false);
       }
     },
     [refresh],
   );
+
+  /**
+   * 等 `start()` 结束后关掉等待提示，并告知用户最终同步了多少个模型。
+   *
+   */
+  useEffect(() => {
+    if (watchStart === 0) return;
+    const timer = setInterval(() => {
+      void (async () => {
+        try {
+          const st = await window.mainHandle.llmFreeStatus();
+          setStatus(st);
+          if (st.startingUp) return; // 还在探测，继续等
+          clearInterval(timer);
+          noticeRef.current?.(); // 关掉等待提示
+          noticeRef.current = null;
+          setWatchStart(0);
+          const count = st.models.filter((m) => m.state === 'available').length;
+          message.success(
+            `免费模型已就绪：${st.models.length} 个模型已写入配置，其中 ${count} 个本轮探测为可用。`,
+            8,
+          );
+        } catch {
+          // 状态读取失败就继续轮询，等startingUp 自然翻转
+        }
+      })();
+    }, 1500);
+    return () => clearInterval(timer);
+  }, [watchStart]);
 
   const refreshCatalog = useCallback(async () => {
     setBusy(true);
