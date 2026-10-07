@@ -458,11 +458,15 @@ class LlmFreeService {
   // ── 生命周期 ───────────────────────────────────────────────────────────────
 
   /**
-   * 拉起转发代理并把可用模型写入 llm-config.json。
+   * 拉起转发代理，刷新目录，把模型写进 llm-config.json——启动到此结束。
    *
-   * 探测按上游配额限制只能逐个进行（见 probe.js），一轮十几个模型约需十几秒。
-   * 期间 llm-config.json 还是上一轮的内容，学科培训与「同步 API key」读不到新模型。
-   * `startingUp` 让 UI 能把这段等待显式说出来，并在真正结束时通知它。
+   * 启动路径上**不含探测**。探测按上游配额限制只能逐个进行（见 probe.js），一轮
+   * 十几个模型最坏是一分钟量级；把它挡在启动路径上，等于让用户为一件事没必要的
+   * 事等一分钟——写入配置并不需要知道哪个模型可用。所以这里是：
+   * 目录到位 → 按上一轮的可用性快照过滤 → 写盘 → 返回，用户可以立刻开始调用。
+   * 探测交给 {@link runAvailabilitySweep} 在后台跑，结果只刷新状态画像。
+   *
+   * `startingUp` 让 UI 能把「刷新目录 + 写盘」这段等待显式说出来。
    */
   async start(): Promise<void> {
     if (this.disposed) return
@@ -470,13 +474,30 @@ class LlmFreeService {
     try {
       setUpstreamBase(this.config.upstream)
       await this.syncForward()
-      await this.refreshCatalog({ probe: true })
-      await this.watchEgress().catch(() => {})
+      await this.refreshCatalog({ probe: false })
       this.syncFreeModelsIntoLlmConfig()
       this.scheduleRefresh()
+      this.runAvailabilitySweep()
     } finally {
       this.startingUp = false
     }
+  }
+
+  /**
+   * 后台跑一轮探测，外加出口测量。
+   *
+   * 由 `start()` 以不 await 的方式发起，所以探测不再挡在启动路径上。两者并行发起：
+   * 出口一变 `watchEgress` 会调 `refreshAvailability`，与在途的那一轮合并成一轮，
+   * 不会变成「先探一轮、发现出口变了再探一轮」。
+   */
+  private runAvailabilitySweep(): void {
+    void (async () => {
+      try {
+        await Promise.all([this.watchEgress(), this.refreshAvailability()])
+      } catch {
+        // 探测失败不是启动失败：状态画像留在上一轮的结果上，周期刷新会再试一次。
+      }
+    })()
   }
 
   async stop(): Promise<void> {
@@ -494,6 +515,14 @@ class LlmFreeService {
     this.catalogStore.dispose()
   }
 
+  /**
+   * 周期刷新目录 + 重探。
+   *
+   * 间隔取 30 分钟而不是更短：每轮要把整个目录探一遍（一次启动 + 每轮 ≈ 十几个
+   * 请求），而这是池化共享的免费额度，探得越勤越容易把额度花在「确认」上、
+   * 挤掉用户自己的调用。漂移本身是分钟级的事，30 分钟足够跟上；
+   * 真正突发的信号（出口变化、调用撞上区域限制）另有即时触发的路径。
+   */
   private scheduleRefresh(): void {
     if (this.refreshTimer !== null) return
     this.refreshTimer = setInterval(() => {
@@ -501,7 +530,7 @@ class LlmFreeService {
         .then(() => this.syncFreeModelsIntoLlmConfig())
         .catch(() => {})
       void this.watchEgress().catch(() => {})
-    }, 5 * 60 * 1000)
+    }, 30 * 60 * 1000)
     this.refreshTimer.unref?.()
   }
 

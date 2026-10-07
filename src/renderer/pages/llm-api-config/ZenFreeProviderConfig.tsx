@@ -128,8 +128,11 @@ export function useZenFreeProvider(): ZenFreeProviderController {
   );
 
   /**
-   * 等 `start()` 结束后关掉等待提示，并告知用户最终同步了多少个模型。
+   * 等「刷新目录 + 写盘」这一段结束（`startingUp` 翻转）就关掉等待提示。
    *
+   * 探测不在启动路径上——写盘一完成 `start()` 就返回了，所以这里不再声称
+   * 「本轮探测为可用」：那一刻本轮探测还没跑，条目里的状态是上一轮的快照。
+   * 状态会随着后台探测继续通过轮询更新。
    */
   useEffect(() => {
     if (watchStart === 0) return;
@@ -138,14 +141,13 @@ export function useZenFreeProvider(): ZenFreeProviderController {
         try {
           const st = await window.mainHandle.llmFreeStatus();
           setStatus(st);
-          if (st.startingUp) return; // 还在探测，继续等
+          if (st.startingUp) return; // 还在刷新目录/写盘，继续等
           clearInterval(timer);
           noticeRef.current?.(); // 关掉等待提示
           noticeRef.current = null;
           setWatchStart(0);
-          const count = st.models.filter((m) => m.state === 'available').length;
           message.success(
-            `免费模型已就绪：${st.models.length} 个模型已写入配置，其中 ${count} 个本轮探测为可用。`,
+            `免费模型已就绪：${st.models.length} 个模型已写入配置，可用性正在后台探测。`,
             8,
           );
         } catch {
