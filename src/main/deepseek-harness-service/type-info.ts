@@ -24,6 +24,23 @@ export const syncWorkbuddyModelsToDshHandle = `${channel}sync-workbuddy-models`;
 /** 在系统文件管理器里打开 dsh 配置的备份目录 */
 export const openDeepseekHarnessBackupDirHandle = `${channel}open-backup-dir`;
 
+/** 创建「双击直接启动 DeepSeek Harness」的桌面快捷方式 */
+export const createDshShortcutHandle = `${channel}create-shortcut`;
+
+/**
+ * 启动器的命令行参数：带这个参数启动时跳过启动器主界面，只拉起 dsh 并打开它的界面窗口。
+ * 桌面快捷方式就是靠它工作的（`启动器.exe --start-dsh`）。
+ */
+export const DSH_START_ARG = '--start-dsh';
+
+/** 创建桌面快捷方式的结果 */
+export interface DshShortcutResult {
+  /** 快捷方式文件（.lnk）的完整路径 */
+  path: string;
+  /** true = 本次新建；false = 原来已存在，本次是覆盖更新 */
+  created: boolean;
+}
+
 /**
  * DeepSeek Harness Web 界面的候选端口（按探测顺序）。
  * 3080 是 dsh web 的默认端口：机器上已经有 dsh 实例在跑时优先复用它，
