@@ -1215,19 +1215,35 @@ export async function createDshDesktopShortcut(): Promise<DshShortcutResult> {
   }
 
   const target = app.getPath('exe');
-  const shortcutPath = path.join(app.getPath('desktop'), DS_SHORTCUT_NAME);
+  const desktopDir = app.getPath('desktop');
+  const shortcutPath = path.join(desktopDir, DS_SHORTCUT_NAME);
   const created = !existsSync(shortcutPath);
 
-  shell.writeShortcutLink(shortcutPath, 'replace', {
+  // operation 必须用 'create'：官方语义里 'replace' 在快捷方式不存在时会直接失败，
+  // 而 'create' 是「新建，必要时覆盖」，正好覆盖两种情况。
+  // 返回值同样必须检查：失败时它返回 false 而不抛异常，不检查就会出现
+  // 「提示成功但桌面上什么都没有」的假成功。
+  const ok = shell.writeShortcutLink(shortcutPath, 'create', {
     target,
     args: DSH_START_ARG,
     cwd: path.dirname(target),
     description: '直接启动 DeepSeek Harness（不打开启动器主界面）',
   });
 
+  if (!ok || !existsSync(shortcutPath)) {
+    throw new Error(
+      `快捷方式写入失败：${shortcutPath}（桌面目录：${desktopDir}，目标：${target}）`,
+    );
+  }
+
   logger.log(
     `[${DS_LABEL}] 已${created ? '创建' : '更新'}桌面快捷方式：${shortcutPath} → ${target} ${DSH_START_ARG}`,
   );
+
+  // 直接在文件管理器里选中它：桌面路径可能被 OneDrive 等重定向到别处，
+  // 光看「桌面」未必找得到，这一步让位置一目了然。
+  shell.showItemInFolder(shortcutPath);
+
   return { path: shortcutPath, created };
 }
 

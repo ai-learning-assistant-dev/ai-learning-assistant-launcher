@@ -148,9 +148,12 @@ export function useDeepseekHarnessServiceShortcut() {
     setCreatingShortcut(true);
     try {
       const result = await window.mainHandle.createDshShortcutHandle();
-      message.success(
-        `桌面快捷方式已${result.created ? '创建' : '更新'}：${result.path}`,
-      );
+      // 停留久一点并带上完整路径：桌面目录可能被 OneDrive 等重定向，
+      // 「桌面」上看不到时要能靠这个路径定位（同时已在文件管理器里选中它）
+      message.success({
+        content: `桌面快捷方式已${result.created ? '创建' : '更新'}：${result.path}`,
+        duration: 8,
+      });
     } catch (e) {
       showError('创建桌面快捷方式', e);
     } finally {
