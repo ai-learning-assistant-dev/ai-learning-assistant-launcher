@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, copyFileSync, existsSync, readdirSync, unlinkSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
-import { appPath } from '../exec';
+import { appPath, Exec } from '../exec';
 import { dialog, IpcMain, shell } from 'electron';
 import {
   ActionName,
@@ -23,6 +23,11 @@ import { ChatGoogleGenerativeAI  } from "@langchain/google-genai";
 import { ChatOllama } from "@langchain/ollama";
 import { ChatDeepSeek } from '@langchain/deepseek';
 import { initTrainingConfig } from './training-config';
+import {
+  createDshSyncLogger,
+  syncModelsIntoDshHarness,
+  type CommandRunner,
+} from '../deepseek-harness-service/dsh-model-sync';
 
 // 临时文件操作记录
 interface FileOperation {
@@ -61,6 +66,16 @@ export const llmConfigPath = path.join(
 
 // 内存中的大模型配置存储
 let currentLlmConfig: LLMConfig = { ...defaultLlmConfig };
+
+/**
+ * 「同步 API key」按钮用的命令执行器：dsh 配置包在 PATH 里找不到全局 dsh 时，
+ * 会用它执行 `npm root -g` 兜底定位。
+ */
+const dshCommandLine = new Exec();
+const runDshCommand: CommandRunner = async (command, args) => {
+  const { stdout } = await dshCommandLine.exec(command, args);
+  return stdout ?? '';
+};
 
 export default async function init(ipcMain: IpcMain) {
   ipcMain.on(
@@ -300,6 +315,8 @@ export default async function init(ipcMain: IpcMain) {
           if (serviceName === 'copilot') {
             const { llmConfig } = extraData;
             await syncAllCopilotApiKeys(event, llmConfig);
+            // 同一份大模型配置顺带同步进 DeepSeek Harness（dsh）
+            await syncAllApiKeysToDeepseekHarness(event, llmConfig);
           }
         }
       }
@@ -546,6 +563,64 @@ async function syncAllCopilotApiKeys(event: any, llmConfig: LLMConfig) {
       channel, 
       MESSAGE_TYPE.ERROR, 
       `批量同步API key失败: ${error instanceof Error ? error.message : '未知错误'}`
+    );
+  }
+}
+
+/**
+ * 把同一份大模型配置同步进 DeepSeek Harness（dsh）。
+ *
+ * 走 dsh 自带的配置包（`@deepseek-ai/dsh-settings-file` / `dsh-credentials-local`）写
+ * `$DSH_HOME/settings.yaml` 与 `.credentials.yaml`，换算规则与安装时完全一致
+ * （空 / 全空白密钥不写凭据、路由也不声明 apiKeyEnv）。
+ *
+ * 没装 dsh 或配置包不可用时不写任何文件，只提示用户去 dsh 界面里手动配置。
+ */
+async function syncAllApiKeysToDeepseekHarness(
+  event: any,
+  llmConfig?: LLMConfig
+) {
+  const models = llmConfig?.models ?? currentLlmConfig.models ?? [];
+  if (models.length === 0) {
+    return;
+  }
+
+  const logger = createDshSyncLogger();
+  try {
+    const summary = await syncModelsIntoDshHarness({
+      models,
+      run: runDshCommand,
+      logger,
+    });
+
+    if (summary === null) {
+      event.reply(
+        channel,
+        MESSAGE_TYPE.WARNING,
+        'DeepSeek Harness 同步已跳过：未能使用 dsh 自带的配置包（可能尚未安装 dsh）。请在 dsh 界面的「设置 → 模型」里手动添加提供方与 API key',
+      );
+      return;
+    }
+    if (summary.length === 0) {
+      // 没有任何「填了 API key」的模型：不写文件，也不留半条用不了的路由
+      event.reply(
+        channel,
+        MESSAGE_TYPE.WARNING,
+        'DeepSeek Harness 同步已跳过：没有配置 API key 的模型（请先给模型填写 API key 再同步）',
+      );
+      return;
+    }
+    event.reply(
+      channel,
+      MESSAGE_TYPE.INFO,
+      `DeepSeek Harness 同步完成：${summary.join('；')}`,
+    );
+  } catch (error) {
+    console.error('同步 API key 到 DeepSeek Harness 失败:', error);
+    event.reply(
+      channel,
+      MESSAGE_TYPE.WARNING,
+      `DeepSeek Harness 同步失败: ${error instanceof Error ? error.message : '未知错误'}`,
     );
   }
 }

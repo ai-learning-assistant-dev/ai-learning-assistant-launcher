@@ -128,3 +128,6 @@ external-resources/local-ai-service/rts-service/flask.out
 external-resources/local-ai-service/rts-service/service-status.json
 external-resources/local-ai-service/rts-service/repo.zip
 external-resources/local-ai-service/rts-service/rtc-backend/
+
+.npm-cache
+.tmp-*

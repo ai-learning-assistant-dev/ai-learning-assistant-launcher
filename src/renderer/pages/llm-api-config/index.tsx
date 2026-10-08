@@ -375,21 +375,25 @@ const LLMConfig: React.FC = () => {
 
   return (
     <div className="llm-api-config">
-      <Card title="大语言模型API配置" extra={
-        <Link to="/lm-service">
-          <Button>返回</Button>
-        </Link>
-      }>
+      <Card 
+        title={
+          <Link to="/lm-service">
+            <Button>返回</Button>
+          </Link>
+        }
+        extra={"大语言模型API配置"}
+      >
         <div style={{ marginBottom: 16 }}>
           <Button type="primary" onClick={handleAddModel}>
             添加模型
           </Button>
-          {/* 新增批量同步API key按钮 */}
+          {/* 批量同步API key：Obsidian 的 ala-copilot 插件 + DeepSeek Harness */}
           <Button 
             style={{ marginLeft: 16 }}
             onClick={handleSyncAllApiKeys}
+            title="把下面配置的模型和 API key 同步到 Obsidian 的 ala-copilot 插件，以及 DeepSeek Harness（dsh）"
           >
-            同步Obsidian中ala-copilot插件的API key
+            同步API key（Obsidian copilot / DeepSeek Harness）
           </Button>
         </div>
 
