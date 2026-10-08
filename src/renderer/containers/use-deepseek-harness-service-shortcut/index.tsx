@@ -137,6 +137,27 @@ export function useDeepseekHarnessServiceShortcut() {
 
   const [syncingWorkbuddyModels, setSyncingWorkbuddyModels] = useState(false);
 
+  const [creatingShortcut, setCreatingShortcut] = useState(false);
+
+  /**
+   * 创建桌面快捷方式：双击它直接拉起 dsh 界面（快捷方式带 `--start-dsh` 参数），
+   * 不必先打开启动器主界面再点「运行」。
+   * 结果（新建还是覆盖更新、文件位置）直接提示出来，失败原因也一并展示。
+   */
+  const createShortcut = useCallback(async () => {
+    setCreatingShortcut(true);
+    try {
+      const result = await window.mainHandle.createDshShortcutHandle();
+      message.success(
+        `桌面快捷方式已${result.created ? '创建' : '更新'}：${result.path}`,
+      );
+    } catch (e) {
+      showError('创建桌面快捷方式', e);
+    } finally {
+      setCreatingShortcut(false);
+    }
+  }, [showError]);
+
   /**
    * 把 WorkBuddy 的模型配置同步进 dsh。
    * 不改动服务状态，所以不走 runAction（不需要重新查询服务信息）；
@@ -184,5 +205,7 @@ export function useDeepseekHarnessServiceShortcut() {
     syncingWorkbuddyModels,
     syncWorkbuddyModels,
     openBackupDir,
+    creatingShortcut,
+    createShortcut,
   };
 }

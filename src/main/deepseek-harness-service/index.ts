@@ -1,6 +1,7 @@
 import {
   app,
   BrowserWindow,
+  dialog,
   IpcMain,
   clipboard,
   session,
@@ -23,11 +24,14 @@ import {
   copyDeepseekHarnessDashboardUrlHandle,
   syncWorkbuddyModelsToDshHandle,
   openDeepseekHarnessBackupDirHandle,
+  createDshShortcutHandle,
+  DSH_START_ARG,
   deepseekHarnessDashboardUrl,
   DEEPSEEK_HARNESS_NPM_PACKAGE,
   DEEPSEEK_HARNESS_NODE_RANGE,
   DEEPSEEK_HARNESS_PORTS,
   DeepseekHarnessServiceInfo,
+  DshShortcutResult,
   WorkbuddyModelSyncResult,
 } from './type-info';
 import { ipcHandle } from '../ipc-util';
@@ -1109,6 +1113,124 @@ export async function openDeepseekHarnessBackupDir(
   return normalizedTarget;
 }
 
+// ===== 桌面快捷方式入口 =====
+//
+// 桌面快捷方式指向 `启动器.exe --start-dsh`：带这个参数启动时不再创建启动器主界面，
+// 这个行为和点击启动Button启动DSH是一致的。
+
+/** 桌面快捷方式文件名 */
+const DS_SHORTCUT_NAME = 'DeepSeek Harness.lnk';
+
+/** 命令行模式下「所有窗口都关了就退出」的轮询句柄（重复触发时先清掉旧的） */
+let standaloneExitWatcher: ReturnType<typeof setInterval> | null = null;
+
+/** 启动等待期间的小提示页（命令行模式下没有主界面，否则双击后几十秒内毫无反馈） */
+const STARTING_PAGE_HTML =
+  '<html><body style="margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:#1f1f1f;color:#f5f5f5;font-family:system-ui,-apple-system,\'Segoe UI\',sans-serif">' +
+  '<div style="text-align:center">' +
+  '<div style="font-size:14px;margin-bottom:10px">正在启动 DeepSeek Harness…</div>' +
+  '<div style="font-size:12px;opacity:0.65">首次启动需要几十秒，请稍候</div>' +
+  '</div></body></html>';
+
+/** 建一个「正在启动」的小窗口，就绪或失败后由调用方关掉 */
+function createStartingWindow(): BrowserWindow {
+  const win = new BrowserWindow({
+    width: 380,
+    height: 150,
+    center: true,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    autoHideMenuBar: true,
+    title: 'DeepSeek Harness',
+  });
+  win.loadURL(
+    `data:text/html;charset=utf-8,${encodeURIComponent(STARTING_PAGE_HTML)}`,
+  );
+  return win;
+}
+
+/**
+ * 命令行模式入口（`--start-dsh`）：跳过启动器主界面，只拉起 dsh 并打开它的界面窗口。
+ * 关掉 dsh 窗口后本程序随之退出（退出前按现有约定结束本次拉起的 dsh web）。
+ */
+export async function runDeepseekHarnessStandalone(): Promise<void> {
+  logger.log(
+    `[${DS_LABEL}] 命令行模式启动（${DSH_START_ARG}）：跳过启动器主界面，直接拉起 dsh`,
+  );
+  const startingWindow = createStartingWindow();
+
+  try {
+    await runDeepseekHarnessService();
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e);
+    logger.error(`[${DS_LABEL}] 命令行模式启动失败：${detail}`);
+    if (!startingWindow.isDestroyed()) {
+      startingWindow.close();
+    }
+    await dialog.showMessageBox({
+      type: 'error',
+      title: 'DeepSeek Harness',
+      message: '启动 DeepSeek Harness 失败',
+      detail,
+      buttons: ['关闭'],
+    });
+    app.quit();
+    return;
+  }
+
+  if (!startingWindow.isDestroyed()) {
+    startingWindow.close();
+  }
+
+  // 命令行模式下没有主窗口：dsh 界面窗口关掉后就没有任何窗口了，直接退出。
+  // （window-all-closed 在托盘启用时会跳过退出，这里兜底一次）
+  if (standaloneExitWatcher !== null) {
+    clearInterval(standaloneExitWatcher);
+  }
+  standaloneExitWatcher = setInterval(() => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      clearInterval(standaloneExitWatcher as ReturnType<typeof setInterval>);
+      standaloneExitWatcher = null;
+      app.quit();
+    }
+  }, 2000);
+}
+
+/**
+ * 创建「双击直接启动 dsh」的桌面快捷方式：
+ * 目标为启动器自身的 exe，参数为 {@link DSH_START_ARG}。
+ *
+ * 只在打包版里可用：开发模式下 `app.getPath('exe')` 是 electron.exe，
+ * 指过去既不是最终安装路径、也拿不到 dev server，快捷方式毫无意义。
+ */
+export async function createDshDesktopShortcut(): Promise<DshShortcutResult> {
+  if (process.platform !== 'win32') {
+    throw new Error('桌面快捷方式目前只支持 Windows');
+  }
+  if (!app.isPackaged) {
+    throw new Error(
+      '开发模式下的程序路径不是最终安装路径，请用打包后的启动器创建快捷方式',
+    );
+  }
+
+  const target = app.getPath('exe');
+  const shortcutPath = path.join(app.getPath('desktop'), DS_SHORTCUT_NAME);
+  const created = !existsSync(shortcutPath);
+
+  shell.writeShortcutLink(shortcutPath, 'replace', {
+    target,
+    args: DSH_START_ARG,
+    cwd: path.dirname(target),
+    description: '直接启动 DeepSeek Harness（不打开启动器主界面）',
+  });
+
+  logger.log(
+    `[${DS_LABEL}] 已${created ? '创建' : '更新'}桌面快捷方式：${shortcutPath} → ${target} ${DSH_START_ARG}`,
+  );
+  return { path: shortcutPath, created };
+}
+
 export default async function init(ipcMain: IpcMain) {
   // 退出前结束本程序拉起的 dsh web，避免后台残留（端口上的实例也会被一并清掉）
   app.on('before-quit', () => {
@@ -1143,5 +1265,8 @@ export default async function init(ipcMain: IpcMain) {
     ipcMain,
     openDeepseekHarnessBackupDirHandle,
     async (_event, dir?: string) => openDeepseekHarnessBackupDir(dir),
+  );
+  ipcHandle(ipcMain, createDshShortcutHandle, async (_event) =>
+    createDshDesktopShortcut(),
   );
 }
