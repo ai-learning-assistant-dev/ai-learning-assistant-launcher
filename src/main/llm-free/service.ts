@@ -25,6 +25,7 @@ import { mintRequestId, sessionForConversation, setUpstreamBase } from './engine
 import { toToolDefs } from './engine/messages.js'
 import { JsonStore, resolveDataDir } from './store.js'
 import { ForwardManager } from './forward-manager'
+import { BridgeManager } from './bridge/manager.js'
 import type {
   CatalogEntry,
   FreeProviderConfig,
@@ -32,7 +33,7 @@ import type {
   FreeModelSummary,
   ProbeResult,
 } from './type-info'
-import { DEFAULT_FREE_PROVIDER_CONFIG } from './type-info'
+import { DEFAULT_FREE_PROVIDER_CONFIG, DEFAULT_FREE_PROVIDER_BRIDGE } from './type-info'
 import { getLlmConfig, saveLlmConfig, upsertFreeModelsInLlmConfig, removeFreeModelsFromLlmConfig } from '../configs/index'
 import type { LLMConfig, CustomModel } from '../configs/type-info'
 import { loggerFactory } from '../terminal-log'
@@ -248,6 +249,11 @@ class LlmFreeService {
   /** 转发代理运行时状态机（纯逻辑，见 forward-manager.ts）。 */
   private forwardManager: ForwardManager
 
+  /**
+   * 出站桥接：把免费通道的请求改由本机托管的 opencode 运行时发出。
+   */
+  private bridgeManager: BridgeManager
+
   private config: FreeProviderConfig
   private availability: JsonStore
   private catalogStore: JsonStore
@@ -291,6 +297,29 @@ class LlmFreeService {
       forwardKey: () => this.forwardKey(),
       log: (message) => log.warn(message),
     })
+
+    this.bridgeManager = new BridgeManager({
+      dataDir,
+      log: (message: string) => log.log(message),
+      warn: (message: string) => log.warn(message),
+      // 运行时是异步准备好的（首次要下载）。它一就绪就补一次目录与探测：
+      // 桥接未就绪时那次拉取只能落到缓存上，否则要等 30 分钟后的周期刷新。
+      onReady: () => {
+        if (this.config.enabled === true) void this.refreshCatalogNow().catch(() => {})
+      },
+    })
+  }
+
+  /** 出站桥接的期望状态：跟随总开关，缺省字段由默认值补齐。 */
+  private bridgeDesired(): { enabled: boolean; registry: string; version: string; binaryPath: string; port: number } {
+    const bridge = { ...DEFAULT_FREE_PROVIDER_BRIDGE, ...(this.config.bridge ?? {}) }
+    return {
+      enabled: this.config.enabled === true && bridge.enabled !== false,
+      registry: bridge.registry,
+      version: bridge.version,
+      binaryPath: bridge.binaryPath,
+      port: bridge.port,
+    }
   }
 
   // ── 配置读写 ──────────────────────────────────────────────────────────────
@@ -309,6 +338,7 @@ class LlmFreeService {
   private mergeConfig(base: FreeProviderConfig, patch: Partial<FreeProviderConfig>): FreeProviderConfig {
     const next: FreeProviderConfig = { ...base, ...patch }
     if (patch.forward) next.forward = { ...base.forward, ...patch.forward }
+    if (patch.bridge) next.bridge = { ...(base.bridge ?? DEFAULT_FREE_PROVIDER_BRIDGE), ...patch.bridge }
     return next
   }
 
@@ -524,6 +554,9 @@ class LlmFreeService {
     try {
       setUpstreamBase(this.config.upstream)
       await this.syncForward()
+      // 出站通道。桥接端点一建立就把 UPSTREAM_BASE 指过去，覆盖上面那行直连——
+      // 免费档不认裸 HTTP 客户端，直连只剩"代码仍在、但不再被选中"这个兜底含义。
+      await this.bridgeManager.sync(this.bridgeDesired())
       await this.refreshCatalog({ probe: false })
       this.syncFreeModelsIntoLlmConfig()
       this.scheduleRefresh()
@@ -560,6 +593,7 @@ class LlmFreeService {
     if (this.refreshTimer !== null) { clearInterval(this.refreshTimer); this.refreshTimer = null }
     if (this.reprobeTimer !== undefined) { clearTimeout(this.reprobeTimer); this.reprobeTimer = undefined }
     await this.forwardManager.stop()
+    await this.bridgeManager.stop()
     // 转发代理已停：把 llm-config.json 里的免费模型清掉，避免下游用到不可达的端口
     removeFreeModelsFromLlmConfig()
   }
@@ -602,6 +636,7 @@ class LlmFreeService {
     setUpstreamBase(this.config.upstream)
     this.persistConfig()
     void this.syncForward()
+    void this.bridgeManager.sync(this.bridgeDesired())
     if (this.config.enabled && !prevEnabled) void this.start()
     // 由开启切到关闭：转发代理随之停止，顺手把 llm-config.json 里的免费模型清掉
     if (!this.config.enabled && prevEnabled) removeFreeModelsFromLlmConfig()
@@ -673,6 +708,7 @@ class LlmFreeService {
       // start() 进行中：UI 据此显示等待提示，并在转为false 时弹「已完成」通知。
       startingUp: this.startingUp,
       ...(forward.error ? { error: forward.error } : {}),
+      bridge: this.bridgeManager.getStatusFragment(),
     }
   }
 

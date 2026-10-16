@@ -74,6 +74,52 @@ export interface ProbeResult {
   ttftMs?: number
 }
 
+/** 桥接运行时的状态机取值（对应 bridge/manager.js 的 BRIDGE_STATE）。 */
+export type BridgeState = 'off' | 'downloading' | 'starting' | 'running' | 'error'
+
+/**
+ * 免费通道的出站方式。
+ *
+ * 免费档的门禁判的是「请求方是不是 OpenCode 客户端」，不是凭证，所以裸 HTTP
+ * 一律 403。出站因此改由本机托管的 opencode headless 运行时代劳：桥接把自己的
+ * 本地端点冒充成上游，引擎把请求发给它，它再翻译成运行时自己的会话 API。
+ */
+export interface FreeProviderBridgeConfig {
+  /** 与总开关一起决定是否启用；留作单独特例排查用 */
+  enabled: boolean
+  /** 二进制来源：npm registry 或镜像站 */
+  registry: string
+  /** 固定版本；空表示取 latest */
+  version: string
+  /** 手工指定的二进制路径（非空且存在则优先使用） */
+  binaryPath: string
+  /** 运行时监听端口；0 表示自动挑选 */
+  port: number
+}
+
+/** 桥接的运行时状态（供设置面板显示一行）。 */
+export interface FreeProviderBridgeStatus {
+  state: BridgeState
+  /** 下载进度 0-100 */
+  percent: number
+  /** 已安装的运行时版本，未知时为空串 */
+  version: string
+  /** 实际使用的二进制路径 */
+  binaryPath: string
+  /** 桥接本地端点端口 */
+  serverPort: number
+  /** 出错或准备中的可读说明 */
+  message: string
+}
+
+export const DEFAULT_FREE_PROVIDER_BRIDGE: FreeProviderBridgeConfig = {
+  enabled: true,
+  registry: 'https://registry.npmjs.org',
+  version: '',
+  binaryPath: '',
+  port: 0,
+}
+
 /** 第三方模型服务面板配置块 */
 export interface FreeProviderConfig {
   /** 总开关：开启即拉起本地转发代理 */
@@ -99,6 +145,10 @@ export interface FreeProviderConfig {
     /** 已签发的访问密钥（空则首次启动时生成并持久化） */
     key: string
   }
+  /**
+   * 出站通道。可选字段：老配置里没有它，缺省即用 DEFAULT_FREE_PROVIDER_BRIDGE。
+   */
+  bridge?: FreeProviderBridgeConfig
   /**
    * 上次 catalog 合并成功的时间戳。
    *
@@ -149,6 +199,8 @@ export interface FreeProviderStatus {
   startingUp: boolean
   /** 最近一次错误（若有） */
   error?: string
+  /** 出站桥接的状态（可选：旧状态对象里没有它） */
+  bridge?: FreeProviderBridgeStatus
 }
 
 export const DEFAULT_FREE_PROVIDER_CONFIG: FreeProviderConfig = {
@@ -165,5 +217,6 @@ export const DEFAULT_FREE_PROVIDER_CONFIG: FreeProviderConfig = {
     port: 18765,
     key: '',
   },
+  bridge: DEFAULT_FREE_PROVIDER_BRIDGE,
   catalogSyncedAt: 0,
 }
