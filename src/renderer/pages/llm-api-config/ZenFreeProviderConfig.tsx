@@ -285,10 +285,10 @@ const ZenFreeProviderConfig: React.FC<ZenFreeProviderConfigProps> = ({ controlle
           />
         </Form.Item>
 
-        <Form.Item label="网关基地址" tooltip="Zen 网关地址，可用镜像覆盖；鉴权由启动器内部处理">
+        <Form.Item label="网关基地址" tooltip="出口固定在本机桥接上，此项不可修改。">
           <Input
             value={config.upstream}
-            disabled={busy}
+            disabled
             onChange={(e) => setConfig({ ...config, upstream: e.target.value })}
             onBlur={() => void patch({ upstream: config.upstream })}
           />

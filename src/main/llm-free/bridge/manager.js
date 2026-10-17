@@ -13,12 +13,17 @@
  * `http://127.0.0.1:<port>` reroutes the entire lane — request bodies, SSE
  * parsing, tool fingerprinting, the forward proxy — without editing any of it.
  *
+ * This class deliberately does *not* move that base. Two writers meant the
+ * decision could be lost: the settings path would write the direct gateway
+ * while the bridge was still up, and the lane silently fell back to a client
+ * the free tier refuses. Subscription to the endpoint is announced once, through
+ * `onBound`, and the owner decides what `UPSTREAM_BASE` should be.
+ *
  * @module src/main/llm-free/bridge/manager.js
  */
 
 import path from 'node:path'
 
-import { setUpstreamBase } from '../engine/upstream.js'
 import { findBinary, installBinary, installRoot } from './binary.js'
 import { startServer } from './runtime.js'
 import { startBridgeServer } from './server.js'
@@ -58,14 +63,18 @@ export class BridgeManager {
    * @param {string} options.dataDir - the launcher's data directory
    * @param {(message: string) => void} [options.log]
    * @param {(message: string) => void} [options.warn]
+   * @param {(url: string) => void} [options.onBound] - fired when the local
+   *   endpoint starts listening. The caller repoints the lane here; this class
+   *   never writes `UPSTREAM_BASE` itself, so there is one owner of that decision.
    * @param {() => void} [options.onReady] - fired on each transition into
    *   `running`, so the caller can refresh the catalog that failed while the
    *   runtime was still coming up
    */
-  constructor({ dataDir, log = () => {}, warn = () => {}, onReady = () => {} }) {
+  constructor({ dataDir, log = () => {}, warn = () => {}, onBound = () => {}, onReady = () => {} }) {
     this.dataDir = dataDir
     this.log = log
     this.warn = warn
+    this.onBound = onBound
     this.onReady = onReady
 
     this.server = null
@@ -124,8 +133,10 @@ export class BridgeManager {
         log: message => this.log(`bridge: ${message}`),
       })
       this.serverPort = this.server.port
-      setUpstreamBase(this.server.url)
-      this.log(`free lane repointed at ${this.server.url}`)
+      // Announce, don't decide: `this.server` is already assigned, so the owner
+      // sees a listening endpoint when it runs.
+      this.onBound(this.server.url)
+      this.log(`free lane endpoint listening at ${this.server.url}`)
     }
 
     if (this.state === BRIDGE_STATE.running || this.preparePromise !== null) {
@@ -219,6 +230,14 @@ export class BridgeManager {
       errorType: 'BridgeNotReady',
       message: `免密免费模型桥接正在准备（${detail}）${this.message === '' ? '' : ` — ${this.message}`}`,
     }
+  }
+
+  /**
+   * The lane-facing endpoint this class is holding open, or `''` when there is
+   * none. Read by the owner to decide where `UPSTREAM_BASE` should point.
+   */
+  listeningUrl() {
+    return this.server === null ? '' : this.server.url
   }
 
   serverUrl() {
