@@ -33,6 +33,21 @@ export const STATE_META: Record<string, { label: string; color: string }> = {
   unavailable: { label: '不可用', color: 'error' },
 };
 
+/**
+ * 出站桥接状态的表现形式（对应主进程 bridge/manager.js 的 BRIDGE_STATE）。
+ *
+ * 免费档不认裸 HTTP 客户端，出站请求实际由本机托管的 opencode 运行时发出；
+ * 首次启用要把运行时下到本地，所以这里必须让用户看见「在下载」，否则那段时间
+ * 看起来就像卡住了。
+ */
+const BRIDGE_META: Record<string, { label: string; color: string }> = {
+  off: { label: '未启用', color: 'default' },
+  downloading: { label: '正在下载运行时', color: 'processing' },
+  starting: { label: '正在启动运行时', color: 'processing' },
+  running: { label: '运行中', color: 'success' },
+  error: { label: '不可用', color: 'error' },
+};
+
 const EFFORT_OPTIONS = [
   { value: 'light', label: 'Light（轻量）' },
   { value: 'balanced', label: 'Balanced（均衡）' },
@@ -158,6 +173,26 @@ export function useZenFreeProvider(): ZenFreeProviderController {
     return () => clearInterval(timer);
   }, [watchStart]);
 
+  /**
+   * 桥接准备期间轮询进度。
+   *
+   * 只在「下载中 / 启动中」这两态之间轮询，且只刷新状态（不动配置），
+   * 免得每秒一次把面板上的按钮也带进 loading。离开这两态即自动停止。
+   */
+  const bridgeState = status?.bridge?.state;
+  useEffect(() => {
+    if (bridgeState !== 'downloading' && bridgeState !== 'starting') return;
+    const timer = setInterval(() => {
+      void window.mainHandle
+        .llmFreeStatus()
+        .then(setStatus)
+        .catch(() => {
+          // 读不到就继续等，下一拍再试
+        });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [bridgeState]);
+
   const refreshCatalog = useCallback(async () => {
     setBusy(true);
     try {
@@ -228,6 +263,17 @@ const ZenFreeProviderConfig: React.FC<ZenFreeProviderConfigProps> = ({ controlle
   const baseUrl = `http://${config.forward.host}:${status?.port || config.forward.port}/v1`;
   const models = status?.models ?? [];
 
+  const bridge = status?.bridge;
+  const bridgeMeta = BRIDGE_META[bridge?.state ?? 'off'] ?? BRIDGE_META.off;
+  const bridgeDetail =
+    bridge === undefined
+      ? ''
+      : bridge.state === 'downloading'
+        ? ` ${bridge.percent}%`
+        : bridge.state === 'running' && bridge.version
+          ? ` · opencode ${bridge.version}`
+          : '';
+
   const body = (
     <>
       <Form layout="vertical" size="small">
@@ -239,10 +285,10 @@ const ZenFreeProviderConfig: React.FC<ZenFreeProviderConfigProps> = ({ controlle
           />
         </Form.Item>
 
-        <Form.Item label="网关基地址" tooltip="Zen 网关地址，可用镜像覆盖；鉴权由启动器内部处理">
+        <Form.Item label="网关基地址" tooltip="出口固定在本机桥接上，此项不可修改。">
           <Input
             value={config.upstream}
-            disabled={busy}
+            disabled
             onChange={(e) => setConfig({ ...config, upstream: e.target.value })}
             onBlur={() => void patch({ upstream: config.upstream })}
           />
@@ -331,6 +377,16 @@ const ZenFreeProviderConfig: React.FC<ZenFreeProviderConfigProps> = ({ controlle
             {status?.egress ? `${status.egress.ip}${status.egress.country ? ` (${status.egress.country})` : ''}` : '未知'}
           </Text>
           <Text>可用模型数：{models.length}</Text>
+          <Text>
+            出站通道：
+            <Tag color={bridgeMeta.color}>{bridgeMeta.label}{bridgeDetail}</Tag>
+            <Tooltip title="免费档只接受 OpenCode 客户端的请求，因此出站由本机托管的 opencode 运行时发出。首次启用会下载约 170MB 到本地数据目录。">
+              <Text type="secondary" style={{ fontSize: 12 }}>（由 opencode 运行时发出）</Text>
+            </Tooltip>
+          </Text>
+          {bridge?.state === 'error' && bridge.message !== '' && (
+            <Text type="danger">桥接不可用：{bridge.message}</Text>
+          )}
           {status?.error && <Text type="danger">错误：{status.error}</Text>}
         </Space>
       </Card>

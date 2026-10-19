@@ -25,6 +25,7 @@ import { mintRequestId, sessionForConversation, setUpstreamBase } from './engine
 import { toToolDefs } from './engine/messages.js'
 import { JsonStore, resolveDataDir } from './store.js'
 import { ForwardManager } from './forward-manager'
+import { BridgeManager } from './bridge/manager.js'
 import type {
   CatalogEntry,
   FreeProviderConfig,
@@ -32,7 +33,7 @@ import type {
   FreeModelSummary,
   ProbeResult,
 } from './type-info'
-import { DEFAULT_FREE_PROVIDER_CONFIG } from './type-info'
+import { DEFAULT_FREE_PROVIDER_CONFIG, DEFAULT_FREE_PROVIDER_BRIDGE } from './type-info'
 import { getLlmConfig, saveLlmConfig, upsertFreeModelsInLlmConfig, removeFreeModelsFromLlmConfig } from '../configs/index'
 import type { LLMConfig, CustomModel } from '../configs/type-info'
 import { loggerFactory } from '../terminal-log'
@@ -63,6 +64,15 @@ const VERDICT_RANK: Record<string, number> = {
   [STATE.unknown]: 2,
   [STATE.regionBlocked]: 3,
 }
+
+/**
+ * 桥接不想启用、或本地端点还没起来时，出口指向的地址。
+ *
+ * 指向一个没有任何程序监听的本地端口，而不是配置里的网关地址：请求会在几毫秒内
+ * 连接失败，而不是跑出公网去撞一个 403。后者会让人以为是免费额度或权限问题，
+ * 而真实原因是本机桥接没准备好——错误指向错误的方向，比没有错误更糟。
+ */
+const BRIDGE_PENDING_BASE = 'http://127.0.0.1:1'
 
 /** 没有判定记录的模型按 `unknown` 处理。 */
 function verdictRank(state: string): number {
@@ -248,6 +258,11 @@ class LlmFreeService {
   /** 转发代理运行时状态机（纯逻辑，见 forward-manager.ts）。 */
   private forwardManager: ForwardManager
 
+  /**
+   * 出站桥接：把免费通道的请求改由本机托管的 opencode 运行时发出。
+   */
+  private bridgeManager: BridgeManager
+
   private config: FreeProviderConfig
   private availability: JsonStore
   private catalogStore: JsonStore
@@ -258,13 +273,14 @@ class LlmFreeService {
   private startingUp = false
   private refreshTimer: ReturnType<typeof setInterval> | null = null
   private reprobeTimer: ReturnType<typeof setTimeout> | undefined
+  /** 当前生效的出站基址（applyUpstream 的最后一次判决），只用于去重与日志。 */
+  private laneBase = ''
 
   constructor() {
     const dataDir = resolveDataDir(app.getPath('userData'))
     fs.mkdirSync(dataDir, { recursive: true })
 
     this.config = this.loadConfig()
-    setUpstreamBase(this.config.upstream)
 
     this.availability = new JsonStore(path.join(dataDir, 'availability.json'), {
       version: 1, at: 0, egress: null, results: {},
@@ -291,6 +307,60 @@ class LlmFreeService {
       forwardKey: () => this.forwardKey(),
       log: (message) => log.warn(message),
     })
+
+    this.bridgeManager = new BridgeManager({
+      dataDir,
+      log: (message: string) => log.log(message),
+      warn: (message: string) => log.warn(message),
+      // 端点一起来就重新裁决出口。管理器不写 UPSTREAM_BASE，只通告"我有了一个
+      // 可用的本地端点"，归属由 {@link applyUpstream} 一处决定。
+      onBound: () => this.applyUpstream(),
+      // 运行时是异步准备好的（首次要下载）。它一就绪就补一次目录与探测：
+      // 桥接未就绪时那次拉取只能落到缓存上，否则要等 30 分钟后的周期刷新。
+      onReady: () => {
+        if (this.config.enabled === true) void this.refreshCatalogNow().catch(() => {})
+      },
+    })
+
+    // 初始出口也走同一个裁决点（此刻还没有桥接端点 → 空端口，绝不会指向公网）。
+    this.applyUpstream()
+  }
+
+  /** 出站桥接的期望状态：跟随总开关，缺省字段由默认值补齐。 */
+  private bridgeDesired(): { enabled: boolean; registry: string; version: string; binaryPath: string; port: number } {
+    const bridge = { ...DEFAULT_FREE_PROVIDER_BRIDGE, ...(this.config.bridge ?? {}) }
+    return {
+      enabled: this.config.enabled === true && bridge.enabled !== false,
+      registry: bridge.registry,
+      version: bridge.version,
+      binaryPath: bridge.binaryPath,
+      port: bridge.port,
+    }
+  }
+
+  /**
+   * 免费通道出口归属的**唯一**决策点。
+   *
+   * 整条通道只有一个可变量：`engine/upstream.js` 的 `UPSTREAM_BASE`。谁能写它，
+   * 谁就决定请求发往哪儿。
+   *
+   * 规则只有一条：**出口永远在回环上**。桥接端点就绪就用它，没就绪就用
+   * {@link BRIDGE_PENDING_BASE} 这个空端口，请求当场失败、等桥接起来。
+   *
+   * 这里**没有**"直连上游"这个分支，是刻意的：免费档只放行 opencode 运行时发出的
+   * 请求，转发代理一旦越过桥接直接打公网，结果必然是 403，而且错误会指向额度或
+   * 权限这些错误的方向。`config.upstream` 因此不再参与运行时决策。
+   *
+   * 之前的写法还允许"桥接没就绪就退回 config.upstream"，面板上改一改配置也能把出口
+   * 拨回直连——那是两条绕过桥接的路，都堵掉了。现在只有这里写。
+   */
+  private applyUpstream(): void {
+    const next = this.bridgeManager.listeningUrl() || BRIDGE_PENDING_BASE
+    if (next === this.laneBase) return
+    this.laneBase = next
+    setUpstreamBase(next)
+    // 改道是排查 403 的第一条线索，所以每次真的换了目标都留一行。
+    log.log(`free lane upstream -> ${next}${next === BRIDGE_PENDING_BASE ? '（桥接端点尚未就绪）' : ''}`)
   }
 
   // ── 配置读写 ──────────────────────────────────────────────────────────────
@@ -309,6 +379,7 @@ class LlmFreeService {
   private mergeConfig(base: FreeProviderConfig, patch: Partial<FreeProviderConfig>): FreeProviderConfig {
     const next: FreeProviderConfig = { ...base, ...patch }
     if (patch.forward) next.forward = { ...base.forward, ...patch.forward }
+    if (patch.bridge) next.bridge = { ...(base.bridge ?? DEFAULT_FREE_PROVIDER_BRIDGE), ...patch.bridge }
     return next
   }
 
@@ -522,8 +593,13 @@ class LlmFreeService {
     if (this.disposed) return
     this.startingUp = true
     try {
-      setUpstreamBase(this.config.upstream)
+      // 出口只在 applyUpstream 里裁决：此刻桥接还没有端点，所以先落在空端口上
+      // （请求当场失败，不会跑去公网）；端点建好后 onBound 会立刻改写成桥接地址。
+      this.applyUpstream()
       await this.syncForward()
+      await this.bridgeManager.sync(this.bridgeDesired())
+      // 补一次裁决：桥接启用时端点已在监听，这里把出口定在桥接上（幂等）。
+      this.applyUpstream()
       await this.refreshCatalog({ probe: false })
       this.syncFreeModelsIntoLlmConfig()
       this.scheduleRefresh()
@@ -560,6 +636,9 @@ class LlmFreeService {
     if (this.refreshTimer !== null) { clearInterval(this.refreshTimer); this.refreshTimer = null }
     if (this.reprobeTimer !== undefined) { clearTimeout(this.reprobeTimer); this.reprobeTimer = undefined }
     await this.forwardManager.stop()
+    await this.bridgeManager.stop()
+    // 端点没了，出口随之落回空端口（通道已停，这次改道只是让状态自洽）。
+    this.applyUpstream()
     // 转发代理已停：把 llm-config.json 里的免费模型清掉，避免下游用到不可达的端口
     removeFreeModelsFromLlmConfig()
   }
@@ -599,9 +678,15 @@ class LlmFreeService {
   setConfig(patch: Partial<FreeProviderConfig>): FreeProviderConfig {
     const prevEnabled = this.config.enabled
     this.config = this.mergeConfig(this.config, patch)
-    setUpstreamBase(this.config.upstream)
+    // 出口归属不在这里写：面板上任何一个控件（含两个输入框仅仅失焦）都会走到这儿，
+    // 无条件写 config.upstream 等于把在跑的桥接拨回直连——请求随即 403，而状态仍
+    // 显示 running。裁决只归 applyUpstream。
+    this.applyUpstream()
     this.persistConfig()
     void this.syncForward()
+    void this.bridgeManager.sync(this.bridgeDesired())
+      .then(() => this.applyUpstream())
+      .catch(() => {})
     if (this.config.enabled && !prevEnabled) void this.start()
     // 由开启切到关闭：转发代理随之停止，顺手把 llm-config.json 里的免费模型清掉
     if (!this.config.enabled && prevEnabled) removeFreeModelsFromLlmConfig()
@@ -673,6 +758,7 @@ class LlmFreeService {
       // start() 进行中：UI 据此显示等待提示，并在转为false 时弹「已完成」通知。
       startingUp: this.startingUp,
       ...(forward.error ? { error: forward.error } : {}),
+      bridge: this.bridgeManager.getStatusFragment(),
     }
   }
 
