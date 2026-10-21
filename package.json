@@ -86,6 +86,7 @@
     "xterm-theme": "^1.1.0"
   },
   "dependencies": {
+    "@deepseek-ai/dsh-app-boot": "0.1.5-rc.3",
     "@langchain/anthropic": "^0.3.30",
     "@langchain/deepseek": "^0.1.0",
     "@langchain/google-genai": "^0.2.18",
