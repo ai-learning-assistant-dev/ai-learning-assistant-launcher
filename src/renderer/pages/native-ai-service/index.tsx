@@ -200,6 +200,11 @@ export default function NativeAiService() {
     }
   };
 
+  /** 创建桌面快捷方式：以后双击它就能直接进 dsh，不用先开启动器 */
+  const createDshShortcut = async () => {
+    await deepseekHarnessShortcut.createShortcut();
+  };
+
   /** 真正执行同步：结果用弹窗展示（写入摘要 + 备份位置），失败给出可读原因 */
   const runSyncWorkbuddyModels = async () => {
     try {
@@ -752,6 +757,17 @@ export default function NativeAiService() {
                 onClick={confirmSyncWorkbuddyModels}
               >
                 <span className="button-text">同步 WorkBuddy 模型</span>
+              </Button>
+            ),
+            deepseekHarnessShortcut.state === 'installed' && (
+              <Button
+                key="create-dsh-shortcut"
+                title="在桌面创建快捷方式，双击直接启动 DeepSeek Harness（不打开启动器主界面）"
+                loading={deepseekHarnessShortcut.creatingShortcut}
+                disabled={deepseekHarnessShortcut.refreshing}
+                onClick={createDshShortcut}
+              >
+                <span className="button-text">创建桌面快捷方式</span>
               </Button>
             ),
           ].filter((item) => item)}

@@ -18,7 +18,8 @@ import initRTSService from './local-service/rts-service';
 import initObsidianVoiceService from './local-service/obsidian-voice-service';
 import initTextbookEditorService from './textbook-editor-service'
 import initOpenclawService from './openclaw-service'
-import initDeepseekHarnessService from './deepseek-harness-service'
+import initDeepseekHarnessService, { runDeepseekHarnessStandalone } from './deepseek-harness-service'
+import { DSH_START_ARG } from './deepseek-harness-service/type-info'
 import initLlmFree from './llm-free'
 import initBunDebug from './bun-debug'
 import path from 'node:path';
@@ -38,6 +39,14 @@ initLogger();
 // 防止应用多开 - 单实例锁
 const gotTheLock = app.requestSingleInstanceLock();
 
+/**
+ * 命令行里带了 `--start-dsh`：这次启动只为拉起 DeepSeek Harness，
+ * 不打开启动器主界面（桌面快捷方式用的就是这个参数）。
+ */
+function shouldStartDshOnly(argv: string[]): boolean {
+  return argv.includes(DSH_START_ARG);
+}
+
 if (!gotTheLock) {
   // 如果已经有实例在运行，则退出当前进程
   console.log('应用已在运行中，退出当前实例');
@@ -45,6 +54,10 @@ if (!gotTheLock) {
 } else {
   // 这是第一个实例，继续初始化
   app.on('second-instance', (event, commandLine, workingDirectory) => {
+    if (shouldStartDshOnly(commandLine)) {
+      void runDeepseekHarnessStandalone();
+      return;
+    }
     // 当用户尝试运行第二个实例时，聚焦到已存在的窗口
     const windows = BrowserWindow.getAllWindows();
     if (windows.length > 0) {
@@ -134,7 +147,14 @@ const createWindow = async () => {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.on('ready', createWindow);
+app.on('ready', () => {
+  // 快捷方式启动：跳过主界面，只拉起 DeepSeek Harness
+  if (shouldStartDshOnly(process.argv)) {
+    void runDeepseekHarnessStandalone();
+    return;
+  }
+  void createWindow();
+});
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits

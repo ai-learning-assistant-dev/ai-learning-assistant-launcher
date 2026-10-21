@@ -101,7 +101,9 @@ import {
   copyDeepseekHarnessDashboardUrlHandle,
   syncWorkbuddyModelsToDshHandle,
   openDeepseekHarnessBackupDirHandle,
+  createDshShortcutHandle,
   DeepseekHarnessServiceInfo,
+  DshShortcutResult,
   WorkbuddyModelSyncResult,
 } from './deepseek-harness-service/type-info';
 import { openBunDebugHandle } from './bun-debug/type-info';
@@ -353,6 +355,10 @@ const mainHandle = {
   // 在系统文件管理器里打开 dsh 配置的备份目录
   openDeepseekHarnessBackupDirHandle: async (dir?: string) => {
     return ipcInvoke<string>(openDeepseekHarnessBackupDirHandle, dir);
+  },
+  // 创建「双击直接启动 DeepSeek Harness」的桌面快捷方式
+  createDshShortcutHandle: async (): Promise<DshShortcutResult> => {
+    return ipcInvoke<DshShortcutResult>(createDshShortcutHandle);
   },
   openBunDebugHandle: async () => {
     return ipcInvoke<void>(openBunDebugHandle);
