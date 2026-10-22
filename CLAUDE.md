@@ -57,3 +57,4 @@ The main process exposes handlers via `ipcMain.handle()` and the renderer calls 
 - `forge.config.ts`: Electron Forge packaging config (makers, plugins, copy rules for external-resources)
 - `webpack.*.config.ts`: Webpack configs for main/renderer/preload bundles
 - `external-resources/`: Runtime assets managed by the launcher (ai-assistant-backend, local-ai-service, etc.)
+- `external-resources/dsh/dsh-plugin-index.json`: plugins auto-installed while installing DSH — one local copy ships with the app, and before install the launcher fetches a newer copy from `https://learning.panchuantech.cn/dsh/plugins.json` (falls back to the local copy when that fails)

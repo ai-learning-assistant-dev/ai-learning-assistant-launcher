@@ -40,6 +40,7 @@ import {
   detectSystemNode,
   ensureNode,
   ensurePnpmInstalled,
+  isPnpmAvailable,
   refreshPathAfterInstall,
   runGlobalMaybeElevated,
   setNpmRegistryTaobaoGlobal,
@@ -54,6 +55,8 @@ import {
   syncModelsIntoDshHarness,
   syncWorkbuddyModelsIntoDshHarness,
 } from './dsh-model-sync';
+import { dshPluginIndexPath, loadDshPluginIndex } from './dsh-plugin-index';
+import { installDshPlugins } from './dsh-plugin-install';
 
 /**
  * DeepSeek Harness（dsh）服务：
@@ -643,6 +646,82 @@ async function onboardDeepseekHarness(): Promise<void> {
   );
 }
 
+// ===== dsh 插件安装（安装 DeepSeek Harness 过程中的独立环节） =====
+//
+// - 清单：`external-resources/dsh/dsh-plugin-index.json`（随安装包分发，离线时用它）
+// - 安装前先从 `DSH_PLUGIN_INDEX_URL` 拉一份最新的覆盖本地那份（拉不到就用本地那份）
+// - 调 `dsh plugin --profile web add <pkg>` 装进 dsh 的 profile，
+//   dsh 自己负责把带 dsh.bundle 的包登记进 `dsh.profile.bundles`
+//
+// 与模型同步一样：插件装不上只记告警，不阻断 dsh 安装本身。
+
+/**
+ * 按插件清单安装本项目挑选的 dsh 插件。
+ * 本函数不抛错 —— 任何失败都只写日志，保证 dsh 安装流程能继续走完。
+ */
+async function installSelectedDshPlugins(): Promise<void> {
+  logger.log(
+    `[${DS_LABEL}] 开始安装 dsh 插件（清单：${dshPluginIndexPath()}）...`,
+  );
+
+  try {
+    // dsh 的插件管理是把参数转给 pnpm 执行的，没有 pnpm 这一步做不了
+    if (!(await isPnpmAvailable(commandLine))) {
+      logger.warn(
+        `[${DS_LABEL}] 未检测到 pnpm，已跳过 dsh 插件安装（可稍后在 dsh 界面里手动安装，或装好 pnpm 后重新运行安装）`,
+      );
+      return;
+    }
+
+    const state = await loadDshPluginIndex(syncLogger);
+    if (!state.index || state.index.plugins.length === 0) {
+      logger.warn(
+        `[${DS_LABEL}] 没有可用的插件清单（远程与本地都不可用），已跳过 dsh 插件安装`,
+      );
+      return;
+    }
+
+    // dsh web 已在跑时，新插件要重启 dsh 才会加载；先记下这个状态，装完给用户提示
+    const runningBefore = (await detectRunningPort()) !== null;
+
+    const result = await installDshPlugins(
+      commandLine,
+      state.index.plugins,
+      syncLogger,
+    );
+
+    if (result.installed.length > 0) {
+      logger.log(
+        `[${DS_LABEL}] 已安装 dsh 插件：${result.installed.join('、')}`,
+      );
+    }
+    logger.log(
+      `[${DS_LABEL}] dsh 插件环节结束：新装 ${result.installed.length} 个，跳过 ${
+        result.skipped.length
+      } 个，失败 ${result.failed.length} 个（清单来源：${
+        state.source === 'remote' ? '远程最新' : '本地'
+      }）`,
+    );
+    if (result.failed.length > 0) {
+      logger.warn(
+        `[${DS_LABEL}] 以下插件没装上，已跳过、不影响 dsh 本身运行（可在 dsh 界面的插件市场里手动安装）：${result.failed
+          .map((item) => `${item.name}（${item.reason}）`)
+          .join('；')}`,
+      );
+    }
+    if (result.installed.length > 0 && runningBefore) {
+      logger.warn(
+        `[${DS_LABEL}] dsh web 正在运行，刚装的插件需要重启 dsh（先“停止”再“启动”）才会加载`,
+      );
+    }
+  } catch (error) {
+    logger.warn(
+      `[${DS_LABEL}] 安装 dsh 插件时出错，已跳过（不影响 dsh 本身安装与运行）：`,
+      error,
+    );
+  }
+}
+
 // ===== 服务生命周期 =====
 
 /**
@@ -944,6 +1023,9 @@ export async function installDeepseekHarnessService(): Promise<DeepseekHarnessSe
     }
     logger.log(`[${DS_LABEL}] dsh 安装完成：v${version}`);
   }
+
+  // 安装本项目挑选的 dsh 插件：清单本地有一份，安装前会先拉一份最新的（拉不到就用本地那份）
+  await installSelectedDshPlugins();
 
   // 用本项目的大模型配置初始化 dsh（cordis.patch.yml + .credentials.yaml）
   logger.log(`[${DS_LABEL}] 使用项目大模型配置同步 dsh 的模型配置 ...`);

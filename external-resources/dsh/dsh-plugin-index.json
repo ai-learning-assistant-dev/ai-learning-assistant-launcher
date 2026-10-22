@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "comment": "本启动器安装 DeepSeek Harness 时自动安装的 dsh 插件清单。安装前会先尝试从服务器拉取最新一份覆盖本文件（拉不到就沿用这份）。字段说明见 src/main/deepseek-harness-service/dsh-plugin-index.ts：version 写版本范围（如 ^1.2.3）表示该范围内已满足就不重装，省略或写 latest 表示每次装最新；enabled:false 表示留在清单里但这次不装。",
+  "plugins": [
+    {
+      "name": "dshmarket",
+      "version": "^1.66.22",
+      "displayName": "插件市场",
+      "description": "在 dsh 界面里浏览、安装其它插件",
+      "enabled": true
+    },
+    {
+      "name": "@linxin666/dsh-client-ui-task-board",
+      "version": "^0.4.6",
+      "displayName": "任务看板",
+      "description": "把待办 / 任务进度做成看板面板",
+      "enabled": true
+    },
+    {
+      "name": "@linxin666/dsh-pet",
+      "version": "^0.4.6",
+      "displayName": "桌面宠物",
+      "description": "界面里的小宠物挂件",
+      "enabled": true
+    },
+    {
+      "name": "dsh-comfyui",
+      "version": "^0.5.5",
+      "displayName": "ComfyUI",
+      "description": "在 dsh 里调用 ComfyUI 生成图片 / 视频",
+      "enabled": true
+    },
+    {
+      "name": "@commonworks/historical-rag-lab",
+      "version": "^0.2.0",
+      "displayName": "历史 RAG 实验",
+      "description": "历史知识库检索实验插件",
+      "enabled": true
+    }
+  ]
+}
