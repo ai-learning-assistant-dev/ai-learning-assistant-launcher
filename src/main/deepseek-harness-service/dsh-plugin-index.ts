@@ -22,7 +22,10 @@
  * - `displayName` / `description`：只用于日志展示，可省略。
  *
  * 清单是外部数据，这里按「不可信输入」处理：逐项校验，非法条目丢掉并记告警，绝不让一份坏清单
- * 变成一堆奇怪的命令参数（版本号里带空格或 `-` 开头会直接丢弃）。
+ * 变成一堆奇怪的命令参数 —— 这条清单最终会被拼成 `dsh plugin --profile web add <name>@<version>`，
+ * 而 dsh 又把参数原样转给 pnpm，所以包名与版本都必须先确认「只可能是包说明符，不可能是开关」：
+ * 包名每段不能以 `-` 开头（见 {@link PACKAGE_NAME_RE}），版本只能由版本号 / 范围 / tag 的字符
+ * 组成（见 {@link VERSION_RE}）。
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -47,10 +50,6 @@ const INDEX_MAX_REDIRECTS = 5;
 
 /** 清单里最多认多少条插件：防止一份坏清单让安装流程跑几十次 pnpm */
 const MAX_PLUGINS = 50;
-
-/** npm 包名（含 scope）的合法写法，用来把非法条目挡在命令行之外 */
-const PACKAGE_NAME_RE =
-  /^(?:@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/i;
 
 /** 清单里的一项插件 */
 export interface DshPluginEntry {
@@ -106,6 +105,31 @@ export function dshPluginIndexPath(): string {
 // ===== 清单解析与校验 =====
 
 /**
+ * npm 包名（含 scope）的合法写法，用来把非法条目挡在命令行之外。
+ * 关键：每段的**首字符不允许是 `-`**，否则 `-bad` / `--force` / `@scope/--flag` 这类
+ * 「开关形状」的名字会原样进到 `dsh plugin ... add <name>`，被转手的 pnpm 当成参数解析。
+ */
+const PACKAGE_NAME_RE =
+  /^(?:@[a-z0-9~][a-z0-9-._~]*\/)?[a-z0-9~][a-z0-9-._~]*$/i;
+
+/**
+ * 版本写法允许的字符：版本号、semver 范围与 tag。
+ * 刻意不含空白、`/`、`:`、`\`、引号 —— 那样 `name@<version>` 就只可能被解析成「包@版本」，
+ * 变不成 `name@owner/repo`（GitHub 简写）或 `name:git+https://…` 这类换来源的写法。
+ */
+const VERSION_RE = /^[0-9A-Za-z.\-+><=|^~*]+$/;
+
+/** 包名是否安全（导出给安装那一步做二次把关：规则只有这一处） */
+export function isSafePluginName(name: string): boolean {
+  return PACKAGE_NAME_RE.test(name);
+}
+
+/** 版本写法是否安全（同样导出，保证安装那一步用的是同一条规则） */
+export function isSafePluginVersion(version: string): boolean {
+  return VERSION_RE.test(version) && !version.startsWith('-');
+}
+
+/**
  * 版本写法校验：空 / latest 放行；写法非法时返回 `drop`，让整条插件被丢掉 ——
  * 与其猜一个版本，不如不装：清单写错就什么都不做，比装了个计划外的版本更好排查。
  */
@@ -126,9 +150,9 @@ function normalizeVersion(
   if (!version) {
     return {};
   }
-  if (/\s/.test(version) || version.startsWith('-')) {
+  if (!isSafePluginVersion(version)) {
     return {
-      warning: `插件 ${name} 的 version（${version}）不是合法的版本号 / 版本范围，已忽略这条`,
+      warning: `插件 ${name} 的 version（${version}）不是版本号 / 版本范围 / tag 的写法，已忽略这条`,
       drop: true,
     };
   }
@@ -148,8 +172,10 @@ function normalizeEntry(raw: unknown): {
   if (!name) {
     return { warning: '插件清单里有一项缺少 name，已忽略' };
   }
-  if (!PACKAGE_NAME_RE.test(name)) {
-    return { warning: `插件清单里的包名 ${name} 不合法，已忽略` };
+  if (!isSafePluginName(name)) {
+    return {
+      warning: `插件清单里的包名 ${name} 不合法（不能以 - / . 开头，也不能是命令行开关的形状），已忽略`,
+    };
   }
 
   const { version, warning, drop } = normalizeVersion(record.version, name);

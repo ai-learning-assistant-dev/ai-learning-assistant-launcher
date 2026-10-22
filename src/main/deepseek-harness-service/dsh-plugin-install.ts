@@ -9,6 +9,9 @@
  * 语义：
  * - 已经装好、且版本满足清单要求的插件直接跳过，不重复跑 pnpm；
  * - 用户自己用 `link:` / `file:` / git 装的同一个包不动它（尊重本地构建），只记一条日志；
+ * - 包名 / 版本写法不安全（命令行开关形状、带空白、能换来源的写法）的条目不执行安装；
+ *   清单解析阶段已经挡过一次（parseDshPluginIndex），这里是第二层，因为条目类型是导出的、
+ *   任何别处构造出来的条目都不该把参数塞进 pnpm；
  * - 单个插件失败只记告警并接着装下一个：插件装不上不应该让 dsh 本身装不上；
  * - 本函数不抛错，结果由调用方汇总提示。
  */
@@ -20,6 +23,7 @@ import type { Exec } from '../exec';
 import { loggerFactory } from '../terminal-log';
 import type { SyncLogger } from './dsh-config-providers';
 import { resolveDshHome } from './dsh-model-sync';
+import { isSafePluginName, isSafePluginVersion } from './dsh-plugin-index';
 import type { DshPluginEntry } from './dsh-plugin-index';
 
 const DS_LABEL = 'DEEPSEEK_HARNESS';
@@ -113,6 +117,18 @@ export function pluginInstallSpec(entry: DshPluginEntry): string {
   return `${entry.name}@${version}`;
 }
 
+/**
+ * 这条目拼出来的参数是否只可能是「包[@版本]」，而不是命令行开关或换来源的写法。
+ * 判断规则全部来自 dsh-plugin-index（同一处定义），这里只是第二层把关。
+ */
+export function isSafeInstallSpec(entry: DshPluginEntry): boolean {
+  if (!isSafePluginName(entry.name)) {
+    return false;
+  }
+  const version = (entry.version ?? '').trim();
+  return !version || isSafePluginVersion(version);
+}
+
 /** 插件当前状态：已满足 / 用户本地装的 / 需要装（或升级） */
 export type InstalledPluginState = 'satisfied' | 'local' | 'outdated';
 
@@ -200,6 +216,15 @@ export async function installDshPlugins(
     const label = entry.displayName
       ? `${entry.displayName}（${entry.name}）`
       : entry.name;
+
+    // 第二层把关：不安全的包名 / 版本不进命令行（清单解析阶段已经挡过一遍）
+    if (!isSafeInstallSpec(entry)) {
+      logger.warn(
+        `跳过插件 ${entry.name}：包名或版本写法不安全（可能被当成命令行开关），不执行安装`,
+      );
+      result.skipped.push(entry.name);
+      continue;
+    }
 
     const state = checkInstalledPlugin(entry);
     if (state === 'satisfied') {
