@@ -1,41 +1,216 @@
 {
   "schemaVersion": 1,
-  "comment": "本启动器安装 DeepSeek Harness 时自动安装的 dsh 插件清单。安装前会先尝试从服务器拉取最新一份覆盖本文件（拉不到就沿用这份）。字段说明见 src/main/deepseek-harness-service/dsh-plugin-index.ts：version 写版本范围（如 ^1.2.3）表示该范围内已满足就不重装，省略或写 latest 表示每次装最新；enabled:false 表示留在清单里但这次不装。",
+  "comment": "本启动器安装 DeepSeek Harness 时自动安装的 dsh 插件清单。安装前会先尝试从服务器拉取最新一份覆盖本文件（拉不到就沿用这份）。字段说明见 src/main/deepseek-harness-service/dsh-plugin-index.ts：version 写版本范围（如 ^1.2.3）表示该范围内已满足就不重装，省略或写 latest 表示每次装最新；enabled:false 表示留在清单里但这次不装。这份清单里的插件取自 2026-10-23 两份插件报告（本地插件清单.md、DSH插件报告_2026-10-23.md）里评价好、实际在用的项，并已逐个核对 npm 上存在、且包里有 dsh.bundle（装了才会被 dsh 加载）。version 一律写 latest：每次装/升级都让 pnpm 去解析一次最新版，已经装好的也会重装到最新（代价是每次都跑一遍 pnpm）。只收 npm 来源：GitHub / git 来源的一律不进（清单的 version 只允许版本号 / 范围 / tag，写不了换来源的写法）——npm 上根本没有的 dsh-krouter、easyeda-agent-dsh、superdesign-dsh 直接略过；npm 同名但内容对不上的也略过，dsh-resume（npm 上 0.0.1 是约 1KB 的空壳、没有 dsh.bundle，真身在 git 仓库）、dsh-prompt-enhancer（npm 上是另一位作者的包，报告里那个来自 GitHub 上的 fishsb 仓库）。agent team、auto review、worktree、session-search、语音输入这些官方实验 bundle 已随 @deepseek-ai/dsh 一起装好，只在 dsh 界面里开关，不必进这份清单。",
   "plugins": [
     {
       "name": "dshmarket",
-      "version": "^1.66.22",
+      "version": "latest",
       "displayName": "插件市场",
       "description": "在 dsh 界面里浏览、安装其它插件",
       "enabled": true
     },
     {
       "name": "@linxin666/dsh-client-ui-task-board",
-      "version": "^0.4.6",
+      "version": "latest",
       "displayName": "任务看板",
       "description": "把待办 / 任务进度做成看板面板",
       "enabled": true
     },
     {
       "name": "@linxin666/dsh-pet",
-      "version": "^0.4.6",
+      "version": "latest",
       "displayName": "桌面宠物",
       "description": "界面里的小宠物挂件",
       "enabled": true
     },
     {
       "name": "dsh-comfyui",
-      "version": "^0.5.5",
+      "version": "latest",
       "displayName": "ComfyUI",
       "description": "在 dsh 里调用 ComfyUI 生成图片 / 视频",
       "enabled": true
     },
     {
       "name": "@commonworks/historical-rag-lab",
-      "version": "^0.2.0",
+      "version": "latest",
       "displayName": "历史 RAG 实验",
-      "description": "历史知识库检索实验插件",
+      "description": "historical_research：历史知识库检索，产出研究报告",
       "enabled": true
+    },
+    {
+      "name": "dsh-ai4scholar",
+      "version": "latest",
+      "displayName": "学术检索（AI4Scholar）",
+      "description": "38 个学术工具：Semantic Scholar / PubMed / arXiv / DOI / PDF 全文 / 自动引用",
+      "enabled": true
+    },
+    {
+      "name": "dsh-free-search",
+      "version": "latest",
+      "displayName": "免费网页搜索",
+      "description": "24 个引擎的免费网页搜索 + 网页正文抓取，不额外产生搜索费用",
+      "enabled": true
+    },
+    {
+      "name": "billion-context",
+      "version": "latest",
+      "displayName": "上下文压缩",
+      "description": "compress / decompress / search_context：长会话大幅省 token（解包约 40MB）",
+      "enabled": true
+    },
+    {
+      "name": "dsh-deja",
+      "version": "latest",
+      "displayName": "历史会话记忆",
+      "description": "deja_recall / blame / how / fix：检索本机历史会话，避免重复解释上下文",
+      "enabled": true
+    },
+    {
+      "name": "dsh-ops",
+      "version": "latest",
+      "displayName": "Windows Shell 增强",
+      "description": "Windows 下补齐 bash / PowerShell 7 与 Rust 工具链，跑命令更省 token",
+      "enabled": true
+    },
+    {
+      "name": "dsh-think-translate",
+      "version": "latest",
+      "displayName": "思考链翻译",
+      "description": "把思考链 / 任务卡显示层翻成中文等 8 种语言，不改模型输出",
+      "enabled": true
+    },
+    {
+      "name": "@yunmiao/studymate",
+      "version": "latest",
+      "displayName": "StudyMate 学习引擎",
+      "description": "学习技能 + 课程引擎，贴合本启动器的 AI 学习场景",
+      "enabled": true
+    },
+    {
+      "name": "superpowers-dsh",
+      "version": "latest",
+      "displayName": "工程方法技能集",
+      "description": "TDD / 调试 / 规划 / 代码评审 / 并行分派等一套技能包",
+      "enabled": true
+    },
+    {
+      "name": "dsh-computer-use-win",
+      "version": "latest",
+      "displayName": "Windows 桌面自动化",
+      "description": "MCP：UIA 控件树 / 截图 / OCR / 键鼠操作，能驱动本机 Windows 程序",
+      "enabled": true
+    },
+    {
+      "name": "@liustack/modlens",
+      "version": "latest",
+      "displayName": "图片识别（ModLens）",
+      "description": "把截图、成绩单、作品集等图片 OCR 成结构化文本，弥补纯文本模型看不了图",
+      "enabled": true
+    },
+    {
+      "name": "dsh-univer-office",
+      "version": "latest",
+      "displayName": "Univer Office",
+      "description": "univer_* 全套：表格 / 文档 / 演示 / 白板 + 内嵌预览窗（含协作网关，解包约 226MB）",
+      "enabled": true
+    },
+    {
+      "name": "dsh-tabbit",
+      "version": "latest",
+      "displayName": "Tabbit 浏览器集成",
+      "description": "调用本机浏览器：tabbit_browser 网页操作 + web_fetch + 页面引用 + 权限确认",
+      "enabled": true
+    },
+    {
+      "name": "@xmanrui/dsh-im",
+      "version": "latest",
+      "displayName": "多平台 IM 接入",
+      "description": "微信 / 飞书 / 企微 / 钉钉 / QQ / Telegram / WhatsApp / Slack / Discord / Matrix 会话接入（解包约 24MB）",
+      "enabled": true
+    },
+    {
+      "name": "dsh-pocket",
+      "version": "latest",
+      "displayName": "手机访问 DSH",
+      "description": "手机扫码访问电脑上的 dsh，局域网 / 公网实时同屏，结果能推到手机",
+      "enabled": true
+    },
+    {
+      "name": "dsh-dream-skin",
+      "version": "latest",
+      "displayName": "主题皮肤",
+      "description": "多套 Web 界面主题皮肤 + 壁纸 + 主题包，界面好看点",
+      "enabled": true
+    },
+    {
+      "name": "dsh-whale-widget",
+      "version": "latest",
+      "displayName": "余额鲸鱼挂件",
+      "description": "右下角显示 DeepSeek API 余额的小挂件",
+      "enabled": true
+    },
+    {
+      "name": "dsh-codex-subscription",
+      "version": "latest",
+      "displayName": "Codex 订阅接入",
+      "description": "用 ChatGPT / Codex 订阅额度（OAuth 登录）跑模型，含 Fast 模式",
+      "enabled": true
+    },
+    {
+      "name": "dsh-remotion",
+      "version": "latest",
+      "displayName": "Remotion 视频",
+      "description": "Remotion 视频技能 / 模板 / Studio 预览 / 导出 MP4",
+      "enabled": true
+    },
+    {
+      "name": "dsh-browser",
+      "version": "latest",
+      "displayName": "浏览器自动化（dsh-browser）",
+      "description": "Playwright 驱动的 open / click / type / screenshot；与 dsh-tabbit 功能重复，默认不装",
+      "enabled": false
+    },
+    {
+      "name": "dsh-wechat",
+      "version": "latest",
+      "displayName": "微信通道",
+      "description": "iLink 机器人桥，能推结果 / 文件到微信；与 @xmanrui/dsh-im 重复，默认不装",
+      "enabled": false
+    },
+    {
+      "name": "dsh-lark-channel",
+      "version": "latest",
+      "displayName": "飞书通道",
+      "description": "飞书机器人通道，会话内可审批；与 @xmanrui/dsh-im 重复，默认不装",
+      "enabled": false
+    },
+    {
+      "name": "dsh-plugin",
+      "version": "latest",
+      "displayName": "社区插件市场（dsh-plugin）",
+      "description": "应用内浏览 / 安装社区插件；与 dshmarket 是两个独立市场，默认只留一个",
+      "enabled": false
+    },
+    {
+      "name": "@linxin666/dsh-web-all",
+      "version": "latest",
+      "displayName": "Web UI 全家桶",
+      "description": "20 行 Web UI（含任务看板 / 宠物 / 市场 / 皮肤中心）；与已单列的 task-board、pet 重复，默认不装",
+      "enabled": false
+    },
+    {
+      "name": "dsh-blender",
+      "version": "latest",
+      "displayName": "Blender 建模",
+      "description": "Blender 建模 / 重建 / 校验 / 导出；需要本机已装 Blender，默认不装",
+      "enabled": false
+    },
+    {
+      "name": "dsh-our-free-model",
+      "version": "latest",
+      "displayName": "免费模型渠道池",
+      "description": "免登录 / 免 API Key 的免费模型渠道 + 本地 OpenAI 网关；与本启动器的模型配置同步有重叠，按需打开",
+      "enabled": false
     }
   ]
 }
