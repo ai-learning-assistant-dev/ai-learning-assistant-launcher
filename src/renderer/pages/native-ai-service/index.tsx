@@ -16,7 +16,10 @@ import { TerminalLogScreen } from '../../containers/terminal-log-screen';
 import { useTextbookEditorServiceShortcut } from '../../containers/use-textbook-editor-service-shortcut';
 import { useOpenclawServiceShortcut } from '../../containers/use-openclaw-service-shortcut';
 import { useDeepseekHarnessServiceShortcut } from '../../containers/use-deepseek-harness-service-shortcut';
-import { WorkbuddyModelSyncResult } from '../../../main/deepseek-harness-service/type-info';
+import {
+  DshPluginInstallSummary,
+  WorkbuddyModelSyncResult,
+} from '../../../main/deepseek-harness-service/type-info';
 import { useState } from 'react';
 
 // OpenClaw 管理界面暂不展示：相关代码全部保留，之后需要重新启用时把这里改成 true 即可
@@ -96,6 +99,58 @@ function WorkbuddySyncResultContent({
           {warning}
         </p>
       ))}
+    </div>
+  );
+}
+
+/** 按清单安装 dsh 插件后的结果展示 */
+function DshPluginInstallResultContent({
+  result,
+}: {
+  result: DshPluginInstallSummary;
+}) {
+  return (
+    <div className="dsh-plugin-install-result">
+      <p className="dsh-plugin-install-headline">
+        清单共 <strong>{result.total}</strong> 条：这次新装 / 升级{' '}
+        <strong>{result.installed.length}</strong> 个，跳过{' '}
+        <strong>{result.skipped.length}</strong> 个
+        {result.failed.length > 0 && (
+          <>
+            ，失败 <strong>{result.failed.length}</strong> 个
+          </>
+        )}
+        。
+      </p>
+
+      {result.installed.length > 0 && (
+        <p className="dsh-plugin-install-list">
+          已安装：{result.installed.join('、')}
+        </p>
+      )}
+
+      {result.failed.length > 0 && (
+        <div className="dsh-plugin-install-failed">
+          <p>以下插件没装上（不影响其它插件，也不影响 dsh 运行）：</p>
+          <ul>
+            {result.failed.map((item) => (
+              <li key={item.name}>
+                <code>{item.name}</code>：{item.reason}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <p className="dsh-plugin-install-hint">
+        {result.running
+          ? 'DeepSeek Harness 正在运行：先点「停止」再点「运行」，重启后新插件才会加载。'
+          : '下次启动 DeepSeek Harness 时会加载这些插件。'}
+      </p>
+      <p className="dsh-plugin-install-hint">
+        清单文件：<code>{result.indexPath}</code>（
+        {result.source === 'remote' ? '安装前下载的最新清单' : '本地清单'}）
+      </p>
     </div>
   );
 }
@@ -257,6 +312,73 @@ export default function NativeAiService() {
         </div>
       ),
       onOk: () => runSyncWorkbuddyModels(),
+    });
+  };
+
+  /** 真正执行插件安装：结果用弹窗展示（装了几个 / 跳过几个 / 失败原因），失败给出可读原因 */
+  const runInstallDshPlugins = async () => {
+    try {
+      const result = await deepseekHarnessShortcut.installPlugins();
+      const content = <DshPluginInstallResultContent result={result} />;
+      if (result.failed.length > 0) {
+        Modal.warning({
+          title: '插件安装结束，有插件没装上',
+          width: 580,
+          okText: '好',
+          content,
+        });
+        return;
+      }
+      Modal.success({
+        title: '插件安装完成',
+        width: 560,
+        okText: '好',
+        content,
+      });
+    } catch (e) {
+      Modal.error({
+        title: '安装 dsh 插件失败',
+        width: 520,
+        okText: '好',
+        content: <span>{describeError(e)}</span>,
+      });
+    }
+  };
+
+  /**
+   * 安装前的确认：说清楚「按哪份清单装、会重装已装的、不动 dsh 本身、进度在日志里」，
+   * 避免用户点完发现要等好几分钟还以为卡住。
+   */
+  const confirmInstallDshPlugins = () => {
+    Modal.confirm({
+      title: '按清单给 DeepSeek Harness 安装插件？',
+      width: 540,
+      icon: null,
+      okText: '开始安装',
+      cancelText: '取消',
+      content: (
+        <div className="dsh-plugin-install-confirm">
+          <p>
+            会按随程序分发的插件清单，用 <code>dsh plugin add</code>{' '}
+            把清单里的插件装进 dsh 的 web profile：
+          </p>
+          <ul>
+            <li>
+              清单里写 <code>latest</code>{' '}
+              的插件每次都重新装一次最新版，已装好的也会重装
+            </li>
+            <li>
+              清单里 <code>enabled:false</code> 的条目跳过不装
+            </li>
+            <li>不动 dsh 本身，也不改模型配置</li>
+          </ul>
+          <p className="dsh-plugin-install-hint">
+            插件里有 Univer Office
+            这类大包，首次执行可能要几分钟，进度看下方命令行日志，期间请不要关闭程序。
+          </p>
+        </div>
+      ),
+      onOk: () => runInstallDshPlugins(),
     });
   };
 
@@ -752,6 +874,16 @@ export default function NativeAiService() {
                 onClick={confirmSyncWorkbuddyModels}
               >
                 <span className="button-text">同步 WorkBuddy 模型</span>
+              </Button>
+            ),
+            deepseekHarnessShortcut.state === 'installed' && (
+              <Button
+                key="install-dsh-plugins"
+                loading={deepseekHarnessShortcut.installingPlugins}
+                disabled={deepseekHarnessShortcut.refreshing}
+                onClick={confirmInstallDshPlugins}
+              >
+                <span className="button-text">安装插件</span>
               </Button>
             ),
           ].filter((item) => item)}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { message } from 'antd';
 import {
   DeepseekHarnessServiceInfo,
+  DshPluginInstallSummary,
   WorkbuddyModelSyncResult,
 } from '../../../main/deepseek-harness-service/type-info';
 
@@ -167,6 +168,26 @@ export function useDeepseekHarnessServiceShortcut() {
     [showError],
   );
 
+  const [installingPlugins, setInstallingPlugins] = useState(false);
+
+  /**
+   * 按插件清单给已装好的 dsh 补装 / 升级插件。
+   * 不改动服务状态，所以不走 runAction（不需要重新查询服务信息）；
+   * 错误交给调用方用弹窗展示（只在这里留一条 console 记录），避免和调用方的提示重复。
+   */
+  const installPlugins =
+    useCallback(async (): Promise<DshPluginInstallSummary> => {
+      setInstallingPlugins(true);
+      try {
+        return await window.mainHandle.installDshPluginsHandle();
+      } catch (e) {
+        console.error('[DeepSeekHarness] 安装 dsh 插件失败:', e);
+        throw e;
+      } finally {
+        setInstallingPlugins(false);
+      }
+    }, []);
+
   return {
     initing,
     refreshing,
@@ -183,6 +204,8 @@ export function useDeepseekHarnessServiceShortcut() {
     refresh,
     syncingWorkbuddyModels,
     syncWorkbuddyModels,
+    installingPlugins,
+    installPlugins,
     openBackupDir,
   };
 }

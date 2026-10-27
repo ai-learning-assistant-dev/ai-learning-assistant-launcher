@@ -366,3 +366,62 @@
     line-height: 18px;
   }
 }
+
+/* 「按清单安装 dsh 插件」的确认弹窗与结果弹窗 */
+.dsh-plugin-install-confirm,
+.dsh-plugin-install-result {
+  p {
+    margin: 0 0 8px;
+    line-height: 20px;
+  }
+
+  ul {
+    margin: 0 0 8px;
+    padding-left: 20px;
+
+    li {
+      line-height: 20px;
+      margin-bottom: 4px;
+    }
+  }
+
+  code {
+    padding: 0 4px;
+    border-radius: 3px;
+    background-color: rgba(128, 128, 128, 0.15);
+    font-size: 12px;
+    word-break: break-all;
+  }
+
+  .dsh-plugin-install-headline {
+    font-size: 14px;
+  }
+
+  .dsh-plugin-install-list {
+    // 一次装十几个插件时列表会很长，限高滚动，别把弹窗撑爆
+    max-height: 160px;
+    overflow: auto;
+    font-size: 12px;
+    line-height: 18px;
+    word-break: break-all;
+  }
+
+  .dsh-plugin-install-failed {
+    max-height: 180px;
+    overflow: auto;
+
+    ul {
+      margin-bottom: 0;
+      font-size: 12px;
+      line-height: 18px;
+      word-break: break-all;
+    }
+  }
+
+  .dsh-plugin-install-hint {
+    margin-bottom: 6px;
+    color: rgba(128, 128, 128, 0.95);
+    font-size: 12px;
+    line-height: 18px;
+  }
+}

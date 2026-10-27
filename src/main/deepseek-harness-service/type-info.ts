@@ -25,6 +25,12 @@ export const syncWorkbuddyModelsToDshHandle = `${channel}sync-workbuddy-models`;
 export const openDeepseekHarnessBackupDirHandle = `${channel}open-backup-dir`;
 
 /**
+ * 按插件清单给「已经装好 dsh」的用户补装 / 升级插件。
+ * 与安装流程里那一步是同一套实现，只是不重新装 dsh、也不改模型配置。
+ */
+export const installDshPluginsHandle = `${channel}install-plugins`;
+
+/**
  * DeepSeek Harness Web 界面的候选端口（按探测顺序）。
  * 3080 是 dsh web 的默认端口：机器上已经有 dsh 实例在跑时优先复用它，
  * 只有所有候选端口都没有实例时才由本模块拉起新的实例。
@@ -86,4 +92,25 @@ export interface WorkbuddyModelSyncResult {
   notices: Array<{ name: string; reason: string }>;
   /** 配置冲突等非致命提示 */
   warnings: string[];
+}
+
+/**
+ * 一次「按清单安装 dsh 插件」的结果，直接给界面展示。
+ * 单个插件装不上不会让整次操作失败，失败项都收在 `failed` 里。
+ */
+export interface DshPluginInstallSummary {
+  /** 这次用的清单从哪来：remote 安装前下载的最新一份 / local 回退本地那份 */
+  source: 'remote' | 'local';
+  /** 清单文件路径（本地那份，远程清单成功时会先覆盖它） */
+  indexPath: string;
+  /** 清单里一共几条（含 enabled:false 的） */
+  total: number;
+  /** 这次新装 / 升级的插件（`name@版本`） */
+  installed: string[];
+  /** 跳过的插件（已是最新 / 本地路径装的 / 清单里 enabled:false） */
+  skipped: string[];
+  /** 没装上的插件及原因 */
+  failed: Array<{ name: string; reason: string }>;
+  /** 装完时 dsh web 是否在运行：在跑的话要重启 dsh 才会加载新插件 */
+  running: boolean;
 }

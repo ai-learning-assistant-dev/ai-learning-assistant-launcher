@@ -101,7 +101,9 @@ import {
   copyDeepseekHarnessDashboardUrlHandle,
   syncWorkbuddyModelsToDshHandle,
   openDeepseekHarnessBackupDirHandle,
+  installDshPluginsHandle,
   DeepseekHarnessServiceInfo,
+  DshPluginInstallSummary,
   WorkbuddyModelSyncResult,
 } from './deepseek-harness-service/type-info';
 import { openBunDebugHandle } from './bun-debug/type-info';
@@ -353,6 +355,10 @@ const mainHandle = {
   // 在系统文件管理器里打开 dsh 配置的备份目录
   openDeepseekHarnessBackupDirHandle: async (dir?: string) => {
     return ipcInvoke<string>(openDeepseekHarnessBackupDirHandle, dir);
+  },
+  // 按插件清单给已装好的 dsh 补装 / 升级插件（不重装 dsh）
+  installDshPluginsHandle: async () => {
+    return ipcInvoke<DshPluginInstallSummary>(installDshPluginsHandle);
   },
   openBunDebugHandle: async () => {
     return ipcInvoke<void>(openBunDebugHandle);

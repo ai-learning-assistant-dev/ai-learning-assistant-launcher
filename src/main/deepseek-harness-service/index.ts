@@ -23,11 +23,13 @@ import {
   copyDeepseekHarnessDashboardUrlHandle,
   syncWorkbuddyModelsToDshHandle,
   openDeepseekHarnessBackupDirHandle,
+  installDshPluginsHandle,
   deepseekHarnessDashboardUrl,
   DEEPSEEK_HARNESS_NPM_PACKAGE,
   DEEPSEEK_HARNESS_NODE_RANGE,
   DEEPSEEK_HARNESS_PORTS,
   DeepseekHarnessServiceInfo,
+  DshPluginInstallSummary,
   WorkbuddyModelSyncResult,
 } from './type-info';
 import { ipcHandle } from '../ipc-util';
@@ -646,74 +648,107 @@ async function onboardDeepseekHarness(): Promise<void> {
   );
 }
 
-// ===== dsh 插件安装（安装 DeepSeek Harness 过程中的独立环节） =====
+// ===== dsh 插件安装（安装 dsh 的一步，也是界面上的「安装插件」按钮） =====
 //
 // - 清单：`external-resources/dsh/dsh-plugin-index.json`（随安装包分发，离线时用它）
 // - 安装前先从 `DSH_PLUGIN_INDEX_URL` 拉一份最新的覆盖本地那份（拉不到就用本地那份）
 // - 调 `dsh plugin --profile web add <pkg>` 装进 dsh 的 profile，
 //   dsh 自己负责把带 dsh.bundle 的包登记进 `dsh.profile.bundles`
 //
-// 与模型同步一样：插件装不上只记告警，不阻断 dsh 安装本身。
+// 两个入口共用 {@link runDshPluginInstall}：
+// - 安装流程（installDeepseekHarnessService）：插件装不上只记告警，不阻断 dsh 安装本身；
+// - 界面「安装插件」按钮（installDeepseekHarnessPlugins）：给已经装好 dsh 的用户补装 / 升级，
+//   不重装 dsh、也不改模型配置，前置条件不满足时抛错，由界面直接提示缺什么。
 
 /**
- * 按插件清单安装本项目挑选的 dsh 插件。
- * 本函数不抛错 —— 任何失败都只写日志，保证 dsh 安装流程能继续走完。
+ * 按清单安装 / 升级 dsh 插件，返回汇总。
+ * 单个插件装不上不算失败（进 `failed`，原因写在日志里）；前置条件不满足时抛错。
+ */
+async function runDshPluginInstall(params?: {
+  /** pnpm 缺失时是否顺手通过 npm 全局装一个（界面按钮传 true；安装流程前面已经装过） */
+  installPnpmIfMissing?: boolean;
+}): Promise<DshPluginInstallSummary> {
+  if (!(await detectDshInstalled())) {
+    throw new Error('还没有安装 DeepSeek Harness，请先安装 dsh 再装插件');
+  }
+
+  // dsh 的插件管理是把参数转给 pnpm 执行的，没有 pnpm 这一步做不了
+  if (!(await isPnpmAvailable(commandLine))) {
+    if (!params?.installPnpmIfMissing) {
+      throw new Error(
+        '未检测到 pnpm：dsh 装插件依赖 pnpm，请装好 pnpm（npm i -g pnpm）后重试',
+      );
+    }
+    logger.log(`[${DS_LABEL}] 未检测到 pnpm，先通过 npm 全局安装 pnpm ...`);
+    await ensurePnpmReady();
+    if (!(await isPnpmAvailable(commandLine))) {
+      throw new Error(
+        'pnpm 安装失败：dsh 装插件依赖 pnpm，请检查网络后重试（或手动执行 npm i -g pnpm）',
+      );
+    }
+  }
+
+  const state = await loadDshPluginIndex(syncLogger);
+  if (!state.index || state.index.plugins.length === 0) {
+    throw new Error(
+      `没有可用的 dsh 插件清单（远程与本地都不可用）：${state.path}`,
+    );
+  }
+
+  // dsh web 已在跑时，新插件要重启 dsh 才会加载；先记下这个状态，装完给用户提示
+  const runningBefore = (await detectRunningPort()) !== null;
+
+  const result = await installDshPlugins(
+    commandLine,
+    state.index.plugins,
+    syncLogger,
+  );
+
+  // 能走到这里说明清单可用，所以来源只会是远程或本地
+  const source = state.source === 'remote' ? 'remote' : 'local';
+  if (result.installed.length > 0) {
+    logger.log(`[${DS_LABEL}] 已安装 dsh 插件：${result.installed.join('、')}`);
+  }
+  logger.log(
+    `[${DS_LABEL}] dsh 插件环节结束：新装 ${result.installed.length} 个，跳过 ${
+      result.skipped.length
+    } 个，失败 ${result.failed.length} 个（清单来源：${
+      source === 'remote' ? '远程最新' : '本地'
+    }）`,
+  );
+  if (result.failed.length > 0) {
+    logger.warn(
+      `[${DS_LABEL}] 以下插件没装上，已跳过、不影响 dsh 本身运行（可在 dsh 界面的插件市场里手动安装）：${result.failed
+        .map((item) => `${item.name}（${item.reason}）`)
+        .join('；')}`,
+    );
+  }
+  if (result.installed.length > 0 && runningBefore) {
+    logger.warn(
+      `[${DS_LABEL}] dsh web 正在运行，刚装的插件需要重启 dsh（先“停止”再“启动”）才会加载`,
+    );
+  }
+
+  return {
+    source,
+    indexPath: state.path,
+    total: state.index.plugins.length,
+    installed: result.installed,
+    skipped: result.skipped,
+    failed: result.failed,
+    running: runningBefore,
+  };
+}
+
+/**
+ * 安装流程里的插件环节：任何失败都只记日志，保证 dsh 安装能继续走完。
  */
 async function installSelectedDshPlugins(): Promise<void> {
   logger.log(
     `[${DS_LABEL}] 开始安装 dsh 插件（清单：${dshPluginIndexPath()}）...`,
   );
-
   try {
-    // dsh 的插件管理是把参数转给 pnpm 执行的，没有 pnpm 这一步做不了
-    if (!(await isPnpmAvailable(commandLine))) {
-      logger.warn(
-        `[${DS_LABEL}] 未检测到 pnpm，已跳过 dsh 插件安装（可稍后在 dsh 界面里手动安装，或装好 pnpm 后重新运行安装）`,
-      );
-      return;
-    }
-
-    const state = await loadDshPluginIndex(syncLogger);
-    if (!state.index || state.index.plugins.length === 0) {
-      logger.warn(
-        `[${DS_LABEL}] 没有可用的插件清单（远程与本地都不可用），已跳过 dsh 插件安装`,
-      );
-      return;
-    }
-
-    // dsh web 已在跑时，新插件要重启 dsh 才会加载；先记下这个状态，装完给用户提示
-    const runningBefore = (await detectRunningPort()) !== null;
-
-    const result = await installDshPlugins(
-      commandLine,
-      state.index.plugins,
-      syncLogger,
-    );
-
-    if (result.installed.length > 0) {
-      logger.log(
-        `[${DS_LABEL}] 已安装 dsh 插件：${result.installed.join('、')}`,
-      );
-    }
-    logger.log(
-      `[${DS_LABEL}] dsh 插件环节结束：新装 ${result.installed.length} 个，跳过 ${
-        result.skipped.length
-      } 个，失败 ${result.failed.length} 个（清单来源：${
-        state.source === 'remote' ? '远程最新' : '本地'
-      }）`,
-    );
-    if (result.failed.length > 0) {
-      logger.warn(
-        `[${DS_LABEL}] 以下插件没装上，已跳过、不影响 dsh 本身运行（可在 dsh 界面的插件市场里手动安装）：${result.failed
-          .map((item) => `${item.name}（${item.reason}）`)
-          .join('；')}`,
-      );
-    }
-    if (result.installed.length > 0 && runningBefore) {
-      logger.warn(
-        `[${DS_LABEL}] dsh web 正在运行，刚装的插件需要重启 dsh（先“停止”再“启动”）才会加载`,
-      );
-    }
+    await runDshPluginInstall();
   } catch (error) {
     logger.warn(
       `[${DS_LABEL}] 安装 dsh 插件时出错，已跳过（不影响 dsh 本身安装与运行）：`,
@@ -1191,6 +1226,19 @@ export async function openDeepseekHarnessBackupDir(
   return normalizedTarget;
 }
 
+/**
+ * 界面上的「安装插件」按钮：给已经装好 dsh 的用户按清单补装 / 升级插件。
+ * 不重装 dsh、也不改模型配置；清单里的单个插件装不上不影响其它插件，结果汇总后交给界面展示。
+ */
+export async function installDeepseekHarnessPlugins(): Promise<DshPluginInstallSummary> {
+  // dsh 的插件是 profile 级的 pnpm 依赖，走 pnpm 装，所以先确保源是国内镜像
+  setNpmRegistryTaobaoGlobal();
+  logger.log(
+    `[${DS_LABEL}] 开始按清单安装 dsh 插件（清单：${dshPluginIndexPath()}）...`,
+  );
+  return runDshPluginInstall({ installPnpmIfMissing: true });
+}
+
 export default async function init(ipcMain: IpcMain) {
   // 退出前结束本程序拉起的 dsh web，避免后台残留（端口上的实例也会被一并清掉）
   app.on('before-quit', () => {
@@ -1225,5 +1273,8 @@ export default async function init(ipcMain: IpcMain) {
     ipcMain,
     openDeepseekHarnessBackupDirHandle,
     async (_event, dir?: string) => openDeepseekHarnessBackupDir(dir),
+  );
+  ipcHandle(ipcMain, installDshPluginsHandle, async (_event) =>
+    installDeepseekHarnessPlugins(),
   );
 }
