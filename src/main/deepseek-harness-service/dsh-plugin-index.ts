@@ -22,7 +22,7 @@
  * - `displayName` / `description`：只用于日志展示，可省略。
  *
  * 清单是外部数据，这里按「不可信输入」处理：逐项校验，非法条目丢掉并记告警，绝不让一份坏清单
- * 变成一堆奇怪的命令参数 —— 这条清单最终会被拼成 `dsh plugin --profile web add <name>@<version>`，
+ * 变成一堆奇怪的命令参数 —— 这条清单最终会被拼成 `dsh plugin --profile desktop add <name>@<version>`，
  * 而 dsh 又把参数原样转给 pnpm，所以包名与版本都必须先确认「只可能是包说明符，不可能是开关」：
  * 包名每段不能以 `-` 开头（见 {@link PACKAGE_NAME_RE}），版本只能由版本号 / 范围 / tag 的字符
  * 组成（见 {@link VERSION_RE}）。

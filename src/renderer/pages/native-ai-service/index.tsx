@@ -144,8 +144,8 @@ function DshPluginInstallResultContent({
 
       <p className="dsh-plugin-install-hint">
         {result.running
-          ? 'DeepSeek Harness 正在运行：先点「停止」再点「运行」，重启后新插件才会加载。'
-          : '下次启动 DeepSeek Harness 时会加载这些插件。'}
+          ? '安装插件前已关闭 DeepSeek Harness 桌面版，请手动重新打开后新插件才会加载。'
+          : '下次打开 DeepSeek Harness 桌面版时会加载这些插件。'}
       </p>
       <p className="dsh-plugin-install-hint">
         清单文件：<code>{result.indexPath}</code>（
@@ -196,10 +196,6 @@ export default function NativeAiService() {
       uninstalling: '卸载中',
     }[deepseekHarnessShortcut.state] || '检测中...';
 
-  const [deepseekHarnessOperating, setDeepseekHarnessOperating] = useState<
-    'run' | 'stop' | null
-  >(null);
-
   const installDeepseekHarnessService = async () => {
     try {
       await deepseekHarnessShortcut.install();
@@ -211,45 +207,6 @@ export default function NativeAiService() {
   const removeDeepseekHarnessService = async () => {
     try {
       await deepseekHarnessShortcut.remove();
-    } catch (e) {
-      message.error(e.message);
-    }
-  };
-
-  const runDeepseekHarnessService = async () => {
-    setDeepseekHarnessOperating('run');
-    try {
-      await deepseekHarnessShortcut.run();
-    } catch (e) {
-      message.error(e.message);
-    } finally {
-      setDeepseekHarnessOperating(null);
-    }
-  };
-
-  const stopDeepseekHarnessService = async () => {
-    setDeepseekHarnessOperating('stop');
-    try {
-      await deepseekHarnessShortcut.stop();
-    } catch (e) {
-      message.error(e.message);
-    } finally {
-      setDeepseekHarnessOperating(null);
-    }
-  };
-
-  const openDeepseekHarnessWindow = async () => {
-    try {
-      await deepseekHarnessShortcut.openWindow();
-    } catch (e) {
-      message.error(e.message);
-    }
-  };
-
-  const copyDeepseekHarnessPageLink = async () => {
-    try {
-      await deepseekHarnessShortcut.copyPageLink();
-      message.success('页面链接已复制到剪贴板');
     } catch (e) {
       message.error(e.message);
     }
@@ -307,7 +264,8 @@ export default function NativeAiService() {
           </ul>
           <p className="workbuddy-sync-backup">
             写入前会自动把这两个文件整份备份到 dsh 的 <code>backups/</code>
-            目录，发生错误时可手动还原；DeepSeek Harness 会热加载新配置，无需重启。
+            目录，发生错误时可手动还原；DeepSeek Harness
+            会热加载新配置，无需重启。
           </p>
         </div>
       ),
@@ -342,6 +300,9 @@ export default function NativeAiService() {
         okText: '好',
         content: <span>{describeError(e)}</span>,
       });
+    } finally {
+      // 装插件时可能关闭了桌面版，刷新一下运行状态
+      void deepseekHarnessShortcut.refresh();
     }
   };
 
@@ -360,7 +321,7 @@ export default function NativeAiService() {
         <div className="dsh-plugin-install-confirm">
           <p>
             会按随程序分发的插件清单，用 <code>dsh plugin add</code>{' '}
-            把清单里的插件装进 dsh 的 web profile：
+            把清单里的插件装进 DeepSeek Harness 桌面版的 desktop profile：
           </p>
           <ul>
             <li>
@@ -369,6 +330,9 @@ export default function NativeAiService() {
             </li>
             <li>
               清单里 <code>enabled:false</code> 的条目跳过不装
+            </li>
+            <li>
+              DeepSeek Harness 桌面版正在运行时会先关闭它，装完需要手动重新打开
             </li>
             <li>不动 dsh 本身，也不改模型配置</li>
           </ul>
@@ -801,60 +765,18 @@ export default function NativeAiService() {
                 <span className="button-text">安装</span>
               </Button>
             ),
-            deepseekHarnessShortcut.state === 'installed' &&
-              !deepseekHarnessShortcut.running && (
-                <Button
-                  key="run-deepseek-harness-service"
-                  className="rts-button run"
-                  loading={deepseekHarnessOperating === 'run'}
-                  disabled={deepseekHarnessOperating === 'stop'}
-                  onClick={runDeepseekHarnessService}
-                >
-                  <span className="button-text">运行</span>
-                </Button>
-              ),
-            deepseekHarnessShortcut.running && (
+            (deepseekHarnessShortcut.state === 'installed' ||
+              deepseekHarnessShortcut.state === 'uninstalling') && (
               <Button
-                key="open-deepseek-harness-window"
-                className="rts-button run"
-                onClick={openDeepseekHarnessWindow}
-              >
-                <span className="button-text">打开界面</span>
-              </Button>
-            ),
-            deepseekHarnessShortcut.running && (
-              <Button
-                key="copy-deepseek-harness-page-link"
-                onClick={copyDeepseekHarnessPageLink}
-              >
-                <span className="button-text">复制页面链接</span>
-              </Button>
-            ),
-            deepseekHarnessShortcut.running && (
-              <Button
-                key="stop-deepseek-harness-service"
+                key="remove-deepseek-harness-service"
                 className="rts-button uninstall"
                 danger
-                loading={deepseekHarnessOperating === 'stop'}
-                disabled={deepseekHarnessOperating === 'run'}
-                onClick={stopDeepseekHarnessService}
+                loading={deepseekHarnessShortcut.state === 'uninstalling'}
+                onClick={removeDeepseekHarnessService}
               >
-                <span className="button-text">停止</span>
+                <span className="button-text">卸载</span>
               </Button>
             ),
-            (deepseekHarnessShortcut.state === 'installed' ||
-              deepseekHarnessShortcut.state === 'uninstalling') &&
-              deepseekHarnessShortcut.running === false && (
-                <Button
-                  key="remove-deepseek-harness-service"
-                  className="rts-button uninstall"
-                  danger
-                  loading={deepseekHarnessShortcut.state === 'uninstalling'}
-                  onClick={removeDeepseekHarnessService}
-                >
-                  <span className="button-text">卸载</span>
-                </Button>
-              ),
             <Button
               key="refresh-deepseek-harness-service"
               loading={
@@ -890,13 +812,7 @@ export default function NativeAiService() {
         >
           <List.Item.Meta
             title="DeepSeek Harness"
-            description={`DeepSeek 智能体工作台 服务状态：${deepseekHarnessStateText}${
-              deepseekHarnessShortcut.running ? '（运行中）' : ''
-            }${
-              deepseekHarnessShortcut.port
-                ? `（端口 ${deepseekHarnessShortcut.port}）`
-                : ''
-            }${
+            description={`DeepSeek 智能体工作台 安装状态：${deepseekHarnessStateText}${
               deepseekHarnessShortcut.version
                 ? ` 版本：${deepseekHarnessShortcut.version}`
                 : ''

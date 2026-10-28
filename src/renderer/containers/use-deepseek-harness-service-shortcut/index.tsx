@@ -97,34 +97,6 @@ export function useDeepseekHarnessServiceShortcut() {
     }
   }, [serviceInfo.state, runAction]);
 
-  const run = useCallback(async () => {
-    await runAction({
-      actionName: '启动',
-      action: () => window.mainHandle.runDeepseekHarnessServiceHandle(),
-    });
-  }, [runAction]);
-
-  const stop = useCallback(async () => {
-    await runAction({
-      actionName: '停止',
-      action: () => window.mainHandle.stopDeepseekHarnessServiceHandle(),
-    });
-  }, [runAction]);
-
-  const openWindow = useCallback(async () => {
-    await runAction({
-      actionName: '打开页面',
-      action: () => window.mainHandle.openDeepseekHarnessWindowHandle(),
-    });
-  }, [runAction]);
-
-  const copyPageLink = useCallback(async () => {
-    await runAction({
-      actionName: '复制链接',
-      action: () => window.mainHandle.copyDeepseekHarnessDashboardUrlHandle(),
-    });
-  }, [runAction]);
-
   const refresh = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -193,14 +165,8 @@ export function useDeepseekHarnessServiceShortcut() {
     refreshing,
     state: serviceInfo.state,
     version: serviceInfo.version,
-    running: serviceInfo.running ?? false,
-    port: serviceInfo.port,
     install,
     remove,
-    run,
-    stop,
-    openWindow,
-    copyPageLink,
     refresh,
     syncingWorkbuddyModels,
     syncWorkbuddyModels,

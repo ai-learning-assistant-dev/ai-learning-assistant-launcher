@@ -42,10 +42,11 @@ export function resolveDshHome(): string {
 }
 
 /**
- * 本启动器只跑 `dsh web`，所以 profile 固定为 `web`（与 dsh 的 profile 模板一致）。
+ * 本启动器只启动 DeepSeek Harness 桌面版，桌面版固定使用保留的 `desktop` profile
+ * （由桌面应用自己初始化，不能通过 `dsh --profile desktop` 启动命令创建）。
  * dsh 0.2.0 起模型路由不再写 `settings.yaml`，而是写这个 profile 的用户补丁层。
  */
-const DSH_PROFILE = 'web';
+const DSH_PROFILE = 'desktop';
 
 /** dsh 的 profile 补丁文件（模型路由写在这里） */
 export function dshProfilePatchPath(): string {
@@ -87,7 +88,7 @@ export function createDshSyncLogger(): SyncLogger {
 
 /**
  * 把一份大模型配置同步进 dsh：写 `$DSH_HOME/.credentials.yaml`（API key）与
- * profile 补丁 `$DSH_HOME/profiles/web/cordis.patch.yml`（模型路由）。
+ * 桌面版 profile 补丁 `$DSH_HOME/profiles/desktop/cordis.patch.yml`（模型路由）。
  *
  * 换算规则见 model-sync-plan.ts：密钥为空 / 全空白不写凭据、路由也不声明 `apiKeyEnv`；
  * DeepSeek 提供方走内置路由 `deepseek-official`，其余走 `llm-pi-ai` 自定义提供方；

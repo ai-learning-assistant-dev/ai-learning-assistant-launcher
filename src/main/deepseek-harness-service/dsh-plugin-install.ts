@@ -28,8 +28,11 @@ import type { DshPluginEntry } from './dsh-plugin-index';
 
 const DS_LABEL = 'DEEPSEEK_HARNESS';
 
-/** 本启动器只跑 `dsh web`，插件也装进这个 profile（与 dsh-model-sync 保持一致） */
-export const DSH_PROFILE = 'web';
+/**
+ * 本启动器只启动 DeepSeek Harness 桌面版，插件也装进桌面版保留的 `desktop` profile
+ * （与 dsh-model-sync 保持一致）。
+ */
+export const DSH_PROFILE = 'desktop';
 
 /** 一次插件安装的结果，用于日志汇总 */
 export interface DshPluginInstallResult {
@@ -187,9 +190,13 @@ function describeError(error: unknown): string {
 /**
  * 按清单安装插件。
  * 每个插件单独跑一次 `dsh plugin add`，这样某一个装不上不会连累后面的插件。
+ *
+ * `dshCommand` 由调用方传入：桌面安装包不在 PATH 里注册 dsh，
+ * 需要直接用它自带的 `resources/runtime/cli/bin/dsh.cmd`。
  */
 export async function installDshPlugins(
   exec: Exec,
+  dshCommand: string,
   plugins: DshPluginEntry[],
   logger: SyncLogger,
 ): Promise<DshPluginInstallResult> {
@@ -246,7 +253,7 @@ export async function installDshPlugins(
     );
     try {
       await exec.exec(
-        'dsh',
+        dshCommand,
         ['plugin', '--profile', DSH_PROFILE, 'add', spec],
         { logger: loggerFactory(DS_LABEL) },
       );

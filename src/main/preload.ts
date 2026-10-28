@@ -95,10 +95,6 @@ import {
   installDeepseekHarnessServiceHandle,
   queryDeepseekHarnessServiceHandle,
   removeDeepseekHarnessServiceHandle,
-  runDeepseekHarnessServiceHandle,
-  stopDeepseekHarnessServiceHandle,
-  openDeepseekHarnessWindowHandle,
-  copyDeepseekHarnessDashboardUrlHandle,
   syncWorkbuddyModelsToDshHandle,
   openDeepseekHarnessBackupDirHandle,
   installDshPluginsHandle,
@@ -329,24 +325,6 @@ const mainHandle = {
     return ipcInvoke<DeepseekHarnessServiceInfo>(
       removeDeepseekHarnessServiceHandle,
     );
-  },
-  runDeepseekHarnessServiceHandle: async () => {
-    return ipcInvoke<DeepseekHarnessServiceInfo>(
-      runDeepseekHarnessServiceHandle,
-    );
-  },
-  stopDeepseekHarnessServiceHandle: async () => {
-    return ipcInvoke<DeepseekHarnessServiceInfo>(
-      stopDeepseekHarnessServiceHandle,
-    );
-  },
-  openDeepseekHarnessWindowHandle: async () => {
-    return ipcInvoke<DeepseekHarnessServiceInfo>(
-      openDeepseekHarnessWindowHandle,
-    );
-  },
-  copyDeepseekHarnessDashboardUrlHandle: async () => {
-    return ipcInvoke<string>(copyDeepseekHarnessDashboardUrlHandle);
   },
   // 把 WorkBuddy 的模型配置同步进 DeepSeek Harness（写入前自动备份 dsh 配置）
   syncWorkbuddyModelsToDshHandle: async () => {

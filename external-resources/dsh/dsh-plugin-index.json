@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "comment": "本启动器安装 DeepSeek Harness 时自动安装的 dsh 插件清单。安装前会先尝试从服务器拉取最新一份覆盖本文件（拉不到就沿用这份）。字段说明见 src/main/deepseek-harness-service/dsh-plugin-index.ts：version 写版本范围（如 ^1.2.3）表示该范围内已满足就不重装，省略或写 latest 表示每次装最新；enabled:false 表示留在清单里但这次不装。这份清单里的插件取自 2026-10-23 两份插件报告（本地插件清单.md、DSH插件报告_2026-10-23.md）里评价好、实际在用的项，并已逐个核对 npm 上存在、且包里有 dsh.bundle（装了才会被 dsh 加载）。version 一律写 latest：每次装/升级都让 pnpm 去解析一次最新版，已经装好的也会重装到最新（代价是每次都跑一遍 pnpm）。只收 npm 来源：GitHub / git 来源的一律不进（清单的 version 只允许版本号 / 范围 / tag，写不了换来源的写法）——npm 上根本没有的 dsh-krouter、easyeda-agent-dsh、superdesign-dsh 直接略过；npm 同名但内容对不上的也略过，dsh-resume（npm 上 0.0.1 是约 1KB 的空壳、没有 dsh.bundle，真身在 git 仓库）、dsh-prompt-enhancer（npm 上是另一位作者的包，报告里那个来自 GitHub 上的 fishsb 仓库）。agent team、auto review、worktree、session-search、语音输入这些官方实验 bundle 已随 @deepseek-ai/dsh 一起装好，只在 dsh 界面里开关，不必进这份清单。",
+  "comment": "本启动器安装 DeepSeek Harness 时自动安装的 dsh 插件清单。安装前会先尝试从服务器拉取最新一份覆盖本文件（拉不到就沿用这份）。字段说明见 src/main/deepseek-harness-service/dsh-plugin-index.ts：version 写版本范围（如 ^1.2.3）表示该范围内已满足就不重装，省略或写 latest 表示每次装最新；enabled:false 表示留在清单里但这次不装。这份清单里的插件取自 2026-10-23 两份插件报告（本地插件清单.md、DSH插件报告_2026-10-23.md）里评价好、实际在用的项，并已逐个核对 npm 上存在、且包里有 dsh.bundle（装了才会被 dsh 加载）。version 一律写 latest：每次装/升级都让 pnpm 去解析一次最新版，已经装好的也会重装到最新（代价是每次都跑一遍 pnpm）。只收 npm 来源：GitHub / git 来源的一律不进（清单的 version 只允许版本号 / 范围 / tag，写不了换来源的写法）——npm 上根本没有的 dsh-krouter、easyeda-agent-dsh、superdesign-dsh 直接略过；npm 同名但内容对不上的也略过，dsh-resume（npm 上 0.0.1 是约 1KB 的空壳、没有 dsh.bundle，真身在 git 仓库）、dsh-prompt-enhancer（npm 上是另一位作者的包，报告里那个来自 GitHub 上的 fishsb 仓库）。agent team、auto review、worktree、session-search、语音输入这些官方实验 bundle 已随 @deepseek-ai/dsh 一起装好，只在 dsh 界面里开关，不必进这份清单。后续按需求补入 dsh-math-calculator（已核对 npm 上存在且包含 dsh.bundle）。",
   "plugins": [
     {
       "name": "dshmarket",
@@ -84,6 +84,13 @@
       "version": "latest",
       "displayName": "StudyMate 学习引擎",
       "description": "学习技能 + 课程引擎，贴合本启动器的 AI 学习场景",
+      "enabled": true
+    },
+    {
+      "name": "dsh-math-calculator",
+      "version": "latest",
+      "displayName": "数学计算器",
+      "description": "高精度数学计算：BigNumber 求值、符号微积分、线性代数、统计回归、微分方程、单位换算与公式库，全部本地执行",
       "enabled": true
     },
     {
