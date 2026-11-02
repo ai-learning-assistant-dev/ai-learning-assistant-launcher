@@ -213,7 +213,9 @@ export async function createProfile(
   }
 
   const bundles = options.bundles ?? template.bundles;
-  initProfile(dir, bundles, template?.patchReload);
+  // 0.2.1 起 initProfile 只接受 (dir, bundles)：模板不再带 patchReload，
+  // 初始化统一写入一份空的用户 patch 层（PROFILE_PATCH_TEMPLATE）。
+  initProfile(dir, bundles);
 
   return { name, dir, bundles: [...bundles] };
 }
