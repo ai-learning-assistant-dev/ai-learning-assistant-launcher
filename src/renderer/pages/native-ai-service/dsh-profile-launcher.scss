@@ -1,0 +1,40 @@
+/* DSH「选 profile 并启动」：挂在 List.Item 的 description 下面，占一整行 */
+.dsh-profile-launcher {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+
+  .dsh-profile-launcher-label {
+    font-size: 13px;
+    color: rgba(0, 0, 0, 0.65);
+    white-space: nowrap;
+  }
+
+  // 名字 + 插件数最长会到「sdk-minimal（12 个插件）」，给足宽度不让它被压扁
+  .dsh-profile-launcher-select {
+    min-width: 210px;
+  }
+
+  .dsh-profile-launcher-button {
+    font-size: 12px;
+  }
+
+  .dsh-profile-launcher-refresh {
+    padding: 0 4px;
+    font-size: 12px;
+  }
+
+  .dsh-profile-launcher-hint {
+    font-size: 12px;
+    line-height: 18px;
+    color: rgba(0, 0, 0, 0.45);
+  }
+
+  .dsh-profile-launcher-warn {
+    font-size: 12px;
+    line-height: 18px;
+    color: #d4380d;
+  }
+}
