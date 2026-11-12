@@ -193,8 +193,9 @@ async function onboardDeepseekHarness(): Promise<void> {
 
 // ===== dsh 插件安装（安装 dsh 的一步，也是界面上的「安装插件」按钮） =====
 //
-// - 清单：`external-resources/dsh/dsh-plugin-index.json`（随安装包分发，离线时用它）
-// - 安装前先从 `DSH_PLUGIN_INDEX_URL` 拉一份最新的覆盖本地那份（拉不到就用本地那份）
+// - 清单：`external-resources/dsh/dsh-plugin-index.json`（随安装包分发，只有
+//   `@commonworks/dsh-starter` 这一条）。插件安装本身已经交给 starter：它会按用户选的场景
+//   在 dsh 首次会话里检查、按需装插件，所以启动器不再预装一长串插件，也不再有远程清单
 // - 调 `dsh plugin --profile desktop add <pkg>` 装进桌面版的 profile，
 //   dsh 自己负责把带 dsh.bundle 的包登记进 `dsh.profile.bundles`
 // - 桌面版运行时会独占 profile 文件锁：装插件前先关闭桌面版，装完按需重新启动
@@ -218,11 +219,9 @@ async function runDshPluginInstall(): Promise<DshPluginInstallSummary> {
   // 先启动一次让桌面版完成初始化（结束后会关掉）
   await ensureDesktopProfileInitialized(install);
 
-  const state = await loadDshPluginIndex(syncLogger);
+  const state = loadDshPluginIndex(syncLogger);
   if (!state.index || state.index.plugins.length === 0) {
-    throw new Error(
-      `没有可用的 dsh 插件清单（远程与本地都不可用）：${state.path}`,
-    );
+    throw new Error(`读不到可用的 dsh 插件清单：${state.path}`);
   }
 
   // 桌面版运行时会占着 profile 的 package.json 文件锁，pnpm 拿不到锁会一直等；
@@ -247,17 +246,14 @@ async function runDshPluginInstall(): Promise<DshPluginInstallSummary> {
     syncLogger,
   );
 
-  // 能走到这里说明清单可用，所以来源只会是远程或本地
-  const source = state.source === 'remote' ? 'remote' : 'local';
+  // 能走到这里说明清单可用
   if (result.installed.length > 0) {
     logger.log(`[${DS_LABEL}] 已安装 dsh 插件：${result.installed.join('、')}`);
   }
   logger.log(
     `[${DS_LABEL}] dsh 插件环节结束：新装 ${result.installed.length} 个，跳过 ${
       result.skipped.length
-    } 个，失败 ${result.failed.length} 个（清单来源：${
-      source === 'remote' ? '远程最新' : '本地'
-    }）`,
+    } 个，失败 ${result.failed.length} 个`,
   );
   if (result.failed.length > 0) {
     logger.warn(
@@ -273,7 +269,6 @@ async function runDshPluginInstall(): Promise<DshPluginInstallSummary> {
   }
 
   return {
-    source,
     indexPath: state.path,
     total: state.index.plugins.length,
     installed: result.installed,
@@ -375,7 +370,7 @@ export async function installDeepseekHarnessService(): Promise<DeepseekHarnessSe
   // 只有桌面版自己会创建，所以先启动一次让它初始化
   await ensureDesktopProfileInitialized(install);
 
-  // 安装本项目挑选的 dsh 插件（清单本地有一份，安装前会先拉一份最新的）
+  // 安装 starter（清单里只有它一条，其余插件由 starter 在 dsh 首次会话里按场景自己装）
   await installSelectedDshPlugins();
 
   // 用本项目的大模型配置初始化 dsh（cordis.patch.yml + .credentials.yaml）

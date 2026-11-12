@@ -148,8 +148,7 @@ function DshPluginInstallResultContent({
           : '下次打开 DeepSeek Harness 桌面版时会加载这些插件。'}
       </p>
       <p className="dsh-plugin-install-hint">
-        清单文件：<code>{result.indexPath}</code>（
-        {result.source === 'remote' ? '安装前下载的最新清单' : '本地清单'}）
+        清单文件：<code>{result.indexPath}</code>
       </p>
     </div>
   );
@@ -312,7 +311,7 @@ export default function NativeAiService() {
    */
   const confirmInstallDshPlugins = () => {
     Modal.confirm({
-      title: '按清单给 DeepSeek Harness 安装插件？',
+      title: '给 DeepSeek Harness 安装插件？',
       width: 540,
       icon: null,
       okText: '开始安装',
@@ -321,7 +320,9 @@ export default function NativeAiService() {
         <div className="dsh-plugin-install-confirm">
           <p>
             会按随程序分发的插件清单，用 <code>dsh plugin add</code>{' '}
-            把清单里的插件装进 DeepSeek Harness 桌面版的 desktop profile：
+            把清单里的插件装进 DeepSeek Harness 桌面版的 desktop
+            profile。清单里只有 <code>@commonworks/dsh-starter</code>{' '}
+            一条——其余插件由它在 dsh 里按场景按需安装。
           </p>
           <ul>
             <li>
@@ -337,8 +338,7 @@ export default function NativeAiService() {
             <li>不动 dsh 本身，也不改模型配置</li>
           </ul>
           <p className="dsh-plugin-install-hint">
-            插件里有 Univer Office
-            这类大包，首次执行可能要几分钟，进度看下方命令行日志，期间请不要关闭程序。
+            只装 starter 一条，通常很快完成，进度看下方命令行日志。
           </p>
         </div>
       ),

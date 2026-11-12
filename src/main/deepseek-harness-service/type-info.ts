@@ -60,9 +60,7 @@ export interface WorkbuddyModelSyncResult {
  * 单个插件装不上不会让整次操作失败，失败项都收在 `failed` 里。
  */
 export interface DshPluginInstallSummary {
-  /** 这次用的清单从哪来：remote 安装前下载的最新一份 / local 回退本地那份 */
-  source: 'remote' | 'local';
-  /** 清单文件路径（本地那份，远程清单成功时会先覆盖它） */
+  /** 清单文件路径（随包分发的那份） */
   indexPath: string;
   /** 清单里一共几条（含 enabled:false 的） */
   total: number;
