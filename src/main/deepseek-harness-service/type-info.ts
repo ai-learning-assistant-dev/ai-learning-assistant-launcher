@@ -20,6 +20,15 @@ export const openDeepseekHarnessBackupDirHandle = `${channel}open-backup-dir`;
  */
 export const installDshPluginsHandle = `${channel}install-plugins`;
 
+/** 列出磁盘上已有的 dsh profile（只列已落盘的，不含随包模板） */
+export const listDshProfilesHandle = `${channel}list-profiles`;
+
+/**
+ * 按指定 profile 启动一套独立的工作台。
+ * 只负责“点火”：进程归用户自己的控制台窗口，启动器不持有句柄、不做就绪探测、不提供停止。
+ */
+export const launchDshProfileHandle = `${channel}launch-profile`;
+
 export interface DeepseekHarnessServiceInfo {
   state: 'not_install' | 'installing' | 'installed' | 'uninstalling';
   /** 已安装的 DeepSeek Harness 桌面版版本号 */
@@ -54,6 +63,16 @@ export interface WorkbuddyModelSyncResult {
   /** 配置冲突等非致命提示 */
   warnings: string[];
 }
+
+/**
+ * profile 相关的两个类型定义在功能模块 `profile-manager/profile-launch.ts` 里，这里只做纯类型转发。
+ * 用 `export type` 而不是 `export *`：渲染层会经这里取类型，
+ * 一旦变成运行时导出，就会把 node:child_process / dsh-desktop 拖进渲染进程 bundle。
+ */
+export type {
+  DshProfileInfo,
+  DshProfileLaunchResult,
+} from './profile-manager/profile-launch';
 
 /**
  * 一次「按清单安装 dsh 插件」的结果，直接给界面展示。

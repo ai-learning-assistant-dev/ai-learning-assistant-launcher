@@ -16,6 +16,7 @@ import { TerminalLogScreen } from '../../containers/terminal-log-screen';
 import { useTextbookEditorServiceShortcut } from '../../containers/use-textbook-editor-service-shortcut';
 import { useOpenclawServiceShortcut } from '../../containers/use-openclaw-service-shortcut';
 import { useDeepseekHarnessServiceShortcut } from '../../containers/use-deepseek-harness-service-shortcut';
+import { DshProfileLauncher } from './dsh-profile-launcher';
 import {
   DshPluginInstallSummary,
   WorkbuddyModelSyncResult,
@@ -812,11 +813,18 @@ export default function NativeAiService() {
         >
           <List.Item.Meta
             title="DeepSeek Harness"
-            description={`DeepSeek 智能体工作台 安装状态：${deepseekHarnessStateText}${
-              deepseekHarnessShortcut.version
-                ? ` 版本：${deepseekHarnessShortcut.version}`
-                : ''
-            }`}
+            description={
+              <>
+                {`DeepSeek 智能体工作台 安装状态：${deepseekHarnessStateText}${
+                  deepseekHarnessShortcut.version
+                    ? ` 版本：${deepseekHarnessShortcut.version}`
+                    : ''
+                }`}
+                <DshProfileLauncher
+                  installed={deepseekHarnessShortcut.state === 'installed'}
+                />
+              </>
+            }
           />
         </List.Item>
       </List>

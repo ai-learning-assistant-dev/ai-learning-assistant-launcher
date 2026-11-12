@@ -8,6 +8,8 @@ import {
   syncWorkbuddyModelsToDshHandle,
   openDeepseekHarnessBackupDirHandle,
   installDshPluginsHandle,
+  listDshProfilesHandle,
+  launchDshProfileHandle,
   DeepseekHarnessServiceInfo,
   DshPluginInstallSummary,
   WorkbuddyModelSyncResult,
@@ -27,6 +29,7 @@ import {
 } from './dsh-model-sync';
 import { dshPluginIndexPath, loadDshPluginIndex } from './dsh-plugin-index';
 import { dshProfileDir, installDshPlugins } from './dsh-plugin-install';
+import { launchDshProfile, listDshProfiles } from './profile-manager/profile-launch';
 import {
   DSH_DESKTOP_DOWNLOAD_PAGE,
   findDshDesktopInstall,
@@ -46,6 +49,9 @@ import {
  * - 启动 / 停止由桌面版自己负责：启动器只负责安装、卸载、同步模型和装插件，
  *   不再提供运行 / 打开界面 / 停止按钮（不再跑 `dsh web`）；
  *   装插件 / 卸载时会按需结束桌面版进程，装插件前若桌面版开着会先关掉它
+ * - 例外是「按 profile 启动」：桌面版把 profile 写死成 `desktop`，想换 profile 只能另起
+ *   一套实例。这条路径只点火不托管（见 profile-launch.ts）——进程和日志都留在用户自己的
+ *   控制台窗口里，启动器不持有句柄、不做就绪探测、也没有停止按钮
  * - 模型与插件都写进桌面版保留的 `desktop` profile，而不是以前的 `web`：
  *   模型写 `$DSH_HOME/profiles/desktop/cordis.patch.yml`（DeepSeek 官方提供方写
  *   `llm-deepseek`，其余模型写 `llm-pi-ai` 自定义提供方），非空 API key 写进
@@ -516,4 +522,18 @@ export default async function init(ipcMain: IpcMain) {
   ipcHandle(ipcMain, installDshPluginsHandle, async (_event) =>
     installDeepseekHarnessPlugins(),
   );
+  ipcHandle(ipcMain, listDshProfilesHandle, async (_event) =>
+    listDshProfiles(),
+  );
+  ipcHandle(ipcMain, launchDshProfileHandle, async (_event, profile: string) => {
+    // 安装位置由这里探测，再以 command 传给 profile-launch，避免那个模块反向依赖上级目录
+    const install = await findDshDesktopInstall(syncLogger);
+    if (!install) {
+      throw new Error('还没有安装 DeepSeek Harness 桌面版，请先安装');
+    }
+    return launchDshProfile(profile, {
+      command: install.command,
+      logger: syncLogger,
+    });
+  });
 }

@@ -98,8 +98,12 @@ import {
   syncWorkbuddyModelsToDshHandle,
   openDeepseekHarnessBackupDirHandle,
   installDshPluginsHandle,
+  listDshProfilesHandle,
+  launchDshProfileHandle,
   DeepseekHarnessServiceInfo,
   DshPluginInstallSummary,
+  DshProfileInfo,
+  DshProfileLaunchResult,
   WorkbuddyModelSyncResult,
 } from './deepseek-harness-service/type-info';
 import { openBunDebugHandle } from './bun-debug/type-info';
@@ -337,6 +341,17 @@ const mainHandle = {
   // 按插件清单给已装好的 dsh 补装 / 升级插件（不重装 dsh）
   installDshPluginsHandle: async () => {
     return ipcInvoke<DshPluginInstallSummary>(installDshPluginsHandle);
+  },
+  // 列出磁盘上已有的 dsh profile（含“能不能启动”的判断）
+  listDshProfilesHandle: async () => {
+    return ipcInvoke<DshProfileInfo[]>(listDshProfilesHandle);
+  },
+  // 按 profile 启动一套独立工作台：只点火，进程与日志都在用户自己的控制台窗口里
+  launchDshProfileHandle: async (profile: string) => {
+    return ipcInvoke<DshProfileLaunchResult>(
+      launchDshProfileHandle,
+      profile,
+    );
   },
   openBunDebugHandle: async () => {
     return ipcInvoke<void>(openBunDebugHandle);
