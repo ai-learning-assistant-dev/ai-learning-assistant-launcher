@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "comment": "本启动器安装 DeepSeek Harness 时自动安装的 dsh 插件清单。这里**只放一条**：@commonworks/dsh-starter。插件安装这件事已经交给它：starter 会按用户选的场景（法律财务 / 办公 / 生活 / 学习 / 开发 / 媒体）在 dsh 首次会话里检查并自动装上真正需要的插件，所以启动器不再预先塞一堆插件（之前那份 20 多条的大清单已全部去掉，老用户已经装上的插件不会被卸载，只是以后不再由启动器安装）。字段说明见 src/main/deepseek-harness-service/dsh-plugin-index.ts：version 写版本范围（如 ^1.2.3）表示该范围内已满足就不重装，省略或写 latest 表示每次装最新；enabled:false 表示留在清单里但这次不装。包名以 npm 上的实际包为准：@commonworks/starter 在 npm 上不存在，对应的是 @commonworks/dsh-starter（0.7.x，package.json 里带 dsh.bundle，装了才会被 dsh 加载）。清单只随安装包分发，安装前不再从服务器拉取覆盖——要改装什么，改这个文件并重新打包，或在 dsh 里手动装。",
+  "plugins": [
+    {
+      "name": "@commonworks/dsh-starter",
+      "version": "latest",
+      "displayName": "场景起步包（Starter）",
+      "description": "按场景（法律财务 / 办公 / 生活 / 学习 / 开发 / 媒体）预置 agent preset，并在首次会话里检查、按需安装该场景需要的插件",
+      "enabled": true
+    }
+  ]
+}

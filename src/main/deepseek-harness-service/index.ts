@@ -1,91 +1,67 @@
-import { app, BrowserWindow, IpcMain, clipboard, session } from 'electron';
-import { createHash, createHmac } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import http from 'node:http';
-import type { ChildProcess } from 'node:child_process';
-import { load } from 'js-yaml';
+import { IpcMain, shell } from 'electron';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import {
   queryDeepseekHarnessServiceHandle,
   installDeepseekHarnessServiceHandle,
   removeDeepseekHarnessServiceHandle,
-  runDeepseekHarnessServiceHandle,
-  stopDeepseekHarnessServiceHandle,
-  openDeepseekHarnessWindowHandle,
-  copyDeepseekHarnessDashboardUrlHandle,
-  deepseekHarnessDashboardUrl,
-  DEEPSEEK_HARNESS_NPM_PACKAGE,
-  DEEPSEEK_HARNESS_NODE_RANGE,
-  DEEPSEEK_HARNESS_PORTS,
+  syncWorkbuddyModelsToDshHandle,
+  openDeepseekHarnessBackupDirHandle,
+  installDshPluginsHandle,
   DeepseekHarnessServiceInfo,
+  DshPluginInstallSummary,
+  WorkbuddyModelSyncResult,
 } from './type-info';
 import { ipcHandle } from '../ipc-util';
 import { Exec } from '../exec';
 import { loggerFactory } from '../terminal-log';
 import { getLlmConfig } from '../configs';
-import { spawn } from 'cross-spawn';
-import {
-  TAOBAO_NPM_REGISTRY,
-  detectSystemNode,
-  ensureNode,
-  ensurePnpmInstalled,
-  refreshPathAfterInstall,
-  runGlobalMaybeElevated,
-  setNpmRegistryTaobaoGlobal,
-  type NodeVersionPolicy,
-} from '../node-toolchain';
-import type { CommandRunner, SyncLogger } from './dsh-config-providers';
+import { setNpmRegistryTaobaoGlobal } from '../node-toolchain';
+import type { SyncLogger } from './dsh-config-providers';
 import {
   createDshSyncLogger,
-  dshCredentialsPath,
-  dshSettingsPath,
+  dshBackupRoot,
+  dshProfilePatchPath,
   syncModelsIntoDshHarness,
+  syncWorkbuddyModelsIntoDshHarness,
 } from './dsh-model-sync';
+import { dshPluginIndexPath, loadDshPluginIndex } from './dsh-plugin-index';
+import { dshProfileDir, installDshPlugins } from './dsh-plugin-install';
+import {
+  DSH_DESKTOP_DOWNLOAD_PAGE,
+  findDshDesktopInstall,
+  findDshDesktopProcess,
+  installDshDesktop,
+  launchDshDesktop,
+  readDshCommandVersion,
+  stopDshDesktop,
+  uninstallDshDesktop,
+  type DshDesktopInstall,
+} from './dsh-desktop';
 
 /**
  * DeepSeek Harness（dsh）服务：
- * - dsh 是全局安装的 npm 包（`npm i -g @deepseek-ai/dsh`），所以已安装时直接复用，不重复安装
- * - 界面是 `dsh web`（默认端口 3080），启动时打印带一次性 token 的 URL；机器上已有实例时
- *   直接复用该实例，不再另起一个
- * - 安装时把本项目配置的大模型镜像进 dsh 的 `$DSH_HOME/settings.yaml`：
- *   DeepSeek 官方提供方写 `llm-deepseek`（内置路由 `deepseek-official`），其余模型写 `llm-pi-ai`
- *   的自定义提供方路由；非空 API key 写进 `$DSH_HOME/.credentials.yaml`（空 / 全空白密钥不写），
- *   装完即可在 dsh 的模型选择器里选到。DeepSeek 密钥同时写进联网搜索提供方
- *   `web-search-deepseek`（复用同一把 key，非 DeepSeek 密钥不写）
+ * - 安装方式：下载官网 https://www.deepseek.com/harness/ 提供的 Windows 安装包并静默安装
+ *   （安装包自带 Node、pnpm 和 dsh CLI，不需要系统预装 Node / npm）
+ * - 启动 / 停止由桌面版自己负责：启动器只负责安装、卸载、同步模型和装插件，
+ *   不再提供运行 / 打开界面 / 停止按钮（不再跑 `dsh web`）；
+ *   装插件 / 卸载时会按需结束桌面版进程，装插件前若桌面版开着会先关掉它
+ * - 模型与插件都写进桌面版保留的 `desktop` profile，而不是以前的 `web`：
+ *   模型写 `$DSH_HOME/profiles/desktop/cordis.patch.yml`（DeepSeek 官方提供方写
+ *   `llm-deepseek`，其余模型写 `llm-pi-ai` 自定义提供方），非空 API key 写进
+ *   `$DSH_HOME/.credentials.yaml`；插件用 `dsh plugin --profile desktop add` 安装
  */
 
 const DS_LABEL = 'DEEPSEEK_HARNESS';
 
 const commandLine = new Exec();
 
-// dsh 的 Node 版本策略：dsh 的会话持久化用到 Node 24 才有的 zlib zstd API，
-// 而包本身没有声明 engines 字段，低版本 Node 只会在运行时抛晦涩的 SyntaxError
-const DSH_NODE_POLICY: NodeVersionPolicy = {
-  label: DS_LABEL,
-  range: DEEPSEEK_HARNESS_NODE_RANGE,
-  // 在线解析失败时的兜底版本（Node 24 的 LTS 补丁版本）
-  fallbackReleases: [
-    { version: '24.21.0', lts: 'Krypton' },
-    { version: '24.20.0', lts: 'Krypton' },
-    { version: '24.16.0', lts: 'Krypton' },
-  ],
-};
+/** 首次启动桌面版并等待它初始化 `desktop` profile 的上限 */
+const DESKTOP_PROFILE_INIT_TIMEOUT_MS = 90 * 1000;
 
-/** 就绪等待上限：超过这个时间端口仍未就绪（根路径回 401）就放弃，不再打开界面 */
-const READY_TIMEOUT_MS = 2 * 60 * 1000;
-
-/** 启动硬超时兜底：超过这个时间整个启动流程仍未结束就报错（正常应在 READY_TIMEOUT_MS 内结束） */
-const STARTUP_TIMEOUT_MS = 150000;
-
-/** 由本模块拉起的 dsh web 子进程（已有的外部实例不在这里） */
-let dshProcess: ChildProcess | null = null;
-
-/** 最近一次探测到的 dsh web 端口与带 token 的界面地址 */
-let activePort: number | null = null;
-let activeUrl: string | null = null;
-
-/** dashboard 界面窗口实例 */
-let dshWindow: BrowserWindow | null = null;
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 /**
  * 统一日志入口：同一条日志同时写 console（主进程 console 已接入 electron-log，落盘 launcher.log）
@@ -123,512 +99,87 @@ function throwWithLog(message: string, cause?: unknown): never {
   throw new Error(message);
 }
 
-// ===== dsh 安装目录与配置文件 =====
+// ===== 桌面版安装与进程状态 =====
 //
-// 路径解析（`$DSH_HOME` / settings.yaml / .credentials.yaml）与配置同步都在
-// dsh-model-sync.ts 里，安装流程与模型配置页的「同步 API key」按钮共用同一套。
+// 安装 / 卸载 / 进程查找都在 dsh-desktop.ts 里；这里只组合业务动作：
+// 启动桌面版、等待 desktop profile 初始化、判断是否在运行。
 
-// ===== 运行状态探测 =====
-
-/**
- * 探测单个端口上是否有 dsh web 进程在监听（不区分是否就绪）。
- * “能收到 HTTP 响应”就说明端口上有服务在跑，不必也不应该去校验响应码。
- * 就绪判定请用 {@link probePortReady}。
- */
-function probePort(port: number, timeoutMs = 2500): Promise<boolean> {
-  return new Promise((resolve) => {
-    const req = http.get(`http://127.0.0.1:${port}/`, (res) => {
-      res.resume();
-      resolve(true);
-    });
-    req.on('error', () => resolve(false));
-    req.setTimeout(timeoutMs, () => {
-      req.destroy();
-      resolve(false);
-    });
-  });
-}
-
-/**
- * 探测端口上的 dsh web 是否「真正就绪」（不是仅仅端口已监听）。
- * 就绪判据：根路径 `/` 返回 401。dsh web 未带 cookie 访问时会回鉴权挑战（401），
- * 而启动流程中路由尚未注册完时根路径会回 404、端口未绑定时会 ECONNREFUSED。
- * 因此只有 401 才代表 dsh 已完成启动、可以打开界面；404 说明还在启动、界面还没就绪。
- */
-function probePortReady(port: number, timeoutMs = 2500): Promise<boolean> {
-  return new Promise((resolve) => {
-    const req = http.get(`http://127.0.0.1:${port}/`, (res) => {
-      res.resume();
-      resolve(res.statusCode === 401);
-    });
-    req.on('error', () => resolve(false));
-    req.setTimeout(timeoutMs, () => {
-      req.destroy();
-      resolve(false);
-    });
-  });
-}
-
-/** 按候选端口顺序探测：返回第一个存活的端口，都没有则返回 null */
-async function detectRunningPort(): Promise<number | null> {
-  // 并发探测（回环地址上无监听会立刻 ECONNREFUSED，只有异常情况才会等超时），
-  // 结果按候选顺序取第一个存活的
-  const results = await Promise.all(
-    DEEPSEEK_HARNESS_PORTS.map((port) => probePort(port)),
-  );
-  const index = results.findIndex((alive) => alive);
-  return index < 0 ? null : DEEPSEEK_HARNESS_PORTS[index];
-}
-
-/**
- * 按端口号反查正在监听的进程 pid。
- * Electron 主进程重启后，之前 `spawn` 出来的 dsh web 子进程句柄就丢了
- * （`dshProcess` 为 null），此时只能靠端口号把那个进程找回来。
- * netstat 在 Windows 上始终可用（wmic 在新系统上已被移除），格式为：
- *   TCP    127.0.0.1:3080    0.0.0.0:0    LISTENING    12672
- */
-async function findListenerPid(port: number): Promise<number | null> {
-  try {
-    const { stdout } = await commandLine.exec('netstat', ['-ano']);
-    const pattern = new RegExp(
-      `^\\s*TCP\\s+\\S+:${port}\\s+\\S+\\s+LISTENING\\s+(\\d+)\\s*$`,
-    );
-    for (const line of (stdout || '').split(/\r?\n/)) {
-      const matched = pattern.exec(line);
-      if (matched) {
-        return Number(matched[1]);
-      }
-    }
-    return null;
-  } catch (e) {
-    logger.warn(`[${DS_LABEL}] 查询端口 ${port} 的监听进程失败:`, e);
-    return null;
-  }
-}
-
-/** 等端口不再响应（进程结束后端口会被释放） */
-async function waitPortStopped(
-  port: number,
-  timeoutMs = 10000,
+/** 桌面版是否在运行（按安装目录里的主程序进程判断） */
+async function isDshDesktopRunning(
+  install: DshDesktopInstall,
 ): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (!(await probePort(port, 1500))) {
-      return true;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  return false;
+  return (await findDshDesktopProcess(install.installDir, syncLogger)) !== null;
 }
 
 /**
- * 结束占用指定端口的 dsh web 进程（按端口号反查 pid）。
- * 先 taskkill 连子进程一起结束；仍有残留时退回 PowerShell 强杀；
- * 最后用端口探测确认真的停下来了。返回是否已停止。
- */
-async function killDshByPort(port: number): Promise<boolean> {
-  const pid = await findListenerPid(port);
-  if (pid === null) {
-    const stopped = !(await probePort(port, 1000));
-    if (stopped) {
-      logger.log(`[${DS_LABEL}] 端口 ${port} 上没有监听进程，无需结束`);
-    } else {
-      logger.warn(
-        `[${DS_LABEL}] 端口 ${port} 仍在响应，但没能从 netstat 里找到监听进程`,
-      );
-    }
-    return stopped;
-  }
-
-  logger.log(
-    `[${DS_LABEL}] 按端口 ${port} 找到 dsh web 进程（pid ${pid}），准备结束`,
-  );
-  try {
-    await commandLine.exec('taskkill', ['/pid', String(pid), '/T', '/F']);
-  } catch (e) {
-    logger.warn(
-      `[${DS_LABEL}] taskkill 结束 pid ${pid} 失败，改用 PowerShell 强杀:`,
-      e,
-    );
-    try {
-      await commandLine.exec('powershell', [
-        '-NoProfile',
-        '-Command',
-        `Stop-Process -Id ${pid} -Force`,
-      ]);
-    } catch (e2) {
-      logger.warn(`[${DS_LABEL}] 强行结束 pid ${pid} 失败:`, e2);
-    }
-  }
-
-  if (await waitPortStopped(port)) {
-    cachedAccess = null;
-    logger.log(`[${DS_LABEL}] 端口 ${port} 上的 dsh web 已停止`);
-    return true;
-  }
-  logger.warn(`[${DS_LABEL}] 端口 ${port} 仍在响应，dsh web 未能停止`);
-  return false;
-}
-
-/** 读取全局安装的 dsh CLI 版本；null 表示未安装或版本不符合要求 */
-async function detectDshInstalled(): Promise<string | null> {
-  const nodeVersion = await detectSystemNode(commandLine, DSH_NODE_POLICY);
-  if (!nodeVersion) {
-    return null;
-  }
-  try {
-    const { stdout } = await commandLine.exec('dsh', ['--version'], {
-      logger: loggerFactory(DS_LABEL),
-    });
-    return (stdout || '').trim().split(/\r?\n/).pop()?.trim() || null;
-  } catch (e) {
-    logger.warn(`[${DS_LABEL}] 执行 dsh --version 失败:`, e);
-    return null;
-  }
-}
-
-// ===== 界面地址与浏览器鉴权 =====
-
-/**
- * dsh web 的浏览器鉴权（node_modules/@deepseek-ai/dsh-client-connection）：
- * - 启动时为每个进程随机生成一个 launch token，打印成 `http://host:port/?token=<token>`；
- *   页面用这个 token 换一个**签名 cookie**，之后带着 cookie 访问即可。
- * - cookie 名 = `dsh-auth-<base64url(sha256(authority))>`，authority 就是 Host（如 127.0.0.1:3080）；
- *   cookie 值 = `v1.<base64url(payload)>.<base64url(HMAC-SHA256(secret, body))>`，
- *   payload = `{ version, authority, issuedAt, expiresAt }`。
- * - 签名密钥持久化在 `$DSH_HOME/.credentials.yaml` 的
- *   `client-connection/browser-session` 记录里（kind: grant, payload.secret）。
+ * 确保桌面版的 `desktop` profile 已初始化。
  *
- * 因此：本模块自己拉起的实例直接用打印出来的带 token 地址；机器上**已有的**实例拿不到
- * 进程内 token，就用本地密钥离线签一个 cookie 塞给窗口（签完先发一次请求校验，401 就退回
- * 普通地址，不假装已登录）。
+ * 这个 profile 是桌面版保留的，只能由桌面应用自己创建（`dsh --profile desktop`
+ * 会被拒绝），所以没初始化时先启动一次桌面版、等 `package.json` 出现；
+ * 随后关掉它，保证后面装插件 / 写模型配置时没有运行中的实例占着 profile 文件锁。
  */
-
-const DS_AUTH_COOKIE_PREFIX = 'dsh-auth-';
-const DS_AUTH_COOKIE_VERSION = 'v1';
-const DS_AUTH_PAYLOAD_VERSION = 1;
-const DS_AUTH_SECRET_BYTES = 32;
-
-/** 自签 cookie 的有效期（天）：dsh 默认为 30 天，这里取更保守的 7 天 */
-const DS_AUTH_COOKIE_DAYS = 7;
-
-/** 本模块管理的界面窗口专用会话分区：cookie 会持久化，重启后仍可复用 */
-const DS_WINDOW_PARTITION = 'persist:dsh-web';
-
-function encodeBase64Url(buffer: Buffer): string {
-  return buffer
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
-}
-
-function decodeBase64Url(value: string): Buffer | null {
-  if (!/^[A-Za-z0-9_-]*$/.test(value)) {
-    return null;
-  }
-  const padding = '='.repeat((4 - (value.length % 4)) % 4);
-  const decoded = Buffer.from(
-    value.replace(/-/g, '+').replace(/_/g, '/') + padding,
-    'base64',
-  );
-  return encodeBase64Url(decoded) === value ? decoded : null;
-}
-
-/** dsh 的 cookie 名：`dsh-auth-` + base64url(sha256(authority)) */
-function dshAuthCookieName(authority: string): string {
-  return `${DS_AUTH_COOKIE_PREFIX}${encodeBase64Url(
-    createHash('sha256').update(authority).digest(),
-  )}`;
-}
-
-/**
- * 读取 dsh 浏览器会话的签名密钥。
- * 记录不存在/格式不对时返回 null（此时无法自签 cookie，只能靠带 token 的地址）。
- */
-function readDshAuthSecret(): Buffer | null {
-  const file = dshCredentialsPath();
-  if (!existsSync(file)) {
-    return null;
-  }
-  try {
-    const document = load(readFileSync(file, 'utf-8')) as {
-      records?: Record<
-        string,
-        { kind?: string; payload?: { version?: number; secret?: string } }
-      >;
-    };
-    const record = document?.records?.['client-connection/browser-session'];
-    if (
-      record?.kind !== 'grant' ||
-      record.payload?.version !== DS_AUTH_PAYLOAD_VERSION ||
-      typeof record.payload.secret !== 'string'
-    ) {
-      return null;
-    }
-    const secret = decodeBase64Url(record.payload.secret);
-    if (!secret || secret.byteLength !== DS_AUTH_SECRET_BYTES) {
-      return null;
-    }
-    return secret;
-  } catch (e) {
-    logger.warn(`[${DS_LABEL}] 读取 dsh 浏览器会话密钥失败:`, e);
-    return null;
-  }
-}
-
-/** 按 dsh 的格式签一个浏览器会话 cookie 值 */
-function signDshAuthCookie(authority: string, secret: Buffer): string {
-  const issuedAt = Date.now();
-  const expiresAt = issuedAt + DS_AUTH_COOKIE_DAYS * 24 * 60 * 60 * 1000;
-  const body = encodeBase64Url(
-    Buffer.from(
-      JSON.stringify({
-        version: DS_AUTH_PAYLOAD_VERSION,
-        authority,
-        issuedAt,
-        expiresAt,
-      }),
-      'utf8',
-    ),
-  );
-  const signature = createHmac('sha256', secret).update(body).digest();
-  return `${DS_AUTH_COOKIE_VERSION}.${body}.${encodeBase64Url(signature)}`;
-}
-
-/**
- * 校验自签 cookie 是否真被这个实例接受。
- * 根路径带合法 cookie 会 303/200，未认证则是 401（dsh 会回
- * “dsh web authentication required; reopen the URL printed by dsh web.”）。
- */
-function verifyDshAuthCookie(
-  port: number,
-  authority: string,
-  cookie: string,
-  timeoutMs = 3000,
-): Promise<boolean> {
-  return new Promise((resolve) => {
-    const req = http.request(
-      {
-        host: '127.0.0.1',
-        port,
-        path: '/',
-        method: 'GET',
-        headers: {
-          Host: authority,
-          Cookie: cookie,
-        },
-      },
-      (res) => {
-        res.resume();
-        resolve(res.statusCode !== 401);
-      },
-    );
-    req.on('error', () => resolve(false));
-    req.setTimeout(timeoutMs, () => {
-      req.destroy();
-      resolve(false);
-    });
-    req.end();
-  });
-}
-
-/** 窗口专用会话（cookie 持久化在用户数据目录里，重启后仍有效） */
-function getDshWindowSession(): ReturnType<typeof session.fromPartition> {
-  return session.fromPartition(DS_WINDOW_PARTITION);
-}
-
-/** 解析出来的界面访问方式：地址 + 让这个地址可用的方式 */
-interface DashboardAccess {
-  /** 打开的地址（要么是带 token 的地址，要么是普通根地址） */
-  url: string;
-  /** token 方式：窗口直接加载 url 即已登录 */
-  token?: string;
-  /** cookie 方式：把这条 `name=value` 写进窗口会话后，url 即已登录 */
-  cookie?: { name: string; value: string };
-}
-
-/** 缓存的访问方式（按端口缓存，避免每次开窗口都重新签 cookie） */
-let cachedAccess: { port: number; access: DashboardAccess } | null = null;
-
-/**
- * 解析怎么免登录打开 `port` 上的 dsh web：
- * 1. 已有带 token 的地址（本模块自己拉起的实例）→ 直接用；
- * 2. 否则（复用机器上已有的实例）→ 用本地密钥签一个 cookie，**先请求校验**，
- *    被这个实例接受才采用；
- * 3. 都不行 → 普通地址，由 dsh 自己回 401 提示。
- */
-async function resolveDashboardAccess(
-  port: number,
-  forceRefresh = false,
-): Promise<DashboardAccess> {
-  if (!forceRefresh && cachedAccess?.port === port) {
-    return cachedAccess.access;
-  }
-
-  const plainUrl = deepseekHarnessDashboardUrl(port);
-  const access = await (async (): Promise<DashboardAccess> => {
-    if (activeUrl) {
-      return { url: activeUrl, token: activeUrl };
-    }
-
-    const secret = readDshAuthSecret();
-    if (!secret) {
-      logger.warn(
-        `[${DS_LABEL}] 未找到 dsh 浏览器会话密钥，无法自动登录界面（可在 dsh 终端里复制带 token 的地址打开）`,
-      );
-      return { url: plainUrl };
-    }
-
-    const authority = new URL(plainUrl).host;
-    const name = dshAuthCookieName(authority);
-    const value = signDshAuthCookie(authority, secret);
-    const accepted = await verifyDshAuthCookie(
-      port,
-      authority,
-      `${name}=${value}`,
-    );
-    if (!accepted) {
-      // 已有实例的签名密钥通常和本地一致；不一致（例如实例用的是别的 DSH_HOME）
-      // 时不能假装已登录，退回普通地址
-      logger.warn(
-        `[${DS_LABEL}] 自签的 dsh 会话 cookie 未被实例接受（实例的签名密钥不匹配），改用普通地址打开`,
-      );
-      return { url: plainUrl };
-    }
-    return { url: plainUrl, cookie: { name, value } };
-  })();
-
-  cachedAccess = { port, access };
-  return access;
-}
-
-/** 把解析出的 cookie 写进窗口会话；返回是否写成功 */
-async function applyDashboardCookie(access: DashboardAccess): Promise<boolean> {
-  if (!access.cookie) {
-    return true;
-  }
-  try {
-    await getDshWindowSession().cookies.set({
-      url: access.url,
-      name: access.cookie.name,
-      value: access.cookie.value,
-      path: '/',
-      httpOnly: true,
-      sameSite: 'strict',
-    });
-    logger.log(`[${DS_LABEL}] 已为界面窗口写入 dsh 会话 cookie`);
-    return true;
-  } catch (e) {
-    logger.warn(`[${DS_LABEL}] 写入 dsh 会话 cookie 失败:`, e);
-    return false;
-  }
-}
-
-/**
- * 复制给外部浏览器用的地址。
- * 带 token 的地址可以直接复制；靠 cookie 登录的实例没有可复制的 token，
- * 此时复制普通地址并提示用「打开界面」按钮（它会带上 cookie）。
- */
-async function resolveCopyableUrl(): Promise<string> {
-  const port = activePort ?? DEEPSEEK_HARNESS_PORTS[0];
-  const access = await resolveDashboardAccess(port);
-  if (access.token) {
-    return access.token;
-  }
-  if (access.cookie) {
-    // 再确认一次这个实例还认这个 cookie（可能已经被重启换过密钥），
-    // 保证复制出去的地址在别处也说得通
-    const authority = new URL(access.url).host;
-    const alive = await verifyDshAuthCookie(
-      port,
-      authority,
-      `${access.cookie.name}=${access.cookie.value}`,
-    );
-    if (!alive) {
-      cachedAccess = null;
-      return (await resolveDashboardAccess(port, true)).url;
-    }
-    logger.warn(
-      `[${DS_LABEL}] 该实例用会话 cookie 登录、没有可复制的 token 地址；已复制普通地址，外部浏览器需用 dsh 终端里打印的带 token 地址`,
-    );
-  }
-  return access.url;
-}
-
-// 打开 dsh dashboard 界面窗口（仅创建窗口，不管理服务生命周期）
-async function createDshWindow(): Promise<void> {
-  if (dshWindow && !dshWindow.isDestroyed()) {
-    if (dshWindow.isMinimized()) {
-      dshWindow.restore();
-    }
-    dshWindow.focus();
+async function ensureDesktopProfileInitialized(
+  install: DshDesktopInstall,
+): Promise<void> {
+  const manifest = path.join(dshProfileDir(), 'package.json');
+  if (existsSync(manifest)) {
     return;
   }
 
-  const port = activePort ?? DEEPSEEK_HARNESS_PORTS[0];
-  const access = await resolveDashboardAccess(port);
-  await applyDashboardCookie(access);
+  logger.log(
+    `[${DS_LABEL}] 桌面版配置还没初始化，先启动一次桌面版完成初始化 ...`,
+  );
+  await launchDshDesktop(install, syncLogger);
 
-  dshWindow = new BrowserWindow({
-    height: 900,
-    width: 1400,
-    autoHideMenuBar: true,
-    webPreferences: {
-      // 用独立分区：会话 cookie 持久化，且不与主窗口的会话互相影响
-      partition: DS_WINDOW_PARTITION,
-    },
-  });
+  const deadline = Date.now() + DESKTOP_PROFILE_INIT_TIMEOUT_MS;
+  while (Date.now() < deadline && !existsSync(manifest)) {
+    await delay(1000);
+  }
+  if (!existsSync(manifest)) {
+    logger.warn(
+      `[${DS_LABEL}] 等待桌面版初始化配置超时（${manifest}）；插件可能装不上，模型配置会在桌面版启动后生效`,
+    );
+    return;
+  }
 
-  dshWindow.loadURL(access.url);
-
-  dshWindow.on('closed', () => {
-    dshWindow = null;
-  });
+  // 再等一会儿，让桌面版把 pnpm-workspace.yaml / cordis.patch.yml 也写完再关
+  await delay(2000);
+  await stopDshDesktop(install, syncLogger);
+  logger.log(`[${DS_LABEL}] 桌面版配置已初始化：${dshProfileDir()}`);
 }
 
-// ===== 大模型配置同步（settings.yaml / .credentials.yaml） =====
+// ===== 大模型配置同步（cordis.patch.yml / .credentials.yaml） =====
 //
 // - 换算规则（哪些模型写哪条路由、哪些密钥写进凭据）：model-sync-plan.ts
-// - 写入：dsh-config-providers.ts —— 直接用 dsh 自带的
-//   `@deepseek-ai/dsh-settings-file` / `@deepseek-ai/dsh-credentials-local`
+// - 写入：dsh-config-providers.ts —— 直接按 dsh 0.2.0 的新文件布局写
+//   `$DSH_HOME/profiles/desktop/cordis.patch.yml` 与 `$DSH_HOME/.credentials.yaml`
 // - 对外入口：dsh-model-sync.ts —— 安装流程与模型配置页的「同步 API key」按钮共用
 //
-// 这里不做任何「自己写 YAML」的兜底：dsh 自带的配置包用不了就只记日志，
-// 让用户在 dsh 的模型页（设置 → 模型）里自己配，避免安装器和 dsh 各写一份格式不同的配置。
+// 写入失败只记日志，不阻断安装：让用户在 dsh 的模型页（设置 → 模型）里自己配。
 
-/** 给 dsh 配置包用的日志出口 */
+/** 给配置写入用的日志出口 */
 const syncLogger: SyncLogger = createDshSyncLogger();
 
-/** 给 dsh 配置包用的命令执行器（只在 PATH 里找不到全局 dsh 时用来问 npm root -g） */
-const runDshCommand: CommandRunner = async (command, args) => {
-  const { stdout } = await commandLine.exec(command, args, {
-    logger: loggerFactory(DS_LABEL),
-  });
-  return stdout ?? '';
-};
-
-/** 配置包用不了时的统一提示：不写文件，交给用户在 dsh 界面里配 */
+/** 写文件失败时的统一提示：不阻断安装，交给用户在 dsh 界面里配 */
 function logManualConfigHint(reason: string): void {
   logger.warn(
     `[${DS_LABEL}] ${reason}；已跳过模型配置同步，不影响 dsh 本身运行。` +
-      `请在 dsh 界面的「设置 → 模型」里手动添加提供方与 API key（或在 ${dshSettingsPath()} 里手写配置）`,
+      `请在 dsh 界面的「设置 → 模型」里手动添加提供方与 API key（或在 ${dshProfilePatchPath()} 里手写配置）`,
   );
 }
 
 /**
  * 用本项目的大模型配置初始化 dsh：写模型路由与凭据。
- * 没有配置模型、或 dsh 配置包不可用时只警告，不阻断安装。
+ * 没有配置模型、或写入失败时只警告，不阻断安装。
  */
 async function onboardDeepseekHarness(): Promise<void> {
   const summary = await syncModelsIntoDshHarness({
     models: getLlmConfig().models ?? [],
-    run: runDshCommand,
     logger: syncLogger,
   });
 
   if (summary === null) {
-    logManualConfigHint('未能通过 dsh 自带的配置包写入配置');
+    logManualConfigHint('写入 dsh 配置文件失败');
     return;
   }
   if (summary.length === 0) {
@@ -636,407 +187,315 @@ async function onboardDeepseekHarness(): Promise<void> {
     return;
   }
   logger.log(
-    `[${DS_LABEL}] 已通过 dsh 自带的配置包（dsh-settings-file / dsh-credentials-local）同步：${summary.join('；')}`,
+    `[${DS_LABEL}] 已写入 dsh 配置（.credentials.yaml / cordis.patch.yml）：${summary.join('；')}`,
   );
 }
 
-// ===== 服务生命周期 =====
+// ===== dsh 插件安装（安装 dsh 的一步，也是界面上的「安装插件」按钮） =====
+//
+// - 清单：`external-resources/dsh/dsh-plugin-index.json`（随安装包分发，只有
+//   `@commonworks/dsh-starter` 这一条）。插件安装本身已经交给 starter：它会按用户选的场景
+//   在 dsh 首次会话里检查、按需装插件，所以启动器不再预装一长串插件，也不再有远程清单
+// - 调 `dsh plugin --profile desktop add <pkg>` 装进桌面版的 profile，
+//   dsh 自己负责把带 dsh.bundle 的包登记进 `dsh.profile.bundles`
+// - 桌面版运行时会独占 profile 文件锁：装插件前先关闭桌面版，装完按需重新启动
+//
+// 两个入口共用 {@link runDshPluginInstall}：
+// - 安装流程（installDeepseekHarnessService）：插件装不上只记告警，不阻断 dsh 安装本身；
+// - 界面「安装插件」按钮（installDeepseekHarnessPlugins）：给已经装好 dsh 的用户补装 / 升级，
+//   不重装 dsh、也不改模型配置，前置条件不满足时抛错，由界面直接提示缺什么。
 
 /**
- * 启动 dsh web（由本模块后台拉起），只以「端口可访问」作为就绪信号返回，
- * 不依赖 dsh 命令的 stdout 输出（带 token 的地址只是免登录打开的优化，抓不到就退回自签 cookie）。
- *
- * 用 dsh 的默认命令启动（不绕过它的 .cmd 包装）；黑窗问题在 spawn 选项上解决：
- * `windowsHide: true` 会带上 CREATE_NO_WINDOW，cmd.exe / node.exe 都以无窗口方式启动，
- * 不会弹控制台、也不会抢到前台。
+ * 按清单安装 / 升级 dsh 插件，返回汇总。
+ * 单个插件装不上不算失败（进 `failed`，原因写在日志里）；前置条件不满足时抛错。
  */
-async function launchDshWeb(candidatePorts: number[]): Promise<number> {
-  const ports =
-    candidatePorts.length > 0 ? candidatePorts : await pickCandidates();
-  const port = ports[0];
-  const args = ['web', '--no-open', '--port', String(port)];
-  logger.log(
-    `[${DS_LABEL}] 启动 dsh web：dsh ${args.join(' ')}（后台常驻，端口 ${port}）`,
-  );
-
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn('dsh', args, {
-      cwd: homedir(),
-      detached: true,
-      // 关键：无窗口启动，避免 GUI 进程拉起控制台程序时弹黑窗并抢前台
-      windowsHide: true,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    dshProcess = child;
-
-    let settled = false;
-    let buffer = '';
-    let tokenUrl: string | null = null;
-
-    /** reject 的同时打印错误日志（console + 界面命令行日志），保证失败原因可见 */
-    const rejectWithLog = (message: string): void => {
-      logger.error(message);
-      reject(new Error(message));
-    };
-
-    /** 只监测端口就绪（根路径回 401），不等待 dsh 命令的 stdout 输出 */
-    const confirmReady = async (): Promise<void> => {
-      const deadline = Date.now() + READY_TIMEOUT_MS;
-      while (Date.now() < deadline) {
-        if (await probePortReady(port, 800)) {
-          activePort = port;
-          cachedAccess = null;
-          logger.log(`[${DS_LABEL}] dsh web 已就绪：端口 ${port}`);
-          settled = true;
-          resolve();
-          return;
-        }
-        if (child.exitCode !== null || child.signalCode !== null) {
-          settled = true;
-          rejectWithLog(
-            `dsh web 在就绪前退出（退出码 ${child.exitCode}）：${buffer.trim().slice(-500)}`,
-          );
-          return;
-        }
-        await new Promise((done) => setTimeout(done, 500));
-      }
-      // 就绪超时：不再打开界面，直接报错，避免打开一个还没就绪（401/404）的空白页
-      settled = true;
-      rejectWithLog(
-        `等待 dsh web 就绪超时（${READY_TIMEOUT_MS / 1000 / 60} 分钟），已放弃打开界面；请检查 dsh 终端日志或稍后重试`,
-      );
-    };
-
-    const onOutput = (chunk: Buffer): void => {
-      const text = chunk.toString('utf-8');
-      loggerFactory(DS_LABEL).log(text.trim());
-      buffer += text;
-      // 带 token 的地址只是「免登录打开」的优化：抓到就用，抓不到由后续自签 cookie 兜底。
-      // 必须锚定在 `dsh web:` 前缀并带上 `?token=`，否则会误匹配到启动过程中其它插件
-      // 打印的回环地址（如 dsh-wechat 的扫码页 `http://127.0.0.1:3080/wechat/qr`）。
-      const matched =
-        /dsh web:\s+(https?:\/\/127\.0\.0\.1:\d+\/\?token=[^\s]*)/.exec(buffer);
-      if (matched && !tokenUrl) {
-        tokenUrl = matched[1];
-        activeUrl = tokenUrl;
-      }
-    };
-    child.stdout?.on('data', onOutput);
-    child.stderr?.on('data', onOutput);
-    // stdout/stderr 都结束说明 dsh 进程真的退出了：
-    // 此时按端口重新探测（兜底判断），并不再把它当成“正在运行”
-    const onStreamEnd = (): void => {
-      if (child.stdout?.destroyed && child.stderr?.destroyed) {
-        if (dshProcess === child) {
-          dshProcess = null;
-        }
-        void probePort(port, 1500).then((alive) => {
-          if (!alive) {
-            if (activePort === port) {
-              activePort = null;
-              activeUrl = null;
-              cachedAccess = null;
-            }
-            if (!settled) {
-              settled = true;
-              rejectWithLog(
-                `dsh web 启动失败（进程已退出）：${buffer.trim().slice(-500)}`,
-              );
-            }
-          } else {
-            // 进程退出了但端口还活着（端口上是别的实例）：以端口为准，
-            // 交给正在运行的 confirmReady 按端口探测返回
-          }
-        });
-      }
-    };
-    child.stdout?.on('end', onStreamEnd);
-    child.stderr?.on('end', onStreamEnd);
-
-    child.on('error', (error) => {
-      if (!settled) {
-        settled = true;
-        dshProcess = null;
-        rejectWithLog(`启动 dsh web 失败：${error.message}`);
-      }
-    });
-
-    setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        rejectWithLog(
-          `等待 dsh web 启动超时（${Math.floor(STARTUP_TIMEOUT_MS / 60000)} 分 ${(STARTUP_TIMEOUT_MS / 1000) % 60} 秒），输出：${buffer.trim().slice(-500)}`,
-        );
-      }
-    }, STARTUP_TIMEOUT_MS);
-
-    // 让子进程脱离父进程，Electron 退出后服务继续常驻
-    child.unref();
-
-    // 直接开始监测端口，不等待 dsh 命令的 stdout 输出
-    void confirmReady();
-  });
-
-  // activeUrl 已由 onOutput 在抓到带 token 的地址时设置；这里不再兜底赋值，
-  // 否则会把普通根地址写进 activeUrl，导致 resolveDashboardAccess 误以为已有 token 而跳过自签 cookie
-  return activePort ?? port;
-}
-
-/** 候选端口里当前没人监听的（按候选顺序，第一个用来新起实例） */
-async function pickCandidates(): Promise<number[]> {
-  const results = await Promise.all(
-    DEEPSEEK_HARNESS_PORTS.map((port) => probePort(port, 800)),
-  );
-  return DEEPSEEK_HARNESS_PORTS.filter((_, index) => !results[index]);
-}
-
-/**
- * 结束 dsh web。
- * 先按子进程句柄结束（本进程拉起的实例），若句柄已丢失（Electron 主进程重启过），
- * 就按端口号把监听进程找回来结束 —— 否则「停止」会变成空操作。
- */
-async function killDshProcess(): Promise<boolean> {
-  const child = dshProcess;
-  const port = activePort;
-
-  if (child?.pid) {
-    dshProcess = null;
-    logger.log(`[${DS_LABEL}] 结束 dsh web 进程（pid ${child.pid}）`);
-    try {
-      await commandLine.exec('taskkill', [
-        '/pid',
-        String(child.pid),
-        '/T',
-        '/F',
-      ]);
-    } catch (e) {
-      logger.warn(`[${DS_LABEL}] 结束 dsh web 进程失败（可能已退出）:`, e);
-    }
+async function runDshPluginInstall(): Promise<DshPluginInstallSummary> {
+  const install = await findDshDesktopInstall(syncLogger);
+  if (!install) {
+    throw new Error('还没有安装 DeepSeek Harness 桌面版，请先安装再装插件');
   }
 
-  // 句柄没了、或进程树里还有残留（detached 的子进程）时，按端口兜底清理
-  const needPortFallback =
-    port !== null &&
-    (child?.pid === undefined || (await probePort(port, 1000)));
-  if (needPortFallback) {
-    const stopped = await killDshByPort(port);
-    if (!stopped) {
-      return false;
-    }
+  // 桌面版还没启动过时 desktop profile 不存在，dsh plugin 会拒绝执行；
+  // 先启动一次让桌面版完成初始化（结束后会关掉）
+  await ensureDesktopProfileInitialized(install);
+
+  const state = loadDshPluginIndex(syncLogger);
+  if (!state.index || state.index.plugins.length === 0) {
+    throw new Error(`读不到可用的 dsh 插件清单：${state.path}`);
   }
 
-  activePort = null;
-  activeUrl = null;
-  cachedAccess = null;
-  return true;
-}
-
-/** 确保界面在运行：已有实例复用，没有则拉起；返回运行端口 */
-async function ensureRunning(): Promise<number> {
-  // 一次探测同时得到“有没有已在运行的实例”和“哪些候选端口是空闲的”
-  const alive = await Promise.all(
-    DEEPSEEK_HARNESS_PORTS.map((port) => probePort(port)),
-  );
-  const existingIndex = alive.findIndex((item) => item);
-  if (existingIndex >= 0) {
-    activePort = DEEPSEEK_HARNESS_PORTS[existingIndex];
+  // 桌面版运行时会占着 profile 的 package.json 文件锁，pnpm 拿不到锁会一直等；
+  // 所以装插件前先关掉桌面版，装完由用户自己重新打开。
+  const runningBefore = await isDshDesktopRunning(install);
+  if (runningBefore) {
     logger.log(
-      `[${DS_LABEL}] 检测到已在运行的 dsh 实例（端口 ${activePort}），直接复用`,
+      `[${DS_LABEL}] 安装插件需要独占 desktop profile，先关闭 DeepSeek Harness 桌面版 ...`,
     );
-    return activePort;
+    const stopped = await stopDshDesktop(install, syncLogger);
+    if (!stopped) {
+      throw new Error(
+        '无法关闭 DeepSeek Harness 桌面版（可能还有进程在运行），请手动退出后重试',
+      );
+    }
   }
 
-  if (await detectDshInstalled()) {
-    const freePorts = DEEPSEEK_HARNESS_PORTS.filter(
-      (_, index) => !alive[index],
-    );
-    return launchDshWeb(freePorts);
+  const result = await installDshPlugins(
+    commandLine,
+    install.command,
+    state.index.plugins,
+    syncLogger,
+  );
+
+  // 能走到这里说明清单可用
+  if (result.installed.length > 0) {
+    logger.log(`[${DS_LABEL}] 已安装 dsh 插件：${result.installed.join('、')}`);
   }
-  throwWithLog('未找到 dsh，请先安装 DeepSeek Harness');
+  logger.log(
+    `[${DS_LABEL}] dsh 插件环节结束：新装 ${result.installed.length} 个，跳过 ${
+      result.skipped.length
+    } 个，失败 ${result.failed.length} 个`,
+  );
+  if (result.failed.length > 0) {
+    logger.warn(
+      `[${DS_LABEL}] 以下插件没装上，已跳过、不影响 dsh 本身运行（可在 dsh 界面的插件市场里手动安装）：${result.failed
+        .map((item) => `${item.name}（${item.reason}）`)
+        .join('；')}`,
+    );
+  }
+  if (result.installed.length > 0 && runningBefore) {
+    logger.warn(
+      `[${DS_LABEL}] 安装插件前已关闭桌面版；请手动重新打开 DeepSeek Harness，新插件才会加载`,
+    );
+  }
+
+  return {
+    indexPath: state.path,
+    total: state.index.plugins.length,
+    installed: result.installed,
+    skipped: result.skipped,
+    failed: result.failed,
+    running: runningBefore,
+  };
 }
 
 /**
- * 确保 pnpm 可用：没有就通过 npm 全局安装（淘宝源）。
- * 返回是否可用；失败时只告警不抛错，由调用方决定「这次安装是否必须依赖 pnpm」
- * （dsh 已经装好时 pnpm 只影响插件管理，可以放行）。
+ * 安装流程里的插件环节：任何失败都只记日志，保证 dsh 安装能继续走完。
  */
-async function ensurePnpmReady(): Promise<boolean> {
+async function installSelectedDshPlugins(): Promise<void> {
+  logger.log(
+    `[${DS_LABEL}] 开始安装 dsh 插件（清单：${dshPluginIndexPath()}）...`,
+  );
   try {
-    await ensurePnpmInstalled(commandLine, DS_LABEL, loggerFactory(DS_LABEL));
-    return true;
-  } catch (e) {
-    logger.warn(`[${DS_LABEL}] pnpm 安装失败:`, e);
-    return false;
+    await runDshPluginInstall();
+  } catch (error) {
+    logger.warn(
+      `[${DS_LABEL}] 安装 dsh 插件时出错，已跳过（不影响 dsh 本身安装与运行）：`,
+      error,
+    );
   }
+}
+
+// ===== 卸载前关闭桌面版 =====
+
+/** 关闭桌面版；返回是否确认已经没有桌面版进程 */
+async function stopDshDesktopInternal(): Promise<boolean> {
+  const install = await findDshDesktopInstall(syncLogger);
+  if (!install) {
+    logger.log(`[${DS_LABEL}] 没有安装 DeepSeek Harness 桌面版，无需停止`);
+    return true;
+  }
+
+  const stopped = await stopDshDesktop(install, syncLogger);
+  if (stopped) {
+    logger.log(`[${DS_LABEL}] DeepSeek Harness 桌面版已关闭`);
+  } else {
+    logger.warn(
+      `[${DS_LABEL}] DeepSeek Harness 桌面版未能关闭（仍检测到进程）`,
+    );
+  }
+  return stopped;
 }
 
 // ===== IPC 导出的业务函数 =====
 
 export async function queryDeepseekHarnessService(): Promise<DeepseekHarnessServiceInfo> {
-  const port = await detectRunningPort();
-  if (port !== null) {
-    activePort = port;
-  }
   try {
-    const version = await detectDshInstalled();
-    if (version) {
-      return { state: 'installed', version, running: port !== null, port };
+    const install = await findDshDesktopInstall(syncLogger);
+    if (!install) {
+      return { state: 'not_install' };
     }
+    const version =
+      install.version ??
+      (await readDshCommandVersion(install.command)) ??
+      undefined;
+    return { state: 'installed', version };
   } catch (e) {
     logger.warn(`[${DS_LABEL}] 查询服务失败:`, e);
+    return { state: 'not_install' };
   }
-  return { state: 'not_install', running: port !== null, port };
 }
 
 export async function installDeepseekHarnessService(): Promise<DeepseekHarnessServiceInfo> {
+  // 插件走 pnpm / npm registry，先把源设成国内镜像（写入 ~/.npmrc，桌面版内置 pnpm 也会读）
   setNpmRegistryTaobaoGlobal();
 
-  // 按 node → npm → pnpm → dsh 的顺序逐个检查，缺哪个装哪个。
-  // node/npm 必须先于 pnpm：pnpm 通过 npm 全局安装、npm 依赖 node，反过来（先查 pnpm）
-  // 会在机器没装 node 时误报「pnpm 安装失败」并直接中断，导致根本没机会装 node。
-  // （node 官方安装包自带 npm，所以 node 和 npm 一起由 ensureNode 保证）
-  const nodeVersion = await ensureNode(commandLine, DSH_NODE_POLICY);
-  logger.log(`[${DS_LABEL}] 使用 node v${nodeVersion}`);
-
-  // pnpm 依赖 node/npm，必须在 node 之后检查
-  const pnpmInstalled = await ensurePnpmReady();
-
-  // dsh 是全局安装的：机器上已经有了就直接复用，不重复安装（用户可能自己在用）
-  const installed = await detectDshInstalled();
-  if (installed) {
+  let install = await findDshDesktopInstall(syncLogger);
+  if (install?.version) {
     logger.log(
-      `[${DS_LABEL}] 已检测到全局安装的 dsh v${installed}，复用现有安装（不重复安装）`,
+      `[${DS_LABEL}] 已检测到官网安装包装好的 DeepSeek Harness v${install.version}，复用现有安装（不重复安装）`,
     );
   } else {
-    // 要重新装 dsh 时，pnpm 是必须的：装不上就直接报错，不继续往下走
-    if (!pnpmInstalled) {
-      throwWithLog('pnpm 安装失败，请检查网络后重试');
+    if (process.platform !== 'win32') {
+      throwWithLog('DeepSeek Harness 官网安装包目前只支持 Windows 系统');
     }
-
+    // 官网安装包自带 Node / pnpm / dsh，不需要系统预装任何运行时
     logger.log(
-      `[${DS_LABEL}] 开始通过 npm 全局安装 ${DEEPSEEK_HARNESS_NPM_PACKAGE}（淘宝源）...`,
+      `[${DS_LABEL}] 未检测到已安装的 DeepSeek Harness，开始下载官网安装包（${DSH_DESKTOP_DOWNLOAD_PAGE}）...`,
     );
-    await runGlobalMaybeElevated(
-      commandLine,
-      'npm',
-      [
-        'install',
-        '-g',
-        `${DEEPSEEK_HARNESS_NPM_PACKAGE}@latest`,
-        '--no-fund',
-        '--no-audit',
-        '--registry',
-        TAOBAO_NPM_REGISTRY,
-      ],
-      loggerFactory(DS_LABEL),
-      '安装 dsh',
-    );
-    // 安装后刷新 PATH：dsh 的命令放在 npm 的全局 bin 目录里
-    await refreshPathAfterInstall(commandLine);
-    const version = await detectDshInstalled();
+    install = await installDshDesktop(syncLogger);
+
+    // 用安装包自带的 dsh 命令确认真的能跑，而不是只看注册表
+    const version = await readDshCommandVersion(install.command);
     if (!version) {
       throwWithLog(
-        'dsh 安装后仍不可用（可能安装失败或 PATH 未刷新），请重新运行安装',
+        `安装包已装到 ${install.installDir}，但自带的 dsh 命令无法运行，请重新运行安装或手动打开 DeepSeek Harness 检查`,
       );
     }
-    logger.log(`[${DS_LABEL}] dsh 安装完成：v${version}`);
+    logger.log(
+      `[${DS_LABEL}] DeepSeek Harness 安装完成：v${version}（${install.installDir}）`,
+    );
   }
 
-  // 用本项目的大模型配置初始化 dsh（settings.yaml + .credentials.yaml）
+  // 插件和模型配置都写进桌面版保留的 desktop profile；首次安装时这个 profile
+  // 只有桌面版自己会创建，所以先启动一次让它初始化
+  await ensureDesktopProfileInitialized(install);
+
+  // 安装 starter（清单里只有它一条，其余插件由 starter 在 dsh 首次会话里按场景自己装）
+  await installSelectedDshPlugins();
+
+  // 用本项目的大模型配置初始化 dsh（cordis.patch.yml + .credentials.yaml）
   logger.log(`[${DS_LABEL}] 使用项目大模型配置同步 dsh 的模型配置 ...`);
   await onboardDeepseekHarness();
-
-  // 自动启动 Web 界面并打开窗口
-  logger.log(`[${DS_LABEL}] 自动启动 DeepSeek Harness 界面 ...`);
-  await ensureRunning();
-  await createDshWindow();
 
   return queryDeepseekHarnessService();
 }
 
 export async function removeDeepseekHarnessService(): Promise<DeepseekHarnessServiceInfo> {
-  const stopped = await stopDeepseekHarnessServiceInternal();
-
-  // 端口上确实还有 dsh web 在跑（按端口反查也没能结束掉）：
-  // 这时全局卸载会影响正在使用的实例，所以拒绝卸载并给出提示
-  if (!stopped && activePort !== null) {
+  const stopped = await stopDshDesktopInternal();
+  if (!stopped) {
     throwWithLog(
-      `端口 ${activePort} 上仍有正在运行的 dsh 实例，且未能结束它，已停止卸载。请先关闭该实例，再执行卸载`,
+      'DeepSeek Harness 桌面版仍在运行，且未能关闭，已停止卸载。请手动退出桌面版后重试',
     );
   }
 
-  if (!(await detectDshInstalled())) {
-    logger.warn(`[${DS_LABEL}] 未检测到全局安装的 dsh，跳过卸载`);
+  const install = await findDshDesktopInstall(syncLogger);
+  if (!install) {
+    logger.warn(`[${DS_LABEL}] 未检测到已安装的 DeepSeek Harness，跳过卸载`);
     return queryDeepseekHarnessService();
   }
 
-  logger.log(
-    `[${DS_LABEL}] 开始通过 npm 全局卸载 ${DEEPSEEK_HARNESS_NPM_PACKAGE} ...`,
-  );
+  // 跑安装包自己注册的卸载程序（QuietUninstallString，/currentuser /S）
+  logger.log(`[${DS_LABEL}] 开始卸载官网安装包（${install.installDir}）...`);
   try {
-    await runGlobalMaybeElevated(
-      commandLine,
-      'npm',
-      ['uninstall', '-g', DEEPSEEK_HARNESS_NPM_PACKAGE],
-      loggerFactory(DS_LABEL),
-      '卸载 dsh',
-    );
-    await refreshPathAfterInstall(commandLine);
+    await uninstallDshDesktop(install, syncLogger);
   } catch (e) {
-    throwWithLog('卸载 dsh 失败', e);
+    throwWithLog('卸载 DeepSeek Harness 失败', e);
   }
 
   return queryDeepseekHarnessService();
 }
 
-export async function runDeepseekHarnessService(): Promise<DeepseekHarnessServiceInfo> {
-  await ensureRunning();
-  await createDshWindow();
-  return queryDeepseekHarnessService();
-}
+// ===== 从 WorkBuddy 同步模型配置 =====
 
-/** 打开 DeepSeek Harness 界面窗口（不自动启动服务） */
-export async function openDeepseekHarnessWindow(): Promise<DeepseekHarnessServiceInfo> {
-  await createDshWindow();
-  return queryDeepseekHarnessService();
-}
+/**
+ * 把 WorkBuddy 的自定义模型配置（`%USERPROFILE%\.workbuddy\models.json`）同步进 dsh。
+ *
+ * 写入前会把 `settings.yaml` / `.credentials.yaml` 整份备份到 `$DSH_HOME/backups/<时间戳>/`，
+ * 备份结果随返回值一起交给界面展示（用户想回滚时直接拷回这两个文件即可）。
+ *
+ * 失败时抛出可直接展示给用户的错误（读不到 WorkBuddy 配置、没有可同步的模型、
+ * dsh 自带的配置包不可用等）；抛错时还没有写任何东西。
+ */
+export async function syncWorkbuddyModelsToDsh(): Promise<WorkbuddyModelSyncResult> {
+  const outcome = await syncWorkbuddyModelsIntoDshHarness({
+    logger: syncLogger,
+  });
 
-/** 复制界面链接到剪贴板，方便用其他浏览器打开 */
-export async function copyDeepseekHarnessDashboardUrl(): Promise<string> {
-  const url = await resolveCopyableUrl();
-  clipboard.writeText(url);
-  return url;
+  if (outcome === null) {
+    logManualConfigHint('未能通过 dsh 自带的配置包写入 WorkBuddy 的模型配置');
+    throw new Error(
+      '未能使用 dsh 自带的配置包写入配置（可能尚未安装 dsh）。请在 dsh 界面的「设置 → 模型」里手动添加提供方与 API key',
+    );
+  }
+
+  logger.log(
+    `[${DS_LABEL}] 已把 WorkBuddy 的模型配置同步进 dsh（${outcome.syncedModels} 个模型 / ${
+      outcome.routeCount
+    } 条路由）：${outcome.summary.join('；')}`,
+  );
+
+  const workbuddyModelCount = outcome.syncedModels + outcome.notices.length;
+  return {
+    workbuddyModelCount,
+    syncedModelCount: outcome.syncedModels,
+    routeCount: outcome.routeCount,
+    summary: outcome.summary,
+    backup: {
+      dir: outcome.backup.dir,
+      files: outcome.backup.files,
+      reused: outcome.backup.reused,
+    },
+    paths: outcome.paths,
+    notices: outcome.notices,
+    warnings: outcome.warnings,
+  };
 }
 
 /**
- * 停止逻辑的内部实现：关闭界面窗口，并结束 dsh web 进程。
- * 先按子进程句柄，句柄丢了（Electron 主进程重启过）就按端口号反查 —— 返回是否真的停下来了。
+ * 在系统文件管理器里打开 dsh 配置的备份目录。
+ * 只允许打开 dsh home 下的备份目录，避免这条 IPC 被当成任意路径打开器。
  */
-async function stopDeepseekHarnessServiceInternal(): Promise<boolean> {
-  // 关闭界面窗口
-  if (dshWindow && !dshWindow.isDestroyed()) {
-    dshWindow.close();
-  }
-  dshWindow = null;
+export async function openDeepseekHarnessBackupDir(
+  dir?: string,
+): Promise<string> {
+  const root = dshBackupRoot();
+  const target = (dir ?? '').trim() || root;
 
-  if (dshProcess === null && activePort === null) {
-    logger.log(`[${DS_LABEL}] 没有正在运行的 dsh web，无需停止`);
-    return true;
+  const normalizedRoot = path.resolve(root);
+  const normalizedTarget = path.resolve(target);
+  if (
+    normalizedTarget !== normalizedRoot &&
+    !normalizedTarget.startsWith(`${normalizedRoot}${path.sep}`)
+  ) {
+    throw new Error(`只能打开 dsh 配置的备份目录：${root}`);
   }
-  return killDshProcess();
+  if (!existsSync(normalizedTarget)) {
+    throw new Error(`备份目录还不存在：${normalizedTarget}`);
+  }
+
+  const failure = await shell.openPath(normalizedTarget);
+  if (failure) {
+    throw new Error(failure);
+  }
+  return normalizedTarget;
 }
 
-export async function stopDeepseekHarnessService(): Promise<DeepseekHarnessServiceInfo> {
-  await stopDeepseekHarnessServiceInternal();
-  return queryDeepseekHarnessService();
+/**
+ * 界面上的「安装插件」按钮：给已经装好 dsh 的用户按清单补装 / 升级插件。
+ * 不重装 dsh、也不改模型配置；清单里的单个插件装不上不影响其它插件，结果汇总后交给界面展示。
+ */
+export async function installDeepseekHarnessPlugins(): Promise<DshPluginInstallSummary> {
+  // dsh 的插件是 profile 级的 pnpm 依赖，走 pnpm 装，所以先确保源是国内镜像
+  setNpmRegistryTaobaoGlobal();
+  logger.log(
+    `[${DS_LABEL}] 开始按清单安装 dsh 插件（清单：${dshPluginIndexPath()}）...`,
+  );
+  // 桌面版开着时先关掉再装，装完自动重新打开（桌面版会独占 profile 文件锁）
+  return runDshPluginInstall();
 }
 
 export default async function init(ipcMain: IpcMain) {
-  // 退出前结束本程序拉起的 dsh web，避免后台残留（端口上的实例也会被一并清掉）
-  app.on('before-quit', () => {
-    void killDshProcess();
-  });
-
+  // 桌面版是独立应用：启动器退出时不结束它
   ipcHandle(ipcMain, queryDeepseekHarnessServiceHandle, async (_event) =>
     queryDeepseekHarnessService(),
   );
@@ -1046,16 +505,15 @@ export default async function init(ipcMain: IpcMain) {
   ipcHandle(ipcMain, removeDeepseekHarnessServiceHandle, async (_event) =>
     removeDeepseekHarnessService(),
   );
-  ipcHandle(ipcMain, runDeepseekHarnessServiceHandle, async (_event) =>
-    runDeepseekHarnessService(),
+  ipcHandle(ipcMain, syncWorkbuddyModelsToDshHandle, async (_event) =>
+    syncWorkbuddyModelsToDsh(),
   );
-  ipcHandle(ipcMain, stopDeepseekHarnessServiceHandle, async (_event) =>
-    stopDeepseekHarnessService(),
+  ipcHandle(
+    ipcMain,
+    openDeepseekHarnessBackupDirHandle,
+    async (_event, dir?: string) => openDeepseekHarnessBackupDir(dir),
   );
-  ipcHandle(ipcMain, openDeepseekHarnessWindowHandle, async (_event) =>
-    openDeepseekHarnessWindow(),
-  );
-  ipcHandle(ipcMain, copyDeepseekHarnessDashboardUrlHandle, async (_event) =>
-    copyDeepseekHarnessDashboardUrl(),
+  ipcHandle(ipcMain, installDshPluginsHandle, async (_event) =>
+    installDeepseekHarnessPlugins(),
   );
 }

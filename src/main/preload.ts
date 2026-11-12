@@ -95,13 +95,29 @@ import {
   installDeepseekHarnessServiceHandle,
   queryDeepseekHarnessServiceHandle,
   removeDeepseekHarnessServiceHandle,
-  runDeepseekHarnessServiceHandle,
-  stopDeepseekHarnessServiceHandle,
-  openDeepseekHarnessWindowHandle,
-  copyDeepseekHarnessDashboardUrlHandle,
+  syncWorkbuddyModelsToDshHandle,
+  openDeepseekHarnessBackupDirHandle,
+  installDshPluginsHandle,
   DeepseekHarnessServiceInfo,
+  DshPluginInstallSummary,
+  WorkbuddyModelSyncResult,
 } from './deepseek-harness-service/type-info';
 import { openBunDebugHandle } from './bun-debug/type-info';
+import {
+  llmFreeQueryConfigHandle,
+  llmFreeSetConfigHandle,
+  llmFreeStartHandle,
+  llmFreeStopHandle,
+  llmFreeStatusHandle,
+  llmFreeRegenerateKeyHandle,
+  llmFreeProbeHandle,
+  llmFreeCatalogHandle,
+  llmFreeModelsHandle,
+} from './llm-free/type-info';
+import type {
+  FreeProviderConfig,
+  FreeProviderStatus,
+} from './llm-free/type-info';
 
 const electronHandler = {
   // 系统信息
@@ -310,26 +326,53 @@ const mainHandle = {
       removeDeepseekHarnessServiceHandle,
     );
   },
-  runDeepseekHarnessServiceHandle: async () => {
-    return ipcInvoke<DeepseekHarnessServiceInfo>(
-      runDeepseekHarnessServiceHandle,
-    );
+  // 把 WorkBuddy 的模型配置同步进 DeepSeek Harness（写入前自动备份 dsh 配置）
+  syncWorkbuddyModelsToDshHandle: async () => {
+    return ipcInvoke<WorkbuddyModelSyncResult>(syncWorkbuddyModelsToDshHandle);
   },
-  stopDeepseekHarnessServiceHandle: async () => {
-    return ipcInvoke<DeepseekHarnessServiceInfo>(
-      stopDeepseekHarnessServiceHandle,
-    );
+  // 在系统文件管理器里打开 dsh 配置的备份目录
+  openDeepseekHarnessBackupDirHandle: async (dir?: string) => {
+    return ipcInvoke<string>(openDeepseekHarnessBackupDirHandle, dir);
   },
-  openDeepseekHarnessWindowHandle: async () => {
-    return ipcInvoke<DeepseekHarnessServiceInfo>(
-      openDeepseekHarnessWindowHandle,
-    );
-  },
-  copyDeepseekHarnessDashboardUrlHandle: async () => {
-    return ipcInvoke<string>(copyDeepseekHarnessDashboardUrlHandle);
+  // 按插件清单给已装好的 dsh 补装 / 升级插件（不重装 dsh）
+  installDshPluginsHandle: async () => {
+    return ipcInvoke<DshPluginInstallSummary>(installDshPluginsHandle);
   },
   openBunDebugHandle: async () => {
     return ipcInvoke<void>(openBunDebugHandle);
+  },
+  // ── 免密免费模型（Zen free lane）──
+  llmFreeQueryConfig: async (): Promise<FreeProviderConfig> => {
+    return ipcInvoke<FreeProviderConfig>(llmFreeQueryConfigHandle);
+  },
+  llmFreeSetConfig: async (
+    patch: Partial<FreeProviderConfig>,
+  ): Promise<FreeProviderConfig> => {
+    return ipcInvoke<FreeProviderConfig>(llmFreeSetConfigHandle, patch);
+  },
+  llmFreeStart: async (): Promise<void> => {
+    return ipcInvoke<void>(llmFreeStartHandle);
+  },
+  llmFreeStop: async (): Promise<void> => {
+    return ipcInvoke<void>(llmFreeStopHandle);
+  },
+  llmFreeStatus: async (): Promise<FreeProviderStatus> => {
+    return ipcInvoke<FreeProviderStatus>(llmFreeStatusHandle);
+  },
+  llmFreeRegenerateKey: async (): Promise<string> => {
+    return ipcInvoke<string>(llmFreeRegenerateKeyHandle);
+  },
+  llmFreeProbe: async (): Promise<Record<string, unknown>> => {
+    return ipcInvoke<Record<string, unknown>>(llmFreeProbeHandle);
+  },
+  llmFreeCatalog: async (): Promise<{
+    entries: Array<Record<string, unknown>>;
+    membership: Record<string, string[]>;
+  }> => {
+    return ipcInvoke(llmFreeCatalogHandle);
+  },
+  llmFreeModels: async (): Promise<Array<Record<string, unknown>>> => {
+    return ipcInvoke<Array<Record<string, unknown>>>(llmFreeModelsHandle);
   },
   // 共建计划相关
   selectJointBuildFolder: async (): Promise<string | null> => {

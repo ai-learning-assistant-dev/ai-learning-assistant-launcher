@@ -1,0 +1,252 @@
+/* 狐狸学伴 AI 助手 —— 首屏轮播宣传页 + 详情浮窗
+   配色遵循 docs/视觉方案-狐狸学伴AI助手.md 的 Style Lock：
+   深底 #1B1B1F，唯一强调色 teal #1D9E75，不使用第二种强调色。 */
+
+.fox-icon {
+  display: block;
+  border-radius: 8px;
+}
+
+.fox-promo {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  cursor: pointer;
+  border-radius: 8px;
+  background:
+    radial-gradient(
+      circle at 76% 38%,
+      rgba(29, 158, 117, 0.18),
+      rgba(29, 158, 117, 0) 58%
+    ),
+    #1b1b1f;
+  transition: box-shadow 0.3s ease;
+
+  &:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  }
+
+  &__copy {
+    display: flex;
+    flex: 0 0 46%;
+    flex-direction: column;
+    justify-content: center;
+    box-sizing: border-box;
+    padding: 0 40px;
+  }
+
+  &__brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  &__brand-name {
+    font-size: 15px;
+    font-weight: 500;
+    color: #f1efe8;
+  }
+
+  &__brand-tag {
+    padding: 2px 8px;
+    font-size: 12px;
+    color: #5dcaa5;
+    border: 1px solid rgba(29, 158, 117, 0.5);
+    border-radius: 10px;
+  }
+
+  &__title {
+    margin: 22px 0 0;
+    font-size: 42px;
+    font-weight: 600;
+    line-height: 1.2;
+    color: #f1efe8;
+    letter-spacing: 1px;
+  }
+
+  &__subtitle {
+    margin: 14px 0 0;
+    font-size: 18px;
+    line-height: 1.6;
+    color: #b4b2a9;
+  }
+
+  &__tags {
+    display: flex;
+    gap: 10px;
+    margin-top: 22px;
+  }
+
+  &__tag {
+    padding: 5px 12px;
+    font-size: 13px;
+    color: #9fe1cb;
+    background: rgba(29, 158, 117, 0.14);
+    border: 1px solid rgba(29, 158, 117, 0.45);
+    border-radius: 13px;
+  }
+
+  &__footer {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 30px;
+    font-size: 13px;
+    color: #888780;
+  }
+
+  &__cta {
+    color: #1d9e75;
+  }
+
+  &:hover &__cta {
+    text-decoration: underline;
+  }
+
+  &__visual {
+    position: relative;
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    padding: 10px 24px;
+    min-width: 0;
+  }
+
+  &__mock {
+    width: 100%;
+    height: 100%;
+    max-height: 320px;
+  }
+
+  &__badge {
+    position: absolute;
+    right: 20px;
+    bottom: 14px;
+    padding: 4px 10px;
+    font-size: 12px;
+    color: #9fe1cb;
+    background: rgba(29, 158, 117, 0.16);
+    border: 1px solid rgba(29, 158, 117, 0.5);
+    border-radius: 12px;
+  }
+}
+
+@media (max-width: 900px) {
+  .fox-promo {
+    &__title {
+      font-size: 32px;
+    }
+
+    &__subtitle {
+      font-size: 16px;
+    }
+
+    &__visual {
+      display: none;
+    }
+
+    &__copy {
+      flex: 1;
+    }
+  }
+}
+
+.fox-modal {
+  .ant-modal-content {
+    border-radius: 12px;
+  }
+
+  &__body {
+    max-height: 68vh;
+    padding-right: 4px;
+    overflow-y: auto;
+  }
+
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  &__title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+  }
+
+  &__subtitle {
+    margin: 2px 0 0;
+    font-size: 13px;
+    color: #8c8c8c;
+  }
+
+  &__features {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  &__feature {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 10px 12px;
+    background: #fafafa;
+    border-radius: 8px;
+  }
+
+  &__feature-title {
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  &__feature-desc {
+    font-size: 12px;
+    line-height: 1.6;
+    color: #8c8c8c;
+  }
+
+  &__section {
+    margin-bottom: 18px;
+  }
+
+  &__section-title {
+    margin-bottom: 10px;
+    padding-left: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    border-left: 3px solid #1d9e75;
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  &__hint {
+    margin: 8px 0 0;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #8c8c8c;
+  }
+
+  &__notices {
+    margin: 0;
+    padding-top: 10px;
+    padding-left: 18px;
+    font-size: 12px;
+    line-height: 1.8;
+    color: #8c8c8c;
+    border-top: 1px solid #f0f0f0;
+  }
+}

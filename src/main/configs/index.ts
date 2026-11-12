@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, copyFileSync, existsSync, readdirSync, unlinkSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
-import { appPath, Exec } from '../exec';
+import { appPath } from '../exec';
 import { dialog, IpcMain, shell } from 'electron';
 import {
   ActionName,
@@ -26,8 +26,8 @@ import { initTrainingConfig } from './training-config';
 import {
   createDshSyncLogger,
   syncModelsIntoDshHarness,
-  type CommandRunner,
 } from '../deepseek-harness-service/dsh-model-sync';
+import type { SyncableModel } from '../deepseek-harness-service/model-sync-plan';
 
 // 临时文件操作记录
 interface FileOperation {
@@ -64,18 +64,8 @@ export const llmConfigPath = path.join(
   'llm-config.json',
 );
 
-// 内存中的大模型配置存储
+// 加载大模型配置存储
 let currentLlmConfig: LLMConfig = { ...defaultLlmConfig };
-
-/**
- * 「同步 API key」按钮用的命令执行器：dsh 配置包在 PATH 里找不到全局 dsh 时，
- * 会用它执行 `npm root -g` 兜底定位。
- */
-const dshCommandLine = new Exec();
-const runDshCommand: CommandRunner = async (command, args) => {
-  const { stdout } = await dshCommandLine.exec(command, args);
-  return stdout ?? '';
-};
 
 export default async function init(ipcMain: IpcMain) {
   ipcMain.on(
@@ -275,7 +265,16 @@ export default async function init(ipcMain: IpcMain) {
             try {
               // 更新大模型配置
               if (extraData) {
-                currentLlmConfig = { ...extraData };
+                const provided = (extraData.models ?? []) as CustomModel[];
+                // 用户手工模型（剔除任何免费模型标记，避免界面误带进来）
+                const userModels = provided.filter((m) => !isFreeModelEntry(m));
+                // 保留 llm-free 已注入的免费模型，避免保存时把它们冲掉
+                const existing = getLlmConfig();
+                const existingFree = (existing.models ?? []).filter((m) => isFreeModelEntry(m));
+                currentLlmConfig = {
+                  models: [...userModels, ...existingFree],
+                  ...(existing.freeProvider ? { freeProvider: existing.freeProvider } : {}),
+                };
                 saveLlmConfig(currentLlmConfig);
                 event.reply(
                   channel,
@@ -313,9 +312,10 @@ export default async function init(ipcMain: IpcMain) {
         } else if (action === 'syncAllApiKeys') {
           // 新增处理批量同步所有API key的逻辑
           if (serviceName === 'copilot') {
-            const { llmConfig } = extraData;
+            const { llmConfig } = extraData as { llmConfig?: LLMConfig };
+            // Sync Obsidian Copilot Model API Config
             await syncAllCopilotApiKeys(event, llmConfig);
-            // 同一份大模型配置顺带同步进 DeepSeek Harness（dsh）
+            // Sync DSH Model API Config
             await syncAllApiKeysToDeepseekHarness(event, llmConfig);
           }
         }
@@ -325,14 +325,69 @@ export default async function init(ipcMain: IpcMain) {
   await initTrainingConfig(ipcMain);
 }
 
-// 添加保存大模型配置的函数
-function saveLlmConfig(config: LLMConfig) {
+// 模型配置持久化写入本地文件
+export function saveLlmConfig(config: LLMConfig) {
   try {
     writeFileSync(llmConfigPath, JSON.stringify(config, null, 2), {
       encoding: 'utf8',
     });
   } catch (error) {
     console.error('保存大模型配置文件失败:', error);
+  }
+}
+
+/**
+ * 标记「由 llm-free 注入的免费模型」的判定：带 isFreeModel 标记即视为免费模型。
+ * 用类型断言兼容历史写入的 llm-config.json（没有该字段的视为手工模型）。
+ */
+function isFreeModelEntry(model: CustomModel): boolean {
+  return (model as CustomModel & { isFreeModel?: boolean }).isFreeModel === true;
+}
+
+/**
+ * 把探测到的可用免费模型写入 llm-config.json 。
+ * 
+ * 这里的实现通过添加 isFreeModel 标记来明确需要下次启动服务代理时更新的Item
+ * 行为：
+ * - 不会覆盖用户的手工模型；
+ * - 不会重复写入：先清掉旧的免费条目，再追加本次探测到的新集合；
+ * - 始终保留 freeProvider 配置块（由 llm-free 模块管理）。
+ */
+export function upsertFreeModelsInLlmConfig(freeModels: CustomModel[]): void {
+  try {
+    const existing = getLlmConfig();
+    const userModels = (existing.models ?? []).filter((m) => !isFreeModelEntry(m));
+    const merged: LLMConfig = {
+      models: [...userModels, ...freeModels],
+      ...(existing.freeProvider ? { freeProvider: existing.freeProvider } : {}),
+    };
+    currentLlmConfig = merged;
+    saveLlmConfig(merged);
+    console.log(`${freeModels.length} 个第三方模型写入 llm-config.json`);
+  } catch (error) {
+    console.error('写入第三方模型到 llm-config.json 失败:', error);
+  }
+}
+
+/**
+ * 关闭免费模型转发后，把标记 isFreeModel 的条目从 llm-config.json 中清除，
+ * 保留用户的手工模型与 freeProvider 配置块。
+ */
+export function removeFreeModelsFromLlmConfig(): void {
+  try {
+    const existing = getLlmConfig();
+    const all = existing.models ?? [];
+    const userModels = all.filter((m) => !isFreeModelEntry(m));
+    if (userModels.length === all.length) return; // 本就没有免费条目，无需改动
+    const merged: LLMConfig = {
+      models: userModels,
+      ...(existing.freeProvider ? { freeProvider: existing.freeProvider } : {}),
+    };
+    currentLlmConfig = merged;
+    saveLlmConfig(merged);
+    console.log('已从 llm-config.json 移除免费模型');
+  } catch (error) {
+    console.error('从 llm-config.json 移除免费模型失败:', error);
   }
 }
 
@@ -570,17 +625,17 @@ async function syncAllCopilotApiKeys(event: any, llmConfig: LLMConfig) {
 /**
  * 把同一份大模型配置同步进 DeepSeek Harness（dsh）。
  *
- * 走 dsh 自带的配置包（`@deepseek-ai/dsh-settings-file` / `dsh-credentials-local`）写
- * `$DSH_HOME/settings.yaml` 与 `.credentials.yaml`，换算规则与安装时完全一致
+ * 直接按 dsh 0.2.0 的新文件布局写 `$DSH_HOME/profiles/web/cordis.patch.yml` 与
+ * `$DSH_HOME/.credentials.yaml`，换算规则与安装时完全一致
  * （空 / 全空白密钥不写凭据、路由也不声明 apiKeyEnv）。
  *
- * 没装 dsh 或配置包不可用时不写任何文件，只提示用户去 dsh 界面里手动配置。
+ * 写入失败时不写任何文件，只提示用户去 dsh 界面里手动配置。
  */
 async function syncAllApiKeysToDeepseekHarness(
   event: any,
   llmConfig?: LLMConfig
 ) {
-  const models = llmConfig?.models ?? currentLlmConfig.models ?? [];
+  const models: SyncableModel[] = llmConfig?.models ?? currentLlmConfig.models ?? [];
   if (models.length === 0) {
     return;
   }
@@ -589,7 +644,6 @@ async function syncAllApiKeysToDeepseekHarness(
   try {
     const summary = await syncModelsIntoDshHarness({
       models,
-      run: runDshCommand,
       logger,
     });
 
@@ -597,7 +651,7 @@ async function syncAllApiKeysToDeepseekHarness(
       event.reply(
         channel,
         MESSAGE_TYPE.WARNING,
-        'DeepSeek Harness 同步已跳过：未能使用 dsh 自带的配置包（可能尚未安装 dsh）。请在 dsh 界面的「设置 → 模型」里手动添加提供方与 API key',
+        'DeepSeek Harness 同步已跳过：写入 dsh 配置文件失败。请在 dsh 界面的「设置 → 模型」里手动添加提供方与 API key',
       );
       return;
     }

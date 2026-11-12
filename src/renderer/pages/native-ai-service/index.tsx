@@ -16,10 +16,143 @@ import { TerminalLogScreen } from '../../containers/terminal-log-screen';
 import { useTextbookEditorServiceShortcut } from '../../containers/use-textbook-editor-service-shortcut';
 import { useOpenclawServiceShortcut } from '../../containers/use-openclaw-service-shortcut';
 import { useDeepseekHarnessServiceShortcut } from '../../containers/use-deepseek-harness-service-shortcut';
+import {
+  DshPluginInstallSummary,
+  WorkbuddyModelSyncResult,
+} from '../../../main/deepseek-harness-service/type-info';
 import { useState } from 'react';
 
 // OpenClaw 管理界面暂不展示：相关代码全部保留，之后需要重新启用时把这里改成 true 即可
 const OPENCLAW_UI_ENABLED = false;
+
+/** 把未知错误转成可展示的文本 */
+function describeError(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  if (typeof error === 'string' && error) {
+    return error;
+  }
+  try {
+    return JSON.stringify(error) || '未知错误';
+  } catch {
+    return String(error);
+  }
+}
+
+/** 从 WorkBuddy 同步模型配置后的结果展示 */
+function WorkbuddySyncResultContent({
+  result,
+  onOpenBackupDir,
+}: {
+  result: WorkbuddyModelSyncResult;
+  onOpenBackupDir: (dir?: string) => void;
+}) {
+  return (
+    <div className="workbuddy-sync-result">
+      <p className="workbuddy-sync-headline">
+        已同步 <strong>{result.syncedModelCount}</strong> 个模型，生成{' '}
+        <strong>{result.routeCount}</strong> 条提供方路由。
+      </p>
+
+      {result.summary.length > 0 && (
+        <ul className="workbuddy-sync-summary">
+          {result.summary.map((line, index) => (
+            // 摘要来自主进程，内容可能重复，用下标做 key
+            // eslint-disable-next-line react/no-array-index-key
+            <li key={`${index}-${line}`}>{line}</li>
+          ))}
+        </ul>
+      )}
+
+      <p className="workbuddy-sync-backup">
+        {result.backup.dir ? (
+          <>
+            {result.backup.reused
+              ? '同步前的 dsh 配置与上次备份一致，沿用已有备份：'
+              : '同步前已备份 dsh 配置到：'}
+            <code>{result.backup.dir}</code>
+            <Button
+              type="link"
+              size="small"
+              onClick={() => onOpenBackupDir(result.backup.dir ?? undefined)}
+            >
+              打开备份目录
+            </Button>
+          </>
+        ) : (
+          <>dsh 还没有配置文件，本次无需备份。</>
+        )}
+      </p>
+
+      {result.notices.length > 0 && (
+        <p className="workbuddy-sync-notices">
+          有 {result.notices.length} 个模型没有同步：
+          {result.notices
+            .map((notice) => `${notice.name}（${notice.reason}）`)
+            .join('、')}
+        </p>
+      )}
+
+      {result.warnings.map((warning) => (
+        <p key={warning} className="workbuddy-sync-notices">
+          {warning}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+/** 按清单安装 dsh 插件后的结果展示 */
+function DshPluginInstallResultContent({
+  result,
+}: {
+  result: DshPluginInstallSummary;
+}) {
+  return (
+    <div className="dsh-plugin-install-result">
+      <p className="dsh-plugin-install-headline">
+        清单共 <strong>{result.total}</strong> 条：这次新装 / 升级{' '}
+        <strong>{result.installed.length}</strong> 个，跳过{' '}
+        <strong>{result.skipped.length}</strong> 个
+        {result.failed.length > 0 && (
+          <>
+            ，失败 <strong>{result.failed.length}</strong> 个
+          </>
+        )}
+        。
+      </p>
+
+      {result.installed.length > 0 && (
+        <p className="dsh-plugin-install-list">
+          已安装：{result.installed.join('、')}
+        </p>
+      )}
+
+      {result.failed.length > 0 && (
+        <div className="dsh-plugin-install-failed">
+          <p>以下插件没装上（不影响其它插件，也不影响 dsh 运行）：</p>
+          <ul>
+            {result.failed.map((item) => (
+              <li key={item.name}>
+                <code>{item.name}</code>：{item.reason}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <p className="dsh-plugin-install-hint">
+        {result.running
+          ? '安装插件前已关闭 DeepSeek Harness 桌面版，请手动重新打开后新插件才会加载。'
+          : '下次打开 DeepSeek Harness 桌面版时会加载这些插件。'}
+      </p>
+      <p className="dsh-plugin-install-hint">
+        清单文件：<code>{result.indexPath}</code>
+      </p>
+    </div>
+  );
+}
 
 export default function NativeAiService() {
   const {
@@ -62,10 +195,6 @@ export default function NativeAiService() {
       uninstalling: '卸载中',
     }[deepseekHarnessShortcut.state] || '检测中...';
 
-  const [deepseekHarnessOperating, setDeepseekHarnessOperating] = useState<
-    'run' | 'stop' | null
-  >(null);
-
   const installDeepseekHarnessService = async () => {
     try {
       await deepseekHarnessShortcut.install();
@@ -82,43 +211,139 @@ export default function NativeAiService() {
     }
   };
 
-  const runDeepseekHarnessService = async () => {
-    setDeepseekHarnessOperating('run');
+  /** 真正执行同步：结果用弹窗展示（写入摘要 + 备份位置），失败给出可读原因 */
+  const runSyncWorkbuddyModels = async () => {
     try {
-      await deepseekHarnessShortcut.run();
+      const result = await deepseekHarnessShortcut.syncWorkbuddyModels();
+      Modal.success({
+        title: '已从 WorkBuddy 同步模型配置',
+        width: 560,
+        okText: '好',
+        content: (
+          <WorkbuddySyncResultContent
+            result={result}
+            onOpenBackupDir={deepseekHarnessShortcut.openBackupDir}
+          />
+        ),
+      });
     } catch (e) {
-      message.error(e.message);
+      Modal.error({
+        title: '同步 WorkBuddy 模型配置失败',
+        width: 520,
+        okText: '好',
+        content: <span>{describeError(e)}</span>,
+      });
+    }
+  };
+
+  /**
+   * 同步前的确认：用一句话讲清楚「从哪里读、往哪里写、会先备份」，
+   * 让用户点之前就知道会发生什么，而不是点完才发现配置被改了。
+   */
+  const confirmSyncWorkbuddyModels = () => {
+    Modal.confirm({
+      title: '从 WorkBuddy 同步模型配置到 DeepSeek Harness？',
+      width: 540,
+      icon: null,
+      okText: '同步',
+      cancelText: '取消',
+      content: (
+        <div className="workbuddy-sync-confirm">
+          <p>
+            将读取 WorkBuddy 里已配置好的自定义模型，转换成 DeepSeek Harness
+            的提供方配置：
+          </p>
+          <ul>
+            <li>
+              <strong>模型元信息配置</strong>：写入 <code>settings.yaml</code>
+            </li>
+            <li>
+              <strong>API Key</strong>：写入 <code>.credentials.yaml</code>
+            </li>
+          </ul>
+          <p className="workbuddy-sync-backup">
+            写入前会自动把这两个文件整份备份到 dsh 的 <code>backups/</code>
+            目录，发生错误时可手动还原；DeepSeek Harness
+            会热加载新配置，无需重启。
+          </p>
+        </div>
+      ),
+      onOk: () => runSyncWorkbuddyModels(),
+    });
+  };
+
+  /** 真正执行插件安装：结果用弹窗展示（装了几个 / 跳过几个 / 失败原因），失败给出可读原因 */
+  const runInstallDshPlugins = async () => {
+    try {
+      const result = await deepseekHarnessShortcut.installPlugins();
+      const content = <DshPluginInstallResultContent result={result} />;
+      if (result.failed.length > 0) {
+        Modal.warning({
+          title: '插件安装结束，有插件没装上',
+          width: 580,
+          okText: '好',
+          content,
+        });
+        return;
+      }
+      Modal.success({
+        title: '插件安装完成',
+        width: 560,
+        okText: '好',
+        content,
+      });
+    } catch (e) {
+      Modal.error({
+        title: '安装 dsh 插件失败',
+        width: 520,
+        okText: '好',
+        content: <span>{describeError(e)}</span>,
+      });
     } finally {
-      setDeepseekHarnessOperating(null);
+      // 装插件时可能关闭了桌面版，刷新一下运行状态
+      void deepseekHarnessShortcut.refresh();
     }
   };
 
-  const stopDeepseekHarnessService = async () => {
-    setDeepseekHarnessOperating('stop');
-    try {
-      await deepseekHarnessShortcut.stop();
-    } catch (e) {
-      message.error(e.message);
-    } finally {
-      setDeepseekHarnessOperating(null);
-    }
-  };
-
-  const openDeepseekHarnessWindow = async () => {
-    try {
-      await deepseekHarnessShortcut.openWindow();
-    } catch (e) {
-      message.error(e.message);
-    }
-  };
-
-  const copyDeepseekHarnessPageLink = async () => {
-    try {
-      await deepseekHarnessShortcut.copyPageLink();
-      message.success('页面链接已复制到剪贴板');
-    } catch (e) {
-      message.error(e.message);
-    }
+  /**
+   * 安装前的确认：说清楚「按哪份清单装、会重装已装的、不动 dsh 本身、进度在日志里」，
+   * 避免用户点完发现要等好几分钟还以为卡住。
+   */
+  const confirmInstallDshPlugins = () => {
+    Modal.confirm({
+      title: '给 DeepSeek Harness 安装插件？',
+      width: 540,
+      icon: null,
+      okText: '开始安装',
+      cancelText: '取消',
+      content: (
+        <div className="dsh-plugin-install-confirm">
+          <p>
+            会按随程序分发的插件清单，用 <code>dsh plugin add</code>{' '}
+            把清单里的插件装进 DeepSeek Harness 桌面版的 desktop
+            profile。清单里只有 <code>@commonworks/dsh-starter</code>{' '}
+            一条——其余插件由它在 dsh 里按场景按需安装。
+          </p>
+          <ul>
+            <li>
+              清单里写 <code>latest</code>{' '}
+              的插件每次都重新装一次最新版，已装好的也会重装
+            </li>
+            <li>
+              清单里 <code>enabled:false</code> 的条目跳过不装
+            </li>
+            <li>
+              DeepSeek Harness 桌面版正在运行时会先关闭它，装完需要手动重新打开
+            </li>
+            <li>不动 dsh 本身，也不改模型配置</li>
+          </ul>
+          <p className="dsh-plugin-install-hint">
+            只装 starter 一条，通常很快完成，进度看下方命令行日志。
+          </p>
+        </div>
+      ),
+      onOk: () => runInstallDshPlugins(),
+    });
   };
 
   const openclawStateText =
@@ -540,60 +765,18 @@ export default function NativeAiService() {
                 <span className="button-text">安装</span>
               </Button>
             ),
-            deepseekHarnessShortcut.state === 'installed' &&
-              !deepseekHarnessShortcut.running && (
-                <Button
-                  key="run-deepseek-harness-service"
-                  className="rts-button run"
-                  loading={deepseekHarnessOperating === 'run'}
-                  disabled={deepseekHarnessOperating === 'stop'}
-                  onClick={runDeepseekHarnessService}
-                >
-                  <span className="button-text">运行</span>
-                </Button>
-              ),
-            deepseekHarnessShortcut.running && (
+            (deepseekHarnessShortcut.state === 'installed' ||
+              deepseekHarnessShortcut.state === 'uninstalling') && (
               <Button
-                key="open-deepseek-harness-window"
-                className="rts-button run"
-                onClick={openDeepseekHarnessWindow}
-              >
-                <span className="button-text">打开界面</span>
-              </Button>
-            ),
-            deepseekHarnessShortcut.running && (
-              <Button
-                key="copy-deepseek-harness-page-link"
-                onClick={copyDeepseekHarnessPageLink}
-              >
-                <span className="button-text">复制页面链接</span>
-              </Button>
-            ),
-            deepseekHarnessShortcut.running && (
-              <Button
-                key="stop-deepseek-harness-service"
+                key="remove-deepseek-harness-service"
                 className="rts-button uninstall"
                 danger
-                loading={deepseekHarnessOperating === 'stop'}
-                disabled={deepseekHarnessOperating === 'run'}
-                onClick={stopDeepseekHarnessService}
+                loading={deepseekHarnessShortcut.state === 'uninstalling'}
+                onClick={removeDeepseekHarnessService}
               >
-                <span className="button-text">停止</span>
+                <span className="button-text">卸载</span>
               </Button>
             ),
-            (deepseekHarnessShortcut.state === 'installed' ||
-              deepseekHarnessShortcut.state === 'uninstalling') &&
-              deepseekHarnessShortcut.running === false && (
-                <Button
-                  key="remove-deepseek-harness-service"
-                  className="rts-button uninstall"
-                  danger
-                  loading={deepseekHarnessShortcut.state === 'uninstalling'}
-                  onClick={removeDeepseekHarnessService}
-                >
-                  <span className="button-text">卸载</span>
-                </Button>
-              ),
             <Button
               key="refresh-deepseek-harness-service"
               loading={
@@ -604,17 +787,32 @@ export default function NativeAiService() {
             >
               刷新状态
             </Button>,
+            deepseekHarnessShortcut.state === 'installed' && (
+              <Button
+                key="sync-workbuddy-models"
+                loading={deepseekHarnessShortcut.syncingWorkbuddyModels}
+                // 只在这里渲染（state 必为 installed），所以只需避开刷新中的状态
+                disabled={deepseekHarnessShortcut.refreshing}
+                onClick={confirmSyncWorkbuddyModels}
+              >
+                <span className="button-text">同步 WorkBuddy 模型</span>
+              </Button>
+            ),
+            deepseekHarnessShortcut.state === 'installed' && (
+              <Button
+                key="install-dsh-plugins"
+                loading={deepseekHarnessShortcut.installingPlugins}
+                disabled={deepseekHarnessShortcut.refreshing}
+                onClick={confirmInstallDshPlugins}
+              >
+                <span className="button-text">安装插件</span>
+              </Button>
+            ),
           ].filter((item) => item)}
         >
           <List.Item.Meta
             title="DeepSeek Harness"
-            description={`DeepSeek 智能体工作台 服务状态：${deepseekHarnessStateText}${
-              deepseekHarnessShortcut.running ? '（运行中）' : ''
-            }${
-              deepseekHarnessShortcut.port
-                ? `（端口 ${deepseekHarnessShortcut.port}）`
-                : ''
-            }${
+            description={`DeepSeek 智能体工作台 安装状态：${deepseekHarnessStateText}${
               deepseekHarnessShortcut.version
                 ? ` 版本：${deepseekHarnessShortcut.version}`
                 : ''

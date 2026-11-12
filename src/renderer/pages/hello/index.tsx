@@ -26,6 +26,8 @@ import { TerminalLogScreen } from '../../containers/terminal-log-screen';
 import toolsIcon from './Tools_Icon.png';
 import Checkbox, { CheckboxChangeEvent } from 'antd/es/checkbox/Checkbox';
 import { TrainingConfig } from '../../../main/configs/type-info';
+import FoxAssistantPromoSlide from './fox-assistant/FoxAssistantPromoSlide';
+import FoxAssistantPromoModal from './fox-assistant/FoxAssistantPromoModal';
 
 export default function Hello() {
   const trainingShortcut = useNativeTrainingServiceShortcut();
@@ -70,6 +72,7 @@ export default function Hello() {
   }, []);
 
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [foxPromoVisible, setFoxPromoVisible] = useState(false);
 
   const slides = [
     {
@@ -77,6 +80,11 @@ export default function Hello() {
     },
     {
       content: <img src={frame8} alt="Frame 8" className="hero-image-slide" />,
+    },
+    {
+      content: (
+        <FoxAssistantPromoSlide onClick={() => setFoxPromoVisible(true)} />
+      ),
     },
   ];
 
@@ -666,10 +674,12 @@ export default function Hello() {
                       </Button>
                     )}
                     {trainingShortcut.state !== 'not_install' && (
-                      <Popconfirm title="确认卸载学科培训服务吗？"
+                      <Popconfirm
+                        title="确认卸载学科培训服务吗？"
                         okText="确认"
                         cancelText="取消"
-                        onConfirm={removeTrainingService}>
+                        onConfirm={removeTrainingService}
+                      >
                         <Button
                           className="feature-button uninstall"
                           block
@@ -767,6 +777,10 @@ export default function Hello() {
           扫描二维码加入QQ群，关于AI学习助手，在群中提出你的任何疑问，会有专业人员解答
         </p>
       </Modal>
+      <FoxAssistantPromoModal
+        open={foxPromoVisible}
+        onClose={() => setFoxPromoVisible(false)}
+      />
     </div>
   );
 }

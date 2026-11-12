@@ -1,0 +1,84 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "启动应用并调试主进程",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "node",
+      "program": "${workspaceFolder}/.vscode/forge-debug.cjs",
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "NODE_ENV": "development",
+        "ELECTRON_RUN_AS_NODE": null
+      },
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "autoAttachChildProcesses": false,
+      "serverReadyAction": {
+        "pattern": "ELECTRON_MAIN_DEBUG_ATTACH:([0-9]+)",
+        "action": "startDebugging",
+        "name": "连接主进程（应用已启动）"
+      },
+      "stopOnEntry": false,
+      "sourceMaps": true,
+      "outFiles": ["${workspaceFolder}/.webpack/main/**/*.js"],
+      "sourceMapPathOverrides": {
+        "webpack://ai-learning-assistant-launcher/./*": "${workspaceFolder}/*",
+        "webpack://ai-learning-assistant-launcher/*": "${workspaceFolder}/*",
+        "${workspaceFolder}/.webpack/main/webpack:/ai-learning-assistant-launcher/*": "${workspaceFolder}/*",
+        "webpack:///./*": "${workspaceFolder}/*",
+        "webpack:///*": "${workspaceFolder}/*"
+      },
+      "skipFiles": ["<node_internals>/**", "${workspaceFolder}/node_modules/**"]
+    },
+    {
+      "name": "连接主进程（应用已启动）",
+      "type": "node",
+      "request": "attach",
+      "address": "127.0.0.1",
+      "port": 9229,
+      "continueOnAttach": true,
+      "restart": true,
+      "timeout": 60000,
+      "cwd": "${workspaceFolder}",
+      "sourceMaps": true,
+      "outFiles": ["${workspaceFolder}/.webpack/main/**/*.js"],
+      "sourceMapPathOverrides": {
+        "webpack://ai-learning-assistant-launcher/./*": "${workspaceFolder}/*",
+        "webpack://ai-learning-assistant-launcher/*": "${workspaceFolder}/*",
+        "${workspaceFolder}/.webpack/main/webpack:/ai-learning-assistant-launcher/*": "${workspaceFolder}/*",
+        "webpack:///./*": "${workspaceFolder}/*",
+        "webpack:///*": "${workspaceFolder}/*"
+      },
+      "skipFiles": ["<node_internals>/**", "${workspaceFolder}/node_modules/**"]
+    },
+    {
+      "name": "连接页面（应用已启动）",
+      "type": "chrome",
+      "request": "attach",
+      "address": "127.0.0.1",
+      "port": 9222,
+      "urlFilter": "http://localhost:30120/*",
+      "timeout": 60000,
+      "webRoot": "${workspaceFolder}",
+      "sourceMapPathOverrides": {
+        "webpack://ai-learning-assistant-launcher/./*": "${workspaceFolder}/*",
+        "webpack://ai-learning-assistant-launcher/*": "${workspaceFolder}/*",
+        "${workspaceFolder}/.webpack/main/webpack:/ai-learning-assistant-launcher/*": "${workspaceFolder}/*",
+        "webpack:///./*": "${workspaceFolder}/*",
+        "webpack:///*": "${workspaceFolder}/*"
+      }
+    }
+  ],
+  "compounds": [
+    {
+      "name": "同时连接主进程和页面（应用已启动）",
+      "configurations": [
+        "连接主进程（应用已启动）",
+        "连接页面（应用已启动）"
+      ],
+      "stopAll": true
+    }
+  ]
+}

@@ -812,7 +812,7 @@ export function getUploadStats(): {
   };
 }
 
-const DLC_INDEX_URL = 'https://learning.panchuantech.cn/dlc/index.json';
+const DLC_INDEX_URL = 'https://commonworks.makeitwork.top/dlc-index.json';
 
 /** 从远程服务器更新DLC索引文件 */
 export async function updateDLCIndex(): Promise<void> {
